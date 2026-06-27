@@ -1,0 +1,41 @@
+# ── Root .gitignore (monorepo) ──
+# Per-service .gitignore files also exist so each folder stays split-ready.
+
+# Env & secrets (every level)
+.env
+.env.local
+.env.*.local
+**/.env
+**/.env.local
+
+# Dependencies
+**/node_modules/
+**/.pnp/
+**/__pycache__/
+*.py[cod]
+**/.venv/
+**/venv/
+**/vendor/
+**/target/
+
+# Build output
+**/dist/
+**/build/
+**/.next/
+**/out/
+
+# Logs
+*.log
+**/logs/
+
+# Test / coverage
+**/coverage/
+**/.pytest_cache/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+
+.claude/
+.planning/
