@@ -19,7 +19,7 @@ docs/                       # architecture.md + adr/ (architecture decision reco
 ```bash
 cp .env.example .env
 # also copy each service env (from the workspace root):
-#   for s in gateway auth catalog order face reco web; do cp ../$s/.env.example ../$s/.env; done
+#   for s in api-gateway user-service product-service order-service payment-service face-processing-service recommendation-service web; do cp ../$s/.env.example ../$s/.env; done
 docker compose up --build
 ```
 
@@ -27,7 +27,7 @@ docker compose up --build
 - Gateway:       http://localhost:8080
 - MinIO console: http://localhost:9001
 
-> ⚠️ `gateway`/`auth`/`catalog`/`order` have placeholder Dockerfiles until backend
-> language (Q2) is chosen — they won't build until then.
+> ⚠️ `api-gateway`/`user-service`/`product-service`/`order-service`/`payment-service` have
+> placeholder Dockerfiles until backend language (Q2) is chosen — they won't build until then.
 
 See [`docs/architecture.md`](docs/architecture.md) for the full design.

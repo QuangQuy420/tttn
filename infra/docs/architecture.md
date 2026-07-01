@@ -7,7 +7,7 @@ recommendation and virtual try-on. It runs **locally only** via Docker Compose.
 
 ## Style & principles
 
-- **Polyrepo** — 8 independent repos, each with its own Dockerfile and CI.
+- **Polyrepo** — 9 independent repos, each with its own Dockerfile and CI.
 - **API-first** — every service publishes an OpenAPI contract in `infra/contracts`.
 - **Database-per-service** — services do not share tables; they integrate over APIs.
 - **North-South vs East-West**
@@ -20,23 +20,24 @@ recommendation and virtual try-on. It runs **locally only** via Docker Compose.
 
 | Component | Tech | Store |
 |-----------|------|-------|
-| gateway   | TBD (Q2) | — |
-| auth      | TBD (Q2) | Postgres `auth_db` |
-| catalog   | TBD (Q2) | Postgres `catalog_db` |
-| order     | TBD (Q2) | Postgres `order_db` + Redis (cart) |
-| face      | Python + FastAPI + MediaPipe | S3 / MinIO (face images) |
-| reco      | Python + FastAPI | reads catalog via API |
-| web       | Next.js + TS | — (browser AR client-side) |
+| api-gateway              | TBD (Q2) | — |
+| user-service             | TBD (Q2) | Postgres `auth_db` |
+| product-service          | TBD (Q2) | Postgres `catalog_db` |
+| order-service            | TBD (Q2) | Postgres `order_db` + Redis (cart) |
+| payment-service          | TBD (Q2) | Postgres `payment_db` (internal-only, called by `order-service`) |
+| face-processing-service  | Python + FastAPI + MediaPipe | S3 / MinIO (face images) |
+| recommendation-service   | Python + FastAPI | reads product-service via API |
+| web                      | Next.js + TS | — (browser AR client-side) |
 
 ## Request flow (happy path)
 
 ```
-browser → gateway → auth        (login → JWT)
-browser → gateway → catalog     (browse)
-browser → gateway → face        (upload photo → landmarks → face shape)   → S3/MinIO
-browser → gateway → reco        (face shape → ranked products)            → catalog
-browser (client-side)           (virtual try-on AR with MediaPipe + Canvas/Three.js)
-browser → gateway → order       (cart in Redis → checkout → order)        → catalog
+browser → api-gateway → user-service          (login → JWT)
+browser → api-gateway → product-service       (browse)
+browser → api-gateway → face-processing-service   (upload photo → landmarks → face shape)   → S3/MinIO
+browser → api-gateway → recommendation-service    (face shape → ranked products)             → product-service
+browser (client-side)                         (virtual try-on AR with MediaPipe + Canvas/Three.js)
+browser → api-gateway → order-service         (cart in Redis → checkout → order)             → product-service, payment-service
 ```
 
 ## Cross-cutting decisions (to record as ADRs)

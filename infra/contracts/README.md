@@ -6,9 +6,10 @@ contract here; other repos consume them via **git submodule** or a versioned cop
 
 ```
 contracts/
-  auth.openapi.yaml
-  catalog.openapi.yaml
-  order.openapi.yaml
-  face.openapi.yaml
-  reco.openapi.yaml
+  user-service.openapi.yaml
+  product-service.openapi.yaml
+  order-service.openapi.yaml
+  payment-service.openapi.yaml
+  face-processing-service.openapi.yaml
+  recommendation-service.openapi.yaml
 ```

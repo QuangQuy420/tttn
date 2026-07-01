@@ -1,6 +1,6 @@
-# face
+# face-processing-service
 
-**Face Analysis service** — Python + FastAPI + MediaPipe. Detects facial landmarks from an
+**Face Processing Service** — Python + FastAPI + MediaPipe. Detects facial landmarks from an
 uploaded photo and classifies the **face shape** with measurements.
 
 ## Responsibilities

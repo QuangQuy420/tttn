@@ -27,7 +27,7 @@ register / login
 
 ## Architecture
 
-- **Polyrepo — 8 independent repos** (this workspace holds them as sibling folders for local dev).
+- **Polyrepo — 9 independent repos** (this workspace holds them as sibling folders for local dev).
 - **North-South** (browser → system) goes through a single **API Gateway** (routing, CORS,
   edge JWT verification, rate-limit).
 - **East-West** (service ↔ service) is internal **REST** (sync). A message broker is a
@@ -37,12 +37,12 @@ register / login
   real S3 later needs no code change.
 
 ```
-            ┌─────────┐
- browser ──▶│ gateway │──┬─▶ auth      (Postgres: auth_db)
-            └─────────┘  ├─▶ catalog   (Postgres: catalog_db)
-                         ├─▶ order     (Postgres: order_db + Redis)
-                         ├─▶ face      (FastAPI + MediaPipe, S3/MinIO)
-                         └─▶ reco      (FastAPI; reads catalog)
+            ┌─────────────┐
+ browser ──▶│ api-gateway │──┬─▶ user-service      (Postgres: auth_db)
+            └─────────────┘  ├─▶ product-service   (Postgres: catalog_db)
+                             ├─▶ order-service      (Postgres: order_db + Redis) ──▶ payment-service (Postgres: payment_db)
+                             ├─▶ face-processing-service   (FastAPI + MediaPipe, S3/MinIO)
+                             └─▶ recommendation-service    (FastAPI; reads product-service)
  web (Next.js) ── runs the AR try-on client-side
 ```
 
@@ -52,18 +52,20 @@ register / login
 
 | Repo | Language | Responsibility |
 |------|----------|----------------|
-| **`gateway`** | _TBD — Q2 (NestJS / Spring Boot / Go)_ | Single entry point; routing, CORS, edge JWT verify, rate-limit (North-South) |
-| **`auth`** | _TBD — Q2_ | Register / login, JWT, user profile |
-| **`catalog`** | _TBD — Q2_ | Products, categories, frame attributes, list/detail/search |
-| **`order`** | _TBD — Q2_ | Cart (Redis), checkout, orders, history (payment mocked) |
-| **`face`** | **Python + FastAPI** | Face landmark detection (MediaPipe) → face shape + measurements |
-| **`reco`** | **Python + FastAPI** | Face shape (+ filters) → ranked frame recommendations (content-based) |
+| **`api-gateway`** | _TBD — Q2 (NestJS / Spring Boot / Go)_ | Single entry point; routing, CORS, edge JWT verify, rate-limit (North-South) |
+| **`user-service`** | _TBD — Q2_ | Register / login, JWT, user profile |
+| **`product-service`** | _TBD — Q2_ | Products, categories, frame attributes, list/detail/search |
+| **`order-service`** | _TBD — Q2_ | Cart (Redis), checkout, orders, history (delegates payment to `payment-service`) |
+| **`payment-service`** | _TBD — Q2_ | Processes checkout payments for `order-service` (mock provider), payment status/history |
+| **`face-processing-service`** | **Python + FastAPI** | Face landmark detection (MediaPipe) → face shape + measurements |
+| **`recommendation-service`** | **Python + FastAPI** | Face shape → ranked frame recommendations (face-shape based, no behavioral filtering) |
 | **`web`** | **Next.js + TypeScript** | Storefront, auth UI, upload, recommendations, virtual try-on (AR), light admin |
 | **`infra`** | Docker Compose + GitHub Actions | `docker-compose.yml`, seed data, shared API contracts, docs/ADRs (local only) |
 
-> ⛔ **Backend language for `gateway` / `auth` / `catalog` / `order` is not decided yet
-> (Open Question Q2).** Their folders are scaffolded language-agnostically and their
-> Dockerfiles are placeholders. Fill them in once the team locks the stack.
+> ⛔ **Backend language for `api-gateway` / `user-service` / `product-service` /
+> `order-service` / `payment-service` is not decided yet (Open Question Q2).** Their
+> folders are scaffolded language-agnostically and their Dockerfiles are placeholders.
+> Fill them in once the team locks the stack.
 
 ---
 
@@ -109,10 +111,10 @@ tests/         - unit (services, repos) + integration
   not by editing callers.
 - **Reuse over duplication** — shared logic extracted; contracts shared via `infra/contracts`.
 
-The Python services (`face`, `reco`) mirror the same layering: `app/routers` → `app/services`
-→ `app/repositories` → `app/db`, with `app/schemas` (Pydantic DTOs) and `app/core`
-(config + DI). The `web` repo (Next.js) keeps its own structure with an `lib/api` client
-layer that talks only to the gateway.
+The Python services (`face-processing-service`, `recommendation-service`) mirror the same
+layering: `app/routers` → `app/services` → `app/repositories` → `app/db`, with
+`app/schemas` (Pydantic DTOs) and `app/core` (config + DI). The `web` repo (Next.js) keeps
+its own structure with an `lib/api` client layer that talks only to the gateway.
 
 ---
 
@@ -124,7 +126,7 @@ layer that talks only to the gateway.
 # 1. Provide environment values
 cp infra/.env.example infra/.env
 # copy each service env too:
-for s in gateway auth catalog order face reco web; do cp $s/.env.example $s/.env; done
+for s in api-gateway user-service product-service order-service payment-service face-processing-service recommendation-service web; do cp $s/.env.example $s/.env; done
 
 # 2. Bring the whole system up
 cd infra

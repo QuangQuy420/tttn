@@ -1,6 +1,6 @@
-# auth
+# user-service
 
-**Auth & User service.** Registration, login, JWT issuance, and user profiles.
+**User Service.** Registration, login, JWT issuance, and user profiles.
 
 > ⛔ **Language: TBD (Open Question Q2 — NestJS / Spring Boot / Go).**
 > The `Dockerfile` is a placeholder until the stack is chosen.
