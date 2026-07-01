@@ -5,8 +5,9 @@
 # Before `up`: copy infra/.env.example -> infra/.env, and each <repo>/.env.example
 # -> <repo>/.env.
 #
-# ⚠️ gateway/auth/catalog/order have PLACEHOLDER Dockerfiles until backend
-#    language (Q2) is decided — they will not build until then.
+# ⚠️ api-gateway/user-service/product-service/order-service/payment-service have
+#    PLACEHOLDER Dockerfiles until backend language (Q2) is decided — they will
+#    not build until then.
 # ============================================================================
 
 name: smart-eyewear
@@ -61,50 +62,59 @@ services:
   # NOTE: internal services are not published to the host on purpose —
   # all traffic enters through the gateway (North-South).
 
-  gateway:
-    build: ../gateway          # ⚠️ language TBD (Q2)
-    env_file: ../gateway/.env
+  api-gateway:
+    build: ../api-gateway      # ⚠️ language TBD (Q2)
+    env_file: ../api-gateway/.env
     ports:
-      - "${GATEWAY_PORT:-8080}:8080"
+      - "${API_GATEWAY_PORT:-8080}:8080"
     depends_on:
-      - auth
-      - catalog
+      - user-service
+      - product-service
 
-  auth:
-    build: ../auth             # ⚠️ language TBD (Q2)
-    env_file: ../auth/.env
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  catalog:
-    build: ../catalog          # ⚠️ language TBD (Q2)
-    env_file: ../catalog/.env
+  user-service:
+    build: ../user-service     # ⚠️ language TBD (Q2)
+    env_file: ../user-service/.env
     depends_on:
       postgres:
         condition: service_healthy
 
-  order:
-    build: ../order            # ⚠️ language TBD (Q2)
-    env_file: ../order/.env
+  product-service:
+    build: ../product-service  # ⚠️ language TBD (Q2)
+    env_file: ../product-service/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  order-service:
+    build: ../order-service    # ⚠️ language TBD (Q2)
+    env_file: ../order-service/.env
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      payment-service:
+        condition: service_started
 
-  face:
-    build: ../face
-    env_file: ../face/.env
+  payment-service:
+    build: ../payment-service  # ⚠️ language TBD (Q2)
+    env_file: ../payment-service/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  face-processing-service:
+    build: ../face-processing-service
+    env_file: ../face-processing-service/.env
     depends_on:
       minio:
         condition: service_healthy
 
-  reco:
-    build: ../reco
-    env_file: ../reco/.env
+  recommendation-service:
+    build: ../recommendation-service
+    env_file: ../recommendation-service/.env
     depends_on:
-      - catalog
+      - product-service
 
   web:
     build: ../web
@@ -112,7 +122,7 @@ services:
     ports:
       - "${WEB_PORT:-3000}:3000"
     depends_on:
-      - gateway
+      - api-gateway
 
 volumes:
   pgdata:

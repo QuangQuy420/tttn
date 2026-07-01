@@ -1,6 +1,6 @@
-# catalog
+# product-service
 
-**Catalog service.** Products, categories, frame attributes, and list/detail/search.
+**Product Service.** Products, categories, frame attributes, and list/detail/search.
 
 > ⛔ **Language: TBD (Open Question Q2 — NestJS / Spring Boot / Go).**
 > The `Dockerfile` is a placeholder until the stack is chosen.
@@ -8,7 +8,7 @@
 ## Responsibilities
 - `GET /products` (filter/paginate), `GET /products/:id`, `GET /categories`.
 - Frame attributes (`frameShape`, size, color, material, price, images) — normalized so
-  `reco` can reuse them.
+  `recommendation-service` can reuse them.
 
 ## Structure (route → service → repository → db, with DI / SOLID)
 ```

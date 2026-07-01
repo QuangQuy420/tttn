@@ -10,7 +10,7 @@ result, recommendations, and **virtual try-on (AR)** running client-side. Light 
 - Storefront: product list/detail, cart, checkout, order history.
 - Auth UI (register/login, session handling).
 - Upload page → face analysis result + measurements.
-- "Recommended for your face" section (calls `reco`).
+- "Recommended for your face" section (calls `recommendation-service`).
 - Virtual try-on: MediaPipe Tasks Vision (JS) in the browser, overlay frames on the webcam
   feed in real time (Canvas 2D MVP → Three.js 3D stretch).
 

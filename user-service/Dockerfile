@@ -1,4 +1,4 @@
-# Dockerfile — gateway service
+# Dockerfile — user-service
 # ============================================================================
 # ⚠️  BACKEND LANGUAGE PENDING (Open Question Q2: NestJS / Spring Boot / Go).
 #     Fill this in once the team locks the stack. The image only needs to run

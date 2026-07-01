@@ -1,4 +1,4 @@
-# gateway
+# api-gateway
 
 **API Gateway — the single North-South entry point.** All browser traffic enters here;
 the gateway routes to internal services, centralizes CORS, verifies JWT at the edge, and
@@ -8,8 +8,10 @@ applies rate-limiting.
 > The `Dockerfile` is a placeholder until the stack is chosen.
 
 ## Responsibilities
-- Route `/api/auth/*`, `/api/catalog/*`, `/api/order/*`, `/api/face/*`, `/api/reco/*`
-  to the matching internal service (East-West REST).
+- Route `/api/auth/*` (→ `user-service`), `/api/products/*` (→ `product-service`),
+  `/api/orders/*` (→ `order-service`), `/api/face/*` (→ `face-processing-service`),
+  `/api/recommendations/*` (→ `recommendation-service`) to the matching internal service
+  (East-West REST). `payment-service` is internal-only and not routed here.
 - Central CORS, `/health`, rate-limit.
 - Edge JWT verification (then forward identity to internal services — see ADR on JWT).
 
