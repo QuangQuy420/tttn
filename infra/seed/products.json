@@ -1,0 +1,505 @@
+{
+  "$comment": "Seed data for product-service (product_db). Consumed by product-service's seed runner (T11). One product = one object with nested variants[] and images[]; brand/category are referenced by name so the seed runner can look up/create the parent rows. frame_shape is the FRAME shape (enum: ROUND|SQUARE|OVAL|CAT_EYE|AVIATOR|RECTANGLE|WAYFARER|RIMLESS) — not the face_shape taxonomy used later by ps_face_shape_styles.",
+  "brands": [
+    { "name": "Ray-Ban", "logo_url": "https://cdn.smarteyewear.local/brands/ray-ban/logo.png", "description": "Iconic American eyewear brand known for the Wayfarer and Aviator." },
+    { "name": "Oakley", "logo_url": "https://cdn.smarteyewear.local/brands/oakley/logo.png", "description": "Sport and performance eyewear with a focus on lens technology." },
+    { "name": "Persol", "logo_url": "https://cdn.smarteyewear.local/brands/persol/logo.png", "description": "Italian eyewear house known for handcrafted acetate frames." },
+    { "name": "Gucci", "logo_url": "https://cdn.smarteyewear.local/brands/gucci/logo.png", "description": "Luxury Italian fashion house eyewear line." },
+    { "name": "Prada", "logo_url": "https://cdn.smarteyewear.local/brands/prada/logo.png", "description": "Luxury Italian fashion house with bold, architectural frame designs." },
+    { "name": "Tom Ford", "logo_url": "https://cdn.smarteyewear.local/brands/tom-ford/logo.png", "description": "American luxury brand with sleek, statement frames." },
+    { "name": "Warby Parker", "logo_url": "https://cdn.smarteyewear.local/brands/warby-parker/logo.png", "description": "Direct-to-consumer eyewear brand with classic, affordable styles." },
+    { "name": "Carrera", "logo_url": "https://cdn.smarteyewear.local/brands/carrera/logo.png", "description": "Austrian eyewear brand with a racing and motorsport heritage." },
+    { "name": "Vogue Eyewear", "logo_url": "https://cdn.smarteyewear.local/brands/vogue-eyewear/logo.png", "description": "Fashion-forward, trend-led eyewear for everyday wear." },
+    { "name": "Oliver Peoples", "logo_url": "https://cdn.smarteyewear.local/brands/oliver-peoples/logo.png", "description": "Los Angeles eyewear brand with a vintage-inspired, boutique aesthetic." }
+  ],
+  "categories": [
+    { "name": "Sunglasses", "slug": "sunglasses", "parent": null },
+    { "name": "Optical Frames", "slug": "optical-frames", "parent": null },
+    { "name": "Reading Glasses", "slug": "reading-glasses", "parent": null },
+    { "name": "Sports Eyewear", "slug": "sports-eyewear", "parent": null },
+    { "name": "Kids Eyewear", "slug": "kids-eyewear", "parent": null }
+  ],
+  "products": [
+    {
+      "sku": "RB-WAY-001",
+      "name": "Ray-Ban Original Wayfarer",
+      "slug": "ray-ban-original-wayfarer",
+      "description": "The original Wayfarer in classic black acetate, unisex icon since 1952.",
+      "brand": "Ray-Ban",
+      "category": "Sunglasses",
+      "frame_shape": "WAYFARER",
+      "gender_target": "UNISEX",
+      "material": "Acetate",
+      "base_price": 163.00,
+      "status": "PUBLISHED",
+      "variants": [
+        { "color": "Black", "size": "M", "extra_price": 0, "sku_variant": "RB-WAY-001-BLK-M" },
+        { "color": "Tortoise", "size": "M", "extra_price": 5.00, "sku_variant": "RB-WAY-001-TOR-M" },
+        { "color": "Black", "size": "L", "extra_price": 8.00, "sku_variant": "RB-WAY-001-BLK-L" }
+      ],
+      "images": [
+        { "image_url": "https://cdn.smarteyewear.local/products/ray-ban-original-wayfarer/main.jpg", "is_thumbnail": true, "sort_order": 0 },
+        { "image_url": "https://cdn.smarteyewear.local/products/ray-ban-original-wayfarer/side.jpg", "is_thumbnail": false, "sort_order": 1 }
+      ]
+    },
+    {
+      "sku": "RB-AVI-002",
+      "name": "Ray-Ban Aviator Classic",
+      "slug": "ray-ban-aviator-classic",
+      "description": "Timeless teardrop aviator with gold metal frame and green G-15 lenses.",
+      "brand": "Ray-Ban",
+      "category": "Sunglasses",
+      "frame_shape": "AVIATOR",
+      "gender_target": "UNISEX",
+      "material": "Metal",
+      "base_price": 178.00,
+      "status": "PUBLISHED",
+      "variants": [
+        { "color": "Gold", "size": "M", "extra_price": 0, "sku_variant": "RB-AVI-002-GLD-M" },
+        { "color": "Silver", "size": "M", "extra_price": 0, "sku_variant": "RB-AVI-002-SLV-M" },
+        { "color": "Gold", "size": "L", "extra_price": 6.00, "sku_variant": "RB-AVI-002-GLD-L" }
+      ],
+      "images": [
+        { "image_url": "https://cdn.smarteyewear.local/products/ray-ban-aviator-classic/main.jpg", "is_thumbnail": true, "sort_order": 0 },
+        { "image_url": "https://cdn.smarteyewear.local/products/ray-ban-aviator-classic/angle.jpg", "is_thumbnail": false, "sort_order": 1 }
+      ]
+    },
+    {
+      "sku": "RB-RND-003",
+      "name": "Ray-Ban Round Metal",
+      "slug": "ray-ban-round-metal",
+      "description": "John Lennon-inspired round metal frame, thin profile.",
+      "brand": "Ray-Ban",
+      "category": "Optical Frames",
+      "frame_shape": "ROUND",
+      "gender_target": "UNISEX",
+      "material": "Metal",
+      "base_price": 154.00,
+      "status": "PUBLISHED",
+      "variants": [
+        { "color": "Gunmetal", "size": "S", "extra_price": 0, "sku_variant": "RB-RND-003-GUN-S" },
+        { "color": "Gold", "size": "S", "extra_price": 4.00, "sku_variant": "RB-RND-003-GLD-S" }
+      ],
+      "images": [
+        { "image_url": "https://cdn.smarteyewear.local/products/ray-ban-round-metal/main.jpg", "is_thumbnail": true, "sort_order": 0 }
+      ]
+    },
+    {
+      "sku": "OK-SQR-004",
+      "name": "Oakley Holbrook",
+      "slug": "oakley-holbrook",
+      "description": "Bold square sport frame with Prizm lens technology.",
+      "brand": "Oakley",
+      "category": "Sports Eyewear",
+      "frame_shape": "SQUARE",
+      "gender_target": "MALE",
+      "material": "O Matter (Polymer)",
+      "base_price": 203.00,
+      "status": "PUBLISHED",
+      "variants": [
+        { "color": "Matte Black", "size": "M", "extra_price": 0, "sku_variant": "OK-SQR-004-MBK-M" },
+        { "color": "Woodgrain", "size": "M", "extra_price": 10.00, "sku_variant": "OK-SQR-004-WOOD-M" }
+      ],
+      "images": [
+        { "image_url": "https://cdn.smarteyewear.local/products/oakley-holbrook/main.jpg", "is_thumbnail": true, "sort_order": 0 },
+        { "image_url": "https://cdn.smarteyewear.local/products/oakley-holbrook/lens.jpg", "is_thumbnail": false, "sort_order": 1 }
+      ]
+    },
+    {
+      "sku": "OK-RECT-005",
+      "name": "Oakley Flak 2.0 XL",
+      "slug": "oakley-flak-2-0-xl",
+      "description": "Rectangular performance shield built for high-intensity sport.",
+      "brand": "Oakley",
+      "category": "Sports Eyewear",
+      "frame_shape": "RECTANGLE",
+      "gender_target": "MALE",
+      "material": "O Matter (Polymer)",
+      "base_price": 216.00,
+      "status": "PUBLISHED",
+      "variants": [
+        { "color": "Black/Grey", "size": "L", "extra_price": 0, "sku_variant": "OK-RECT-005-BLKGRY-L" }
+      ],
+      "images": [
+        { "image_url": "https://cdn.smarteyewear.local/products/oakley-flak-2-0-xl/main.jpg", "is_thumbnail": true, "sort_order": 0 }
+      ]
+    },
+    {
+      "sku": "PS-OVAL-006",
+      "name": "Persol PO3092SM",
+      "slug": "persol-po3092sm",
+      "description": "Refined oval acetate frame with signature arrow hinge.",
+      "brand": "Persol",
+      "category": "Sunglasses",
+      "frame_shape": "OVAL",
+      "gender_target": "MALE",
+      "material": "Acetate",
+      "base_price": 289.00,
+      "status": "PUBLISHED",
+      "variants": [
+        { "color": "Havana", "size": "M", "extra_price": 0, "sku_variant": "PS-OVAL-006-HAV-M" },
+        { "color": "Black", "size": "M", "extra_price": 0, "sku_variant": "PS-OVAL-006-BLK-M" }
+      ],
+      "images": [
+        { "image_url": "https://cdn.smarteyewear.local/products/persol-po3092sm/main.jpg", "is_thumbnail": true, "sort_order": 0 },
+        { "image_url": "https://cdn.smarteyewear.local/products/persol-po3092sm/hinge.jpg", "is_thumbnail": false, "sort_order": 1 }
+      ]
+    },
+    {
+      "sku": "PS-CATEYE-007",
+      "name": "Persol PO3259S Cat Eye",
+      "slug": "persol-po3259s-cat-eye",
+      "description": "Feminine cat-eye silhouette in polished acetate.",
+      "brand": "Persol",
+      "category": "Sunglasses",
+      "frame_shape": "CAT_EYE",
+      "gender_target": "FEMALE",
+      "material": "Acetate",
+      "base_price": 305.00,
+      "status": "PUBLISHED",
+      "variants": [
+        { "color": "Tortoise", "size": "S", "extra_price": 0, "sku_variant": "PS-CATEYE-007-TOR-S" },
+        { "color": "Red", "size": "S", "extra_price": 12.00, "sku_variant": "PS-CATEYE-007-RED-S" }
+      ],
+      "images": [
+        { "image_url": "https://cdn.smarteyewear.local/products/persol-po3259s-cat-eye/main.jpg", "is_thumbnail": true, "sort_order": 0 }
+      ]
+    },
+    {
+      "sku": "GC-CATEYE-008",
+      "name": "Gucci GG0850S Cat Eye",
+      "slug": "gucci-gg0850s-cat-eye",
+      "description": "Oversized cat-eye frame with signature Gucci web temple detail.",
+      "brand": "Gucci",
+      "category": "Sunglasses",
+      "frame_shape": "CAT_EYE",
+      "gender_target": "FEMALE",
+      "material": "Acetate",
+      "base_price": 410.00,
+      "status": "PUBLISHED",
+      "variants": [
+        { "color": "Black", "size": "M", "extra_price": 0, "sku_variant": "GC-CATEYE-008-BLK-M" },
+        { "color": "Ivory", "size": "M", "extra_price": 15.00, "sku_variant": "GC-CATEYE-008-IVY-M" }
+      ],
+      "images": [
+        { "image_url": "https://cdn.smarteyewear.local/products/gucci-gg0850s-cat-eye/main.jpg", "is_thumbnail": true, "sort_order": 0 },
+        { "image_url": "https://cdn.smarteyewear.local/products/gucci-gg0850s-cat-eye/detail.jpg", "is_thumbnail": false, "sort_order": 1 }
+      ]
+    },
+    {
+      "sku": "GC-RND-009",
+      "name": "Gucci GG0737O Round Optical",
+      "slug": "gucci-gg0737o-round-optical",
+      "description": "Thin round metal optical frame with subtle web temple stripe.",
+      "brand": "Gucci",
+      "category": "Optical Frames",
+      "frame_shape": "ROUND",
+      "gender_target": "UNISEX",
+      "material": "Titanium",
+      "base_price": 375.00,
+      "status": "PUBLISHED",
+      "variants": [
+        { "color": "Gold", "size": "S", "extra_price": 0, "sku_variant": "GC-RND-009-GLD-S" }
+      ],
+      "images": [
+        { "image_url": "https://cdn.smarteyewear.local/products/gucci-gg0737o-round-optical/main.jpg", "is_thumbnail": true, "sort_order": 0 }
+      ]
+    },
+    {
+      "sku": "PR-RECT-010",
+      "name": "Prada PR 01OS Rectangle",
+      "slug": "prada-pr-01os-rectangle",
+      "description": "Sharp rectangular sunglasses with a minimalist metal bridge.",
+      "brand": "Prada",
+      "category": "Sunglasses",
+      "frame_shape": "RECTANGLE",
+      "gender_target": "MALE",
+      "material": "Metal",
+      "base_price": 340.00,
+      "status": "PUBLISHED",
+      "variants": [
+        { "color": "Black", "size": "M", "extra_price": 0, "sku_variant": "PR-RECT-010-BLK-M" },
+        { "color": "Gunmetal", "size": "L", "extra_price": 10.00, "sku_variant": "PR-RECT-010-GUN-L" }
+      ],
+      "images": [
+        { "image_url": "https://cdn.smarteyewear.local/products/prada-pr-01os-rectangle/main.jpg", "is_thumbnail": true, "sort_order": 0 }
+      ]
+    },
+    {
+      "sku": "PR-SQR-011",
+      "name": "Prada PR 17WS Square",
+      "slug": "prada-pr-17ws-square",
+      "description": "Bold square acetate frame with logo temple hardware.",
+      "brand": "Prada",
+      "category": "Sunglasses",
+      "frame_shape": "SQUARE",
+      "gender_target": "FEMALE",
+      "material": "Acetate",
+      "base_price": 355.00,
+      "status": "PUBLISHED",
+      "variants": [
+        { "color": "Black", "size": "M", "extra_price": 0, "sku_variant": "PR-SQR-011-BLK-M" },
+        { "color": "Havana", "size": "M", "extra_price": 0, "sku_variant": "PR-SQR-011-HAV-M" }
+      ],
+      "images": [
+        { "image_url": "https://cdn.smarteyewear.local/products/prada-pr-17ws-square/main.jpg", "is_thumbnail": true, "sort_order": 0 },
+        { "image_url": "https://cdn.smarteyewear.local/products/prada-pr-17ws-square/back.jpg", "is_thumbnail": false, "sort_order": 1 }
+      ]
+    },
+    {
+      "sku": "TF-RIML-012",
+      "name": "Tom Ford Alex Rimless",
+      "slug": "tom-ford-alex-rimless",
+      "description": "Minimalist rimless optical frame with titanium temples.",
+      "brand": "Tom Ford",
+      "category": "Optical Frames",
+      "frame_shape": "RIMLESS",
+      "gender_target": "MALE",
+      "material": "Titanium",
+      "base_price": 420.00,
+      "status": "PUBLISHED",
+      "variants": [
+        { "color": "Silver", "size": "M", "extra_price": 0, "sku_variant": "TF-RIML-012-SLV-M" }
+      ],
+      "images": [
+        { "image_url": "https://cdn.smarteyewear.local/products/tom-ford-alex-rimless/main.jpg", "is_thumbnail": true, "sort_order": 0 }
+      ]
+    },
+    {
+      "sku": "TF-AVI-013",
+      "name": "Tom Ford Dashel Aviator",
+      "slug": "tom-ford-dashel-aviator",
+      "description": "Modern aviator with double bridge and gradient lenses.",
+      "brand": "Tom Ford",
+      "category": "Sunglasses",
+      "frame_shape": "AVIATOR",
+      "gender_target": "MALE",
+      "material": "Metal",
+      "base_price": 395.00,
+      "status": "PUBLISHED",
+      "variants": [
+        { "color": "Gold", "size": "L", "extra_price": 0, "sku_variant": "TF-AVI-013-GLD-L" },
+        { "color": "Black", "size": "L", "extra_price": 0, "sku_variant": "TF-AVI-013-BLK-L" }
+      ],
+      "images": [
+        { "image_url": "https://cdn.smarteyewear.local/products/tom-ford-dashel-aviator/main.jpg", "is_thumbnail": true, "sort_order": 0 }
+      ]
+    },
+    {
+      "sku": "WP-WAY-014",
+      "name": "Warby Parker Percey",
+      "slug": "warby-parker-percey",
+      "description": "Affordable classic wayfarer-inspired optical frame.",
+      "brand": "Warby Parker",
+      "category": "Optical Frames",
+      "frame_shape": "WAYFARER",
+      "gender_target": "UNISEX",
+      "material": "Acetate",
+      "base_price": 95.00,
+      "status": "PUBLISHED",
+      "variants": [
+        { "color": "Whiskey Tortoise", "size": "M", "extra_price": 0, "sku_variant": "WP-WAY-014-WTOR-M" },
+        { "color": "Jet Black", "size": "M", "extra_price": 0, "sku_variant": "WP-WAY-014-JBLK-M" }
+      ],
+      "images": [
+        { "image_url": "https://cdn.smarteyewear.local/products/warby-parker-percey/main.jpg", "is_thumbnail": true, "sort_order": 0 }
+      ]
+    },
+    {
+      "sku": "WP-RND-015",
+      "name": "Warby Parker Begley",
+      "slug": "warby-parker-begley",
+      "description": "Round acetate optical frame with a slightly oversized fit.",
+      "brand": "Warby Parker",
+      "category": "Optical Frames",
+      "frame_shape": "ROUND",
+      "gender_target": "UNISEX",
+      "material": "Acetate",
+      "base_price": 95.00,
+      "status": "PUBLISHED",
+      "variants": [
+        { "color": "Crystal", "size": "S", "extra_price": 0, "sku_variant": "WP-RND-015-CRY-S" },
+        { "color": "Black Matte", "size": "S", "extra_price": 0, "sku_variant": "WP-RND-015-BMAT-S" }
+      ],
+      "images": [
+        { "image_url": "https://cdn.smarteyewear.local/products/warby-parker-begley/main.jpg", "is_thumbnail": true, "sort_order": 0 }
+      ]
+    },
+    {
+      "sku": "WP-READ-016",
+      "name": "Warby Parker Percey Readers",
+      "slug": "warby-parker-percey-readers",
+      "description": "Percey frame fitted with non-prescription reading lenses.",
+      "brand": "Warby Parker",
+      "category": "Reading Glasses",
+      "frame_shape": "WAYFARER",
+      "gender_target": "UNISEX",
+      "material": "Acetate",
+      "base_price": 60.00,
+      "status": "PUBLISHED",
+      "variants": [
+        { "color": "Jet Black", "size": "M", "extra_price": 0, "sku_variant": "WP-READ-016-JBLK-M-150" },
+        { "color": "Jet Black", "size": "M", "extra_price": 0, "sku_variant": "WP-READ-016-JBLK-M-200" }
+      ],
+      "images": [
+        { "image_url": "https://cdn.smarteyewear.local/products/warby-parker-percey-readers/main.jpg", "is_thumbnail": true, "sort_order": 0 }
+      ]
+    },
+    {
+      "sku": "CA-SQR-017",
+      "name": "Carrera 1067/S",
+      "slug": "carrera-1067-s",
+      "description": "Sporty square sunglasses with contrast temple accents.",
+      "brand": "Carrera",
+      "category": "Sunglasses",
+      "frame_shape": "SQUARE",
+      "gender_target": "MALE",
+      "material": "Injected Plastic",
+      "base_price": 129.00,
+      "status": "PUBLISHED",
+      "variants": [
+        { "color": "Black/Red", "size": "M", "extra_price": 0, "sku_variant": "CA-SQR-017-BLKRED-M" }
+      ],
+      "images": [
+        { "image_url": "https://cdn.smarteyewear.local/products/carrera-1067-s/main.jpg", "is_thumbnail": true, "sort_order": 0 }
+      ]
+    },
+    {
+      "sku": "CA-RECT-018",
+      "name": "Carrera 8865 Sport",
+      "slug": "carrera-8865-sport",
+      "description": "Lightweight rectangular sport frame for active wear.",
+      "brand": "Carrera",
+      "category": "Sports Eyewear",
+      "frame_shape": "RECTANGLE",
+      "gender_target": "MALE",
+      "material": "TR90",
+      "base_price": 110.00,
+      "status": "PUBLISHED",
+      "variants": [
+        { "color": "Matte Grey", "size": "M", "extra_price": 0, "sku_variant": "CA-RECT-018-MGRY-M" },
+        { "color": "Matte Black", "size": "M", "extra_price": 0, "sku_variant": "CA-RECT-018-MBLK-M" }
+      ],
+      "images": [
+        { "image_url": "https://cdn.smarteyewear.local/products/carrera-8865-sport/main.jpg", "is_thumbnail": true, "sort_order": 0 }
+      ]
+    },
+    {
+      "sku": "VG-CATEYE-019",
+      "name": "Vogue Eyewear VO5361S",
+      "slug": "vogue-eyewear-vo5361s",
+      "description": "Playful cat-eye sunglasses with a two-tone acetate finish.",
+      "brand": "Vogue Eyewear",
+      "category": "Sunglasses",
+      "frame_shape": "CAT_EYE",
+      "gender_target": "FEMALE",
+      "material": "Acetate",
+      "base_price": 89.00,
+      "status": "PUBLISHED",
+      "variants": [
+        { "color": "Pink Havana", "size": "S", "extra_price": 0, "sku_variant": "VG-CATEYE-019-PHAV-S" },
+        { "color": "Black", "size": "S", "extra_price": 0, "sku_variant": "VG-CATEYE-019-BLK-S" }
+      ],
+      "images": [
+        { "image_url": "https://cdn.smarteyewear.local/products/vogue-eyewear-vo5361s/main.jpg", "is_thumbnail": true, "sort_order": 0 }
+      ]
+    },
+    {
+      "sku": "VG-OVAL-020",
+      "name": "Vogue Eyewear VO5239 Oval Optical",
+      "slug": "vogue-eyewear-vo5239-oval-optical",
+      "description": "Soft oval metal optical frame, lightweight everyday wear.",
+      "brand": "Vogue Eyewear",
+      "category": "Optical Frames",
+      "frame_shape": "OVAL",
+      "gender_target": "FEMALE",
+      "material": "Metal",
+      "base_price": 79.00,
+      "status": "PUBLISHED",
+      "variants": [
+        { "color": "Rose Gold", "size": "S", "extra_price": 0, "sku_variant": "VG-OVAL-020-RGLD-S" }
+      ],
+      "images": [
+        { "image_url": "https://cdn.smarteyewear.local/products/vogue-eyewear-vo5239-oval-optical/main.jpg", "is_thumbnail": true, "sort_order": 0 }
+      ]
+    },
+    {
+      "sku": "OP-RND-021",
+      "name": "Oliver Peoples Gregory Peck",
+      "slug": "oliver-peoples-gregory-peck",
+      "description": "Vintage-inspired round acetate frame, small fit.",
+      "brand": "Oliver Peoples",
+      "category": "Optical Frames",
+      "frame_shape": "ROUND",
+      "gender_target": "UNISEX",
+      "material": "Acetate",
+      "base_price": 349.00,
+      "status": "PUBLISHED",
+      "variants": [
+        { "color": "Honey Tortoise", "size": "XS", "extra_price": 0, "sku_variant": "OP-RND-021-HTOR-XS" },
+        { "color": "Black", "size": "XS", "extra_price": 0, "sku_variant": "OP-RND-021-BLK-XS" }
+      ],
+      "images": [
+        { "image_url": "https://cdn.smarteyewear.local/products/oliver-peoples-gregory-peck/main.jpg", "is_thumbnail": true, "sort_order": 0 }
+      ]
+    },
+    {
+      "sku": "OP-RIML-022",
+      "name": "Oliver Peoples Coleridge Rimless",
+      "slug": "oliver-peoples-coleridge-rimless",
+      "description": "Understated rimless optical frame in brushed titanium.",
+      "brand": "Oliver Peoples",
+      "category": "Optical Frames",
+      "frame_shape": "RIMLESS",
+      "gender_target": "MALE",
+      "material": "Titanium",
+      "base_price": 399.00,
+      "status": "PUBLISHED",
+      "variants": [
+        { "color": "Gunmetal", "size": "M", "extra_price": 0, "sku_variant": "OP-RIML-022-GUN-M" }
+      ],
+      "images": [
+        { "image_url": "https://cdn.smarteyewear.local/products/oliver-peoples-coleridge-rimless/main.jpg", "is_thumbnail": true, "sort_order": 0 }
+      ]
+    },
+    {
+      "sku": "RB-KID-023",
+      "name": "Ray-Ban Junior Wayfarer",
+      "slug": "ray-ban-junior-wayfarer",
+      "description": "Scaled-down Wayfarer built for kids, impact-resistant lenses.",
+      "brand": "Ray-Ban",
+      "category": "Kids Eyewear",
+      "frame_shape": "WAYFARER",
+      "gender_target": "UNISEX",
+      "material": "Injected Plastic",
+      "base_price": 89.00,
+      "status": "PUBLISHED",
+      "variants": [
+        { "color": "Blue", "size": "XS", "extra_price": 0, "sku_variant": "RB-KID-023-BLU-XS" },
+        { "color": "Red", "size": "XS", "extra_price": 0, "sku_variant": "RB-KID-023-RED-XS" }
+      ],
+      "images": [
+        { "image_url": "https://cdn.smarteyewear.local/products/ray-ban-junior-wayfarer/main.jpg", "is_thumbnail": true, "sort_order": 0 }
+      ]
+    },
+    {
+      "sku": "OK-SQR-024",
+      "name": "Oakley Kids Flak Junior",
+      "slug": "oakley-kids-flak-junior",
+      "description": "Junior-sized square sport frame for active kids.",
+      "brand": "Oakley",
+      "category": "Kids Eyewear",
+      "frame_shape": "SQUARE",
+      "gender_target": "UNISEX",
+      "material": "O Matter (Polymer)",
+      "base_price": 99.00,
+      "status": "PUBLISHED",
+      "variants": [
+        { "color": "Black/Blue", "size": "XS", "extra_price": 0, "sku_variant": "OK-SQR-024-BLKBLU-XS" }
+      ],
+      "images": [
+        { "image_url": "https://cdn.smarteyewear.local/products/oakley-kids-flak-junior/main.jpg", "is_thumbnail": true, "sort_order": 0 }
+      ]
+    }
+  ]
+}

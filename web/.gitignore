@@ -31,3 +31,7 @@ logs/
 # Test / coverage
 coverage/
 .pytest_cache/
+
+# TypeScript / Next.js generated
+*.tsbuildinfo
+next-env.d.ts

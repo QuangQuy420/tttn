@@ -1,0 +1,323 @@
+openapi: 3.0.3
+info:
+  title: product-service
+  description: >
+    Catalog service — brands, categories, products, variants, images.
+    Code-first contract (see infra/docs/adr/0001-contract-sharing-mechanism.md and the
+    Sprint 1 plan's Q7): written from the real NestJS implementation in
+    `product-service/src`, not the other way around. Only the endpoints that exist today
+    are documented (GET /products, GET /products/:id, GET /categories, GET /health).
+    `ps_inventory`/`ps_tags`/`ps_product_tags`/`ps_ratings`/`ps_face_shape_styles` have
+    migrated tables but no endpoints yet (Sprint 1 Q10) and are intentionally absent here.
+  version: "0.1.0"
+servers:
+  - url: http://localhost:3002
+    description: product-service, direct (local dev only)
+  - url: http://localhost:8080/api
+    description: via api-gateway (same shapes, `/api` prefix — see api-gateway proxy)
+
+# No auth on any endpoint today — edge JWT verification is deferred (see the Sprint 1
+# plan's Q3); these routes are proxied/served unauthenticated for now.
+security: []
+
+tags:
+  - name: products
+  - name: categories
+  - name: health
+
+paths:
+  /health:
+    get:
+      tags: [health]
+      summary: Liveness check
+      description: Plain endpoint, no auth, no downstream calls.
+      operationId: getHealth
+      responses:
+        "200":
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                required: [status]
+
+  /products:
+    get:
+      tags: [products]
+      summary: List products (filter + paginate)
+      operationId: listProducts
+      parameters:
+        - name: categoryId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: brandId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: frameShape
+          in: query
+          schema:
+            $ref: "#/components/schemas/FrameShape"
+        - name: genderTarget
+          in: query
+          schema:
+            $ref: "#/components/schemas/GenderTarget"
+        - name: status
+          in: query
+          description: >
+            Defaults to `PUBLISHED` server-side when omitted.
+          schema:
+            $ref: "#/components/schemas/ProductStatus"
+        - name: minPrice
+          in: query
+          schema:
+            type: number
+            minimum: 0
+            exclusiveMinimum: true
+        - name: maxPrice
+          in: query
+          schema:
+            type: number
+            minimum: 0
+            exclusiveMinimum: true
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Paginated list of products
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedProductResponse"
+        "400":
+          description: Invalid query parameters (validation failure)
+
+  /products/{id}:
+    get:
+      tags: [products]
+      summary: Get a single product by id
+      operationId: getProductById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Product found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductResponse"
+        "404":
+          description: Product not found
+
+  /categories:
+    get:
+      tags: [categories]
+      summary: List all categories
+      operationId: listCategories
+      responses:
+        "200":
+          description: Flat list of categories (self-referential via parentId)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CategoryResponse"
+
+components:
+  schemas:
+    FrameShape:
+      type: string
+      enum: [ROUND, SQUARE, OVAL, CAT_EYE, AVIATOR, RECTANGLE, WAYFARER, RIMLESS]
+
+    GenderTarget:
+      type: string
+      enum: [MALE, FEMALE, UNISEX]
+
+    ProductStatus:
+      type: string
+      enum: [DRAFT, PUBLISHED, ARCHIVED]
+
+    BrandSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        logoUrl:
+          type: string
+          nullable: true
+      required: [id, name, logoUrl]
+
+    CategorySummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+      required: [id, name, slug]
+
+    CategoryResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        parentId:
+          type: string
+          format: uuid
+          nullable: true
+      required: [id, name, slug, parentId]
+
+    ProductVariantResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        color:
+          type: string
+        size:
+          type: string
+        extraPrice:
+          type: number
+        skuVariant:
+          type: string
+      required: [id, color, size, extraPrice, skuVariant]
+
+    ProductImageResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+          nullable: true
+        imageUrl:
+          type: string
+        isThumbnail:
+          type: boolean
+        sortOrder:
+          type: integer
+      required: [id, variantId, imageUrl, isThumbnail, sortOrder]
+
+    ProductResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+          nullable: true
+        frameShape:
+          $ref: "#/components/schemas/FrameShape"
+        genderTarget:
+          $ref: "#/components/schemas/GenderTarget"
+        material:
+          type: string
+          nullable: true
+        basePrice:
+          type: number
+        status:
+          $ref: "#/components/schemas/ProductStatus"
+        brand:
+          $ref: "#/components/schemas/BrandSummary"
+        category:
+          $ref: "#/components/schemas/CategorySummary"
+        variants:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductVariantResponse"
+        images:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductImageResponse"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - sku
+        - name
+        - slug
+        - description
+        - frameShape
+        - genderTarget
+        - material
+        - basePrice
+        - status
+        - brand
+        - category
+        - variants
+        - images
+        - createdAt
+        - updatedAt
+
+    PaginatedProductResponse:
+      type: object
+      description: >
+        Flat pagination envelope (NOT a nested data/meta shape) — see
+        product-service/src/routes/dto/paginated-response.dto.ts.
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductResponse"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        totalPages:
+          type: integer
+      required: [items, total, page, limit, totalPages]

@@ -7,7 +7,9 @@ recommendation and virtual try-on. It runs **locally only** via Docker Compose.
 
 ## Style & principles
 
-- **Polyrepo** — 9 independent repos, each with its own Dockerfile and CI.
+- **Monorepo, split-ready** — one git repo today with 9 sibling service folders (own Dockerfile
+  and CI config each), kept structured so a future polyrepo split is a folder-by-folder extraction,
+  not a rewrite.
 - **API-first** — every service publishes an OpenAPI contract in `infra/contracts`.
 - **Database-per-service** — services do not share tables; they integrate over APIs.
 - **North-South vs East-West**
@@ -20,9 +22,9 @@ recommendation and virtual try-on. It runs **locally only** via Docker Compose.
 
 | Component | Tech | Store |
 |-----------|------|-------|
-| api-gateway              | TBD (Q2) | — |
+| api-gateway              | NestJS + TypeScript | — |
 | user-service             | TBD (Q2) | Postgres `auth_db` |
-| product-service          | TBD (Q2) | Postgres `catalog_db` |
+| product-service          | NestJS + TypeScript | Postgres `product_db` |
 | order-service            | TBD (Q2) | Postgres `order_db` + Redis (cart) |
 | payment-service          | TBD (Q2) | Postgres `payment_db` (internal-only, called by `order-service`) |
 | face-processing-service  | Python + FastAPI + MediaPipe | S3 / MinIO (face images) |
@@ -42,7 +44,8 @@ browser → api-gateway → order-service         (cart in Redis → checkout �
 
 ## Cross-cutting decisions (to record as ADRs)
 
-- **Backend language (Q2)** — pending team decision (NestJS / Spring Boot / Go).
+- **Backend language (Q2)** — `api-gateway`/`product-service` locked in as NestJS + TypeScript;
+  `user-service`/`order-service`/`payment-service` still pending (owned by the other dev).
 - **JWT verification across polyrepo** — either (a) gateway verifies at the edge and injects
   a trusted `X-User-*` header for internal services, or (b) each service verifies using a
   shared `JWT_SECRET`/JWKS. Decide and record.
