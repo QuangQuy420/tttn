@@ -1,13 +1,22 @@
 # ============================================================================
 # Smart Eyewear — local orchestration (LOCAL ONLY, no production deploy).
 #
-# Polyrepo layout: build contexts point to sibling repo folders (../<repo>).
-# Before `up`: copy infra/.env.example -> infra/.env, and each <repo>/.env.example
-# -> <repo>/.env.
+# Monorepo, split-ready layout: build contexts point to sibling service folders
+# (../<service>), kept structured so a future polyrepo split is a folder extraction,
+# not a rewrite. Before `up`: copy infra/.env.example -> infra/.env, and each
+# <service>/.env.example -> <service>/.env.
 #
-# ⚠️ api-gateway/user-service/product-service/order-service/payment-service have
-#    PLACEHOLDER Dockerfiles until backend language (Q2) is decided — they will
-#    not build until then.
+# ⚠️ api-gateway, product-service, and web are real, building services with healthchecks.
+#    user-service/order-service/payment-service still have no language decided (Q2) — their
+#    Dockerfiles are placeholders (`file with no instructions`), which would abort a bare
+#    `docker compose up --build` before ANY container starts. face-processing-service/
+#    recommendation-service have real Dockerfiles (python:3.11-slim) that build, but no
+#    app/main.py yet, so their containers would build then crash-loop.
+#    All five are gated behind the `not-ready` Compose profile so a bare `docker compose up
+#    --build` (no profile) only builds/starts Postgres/Redis/MinIO + api-gateway +
+#    product-service + web — matching this sprint's AC1. Once a service's app lands, drop its
+#    `profiles:` key here. To bring the gated ones up anyway: `docker compose --profile
+#    not-ready up --build`. See infra/README.md for the up-to-date per-service status.
 # ============================================================================
 
 name: smart-eyewear
@@ -63,31 +72,55 @@ services:
   # all traffic enters through the gateway (North-South).
 
   api-gateway:
-    build: ../api-gateway      # ⚠️ language TBD (Q2)
+    build: ../api-gateway
     env_file: ../api-gateway/.env
     ports:
       - "${API_GATEWAY_PORT:-8080}:8080"
+    # user-service intentionally NOT listed here: api-gateway doesn't call it yet
+    # (edge JWT / `/api/auth/*` proxying is deferred — see Q3 in the sprint plan).
+    # Re-add `user-service: condition: service_healthy` once that proxy exists —
+    # until then, a hard dependency would block api-gateway from coming up whenever
+    # user-service's Dockerfile (still a placeholder) fails to build.
     depends_on:
-      - user-service
-      - product-service
+      product-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   user-service:
     build: ../user-service     # ⚠️ language TBD (Q2)
     env_file: ../user-service/.env
+    profiles: [not-ready]
     depends_on:
       postgres:
         condition: service_healthy
 
   product-service:
-    build: ../product-service  # ⚠️ language TBD (Q2)
+    build: ../product-service
     env_file: ../product-service/.env
+    # The seed runner (T11, src/seed.ts) resolves the seed file to /infra/seed/products.json
+    # (matches the monorepo layout when run on the host) — bind-mount the same path so
+    # `docker compose exec product-service node dist/seed.js` also works from a clean checkout.
+    volumes:
+      - ./seed:/infra/seed:ro
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3002/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   order-service:
     build: ../order-service    # ⚠️ language TBD (Q2)
     env_file: ../order-service/.env
+    profiles: [not-ready]
     depends_on:
       postgres:
         condition: service_healthy
@@ -99,6 +132,7 @@ services:
   payment-service:
     build: ../payment-service  # ⚠️ language TBD (Q2)
     env_file: ../payment-service/.env
+    profiles: [not-ready]
     depends_on:
       postgres:
         condition: service_healthy
@@ -106,6 +140,7 @@ services:
   face-processing-service:
     build: ../face-processing-service
     env_file: ../face-processing-service/.env
+    profiles: [not-ready]
     depends_on:
       minio:
         condition: service_healthy
@@ -113,16 +148,30 @@ services:
   recommendation-service:
     build: ../recommendation-service
     env_file: ../recommendation-service/.env
+    profiles: [not-ready]
     depends_on:
       - product-service
 
   web:
-    build: ../web
+    build:
+      context: ../web
+      # NEXT_PUBLIC_* vars are inlined into the client bundle at build time — env_file below
+      # only reaches the container at runtime, which is too late for Next.js. Default matches
+      # web/.env.example (browser reaches the gateway's published host port).
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080/api}
     env_file: ../web/.env
     ports:
       - "${WEB_PORT:-3000}:3000"
     depends_on:
-      - api-gateway
+      api-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
 volumes:
   pgdata:

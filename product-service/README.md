@@ -2,8 +2,7 @@
 
 **Product Service.** Products, categories, frame attributes, and list/detail/search.
 
-> ⛔ **Language: TBD (Open Question Q2 — NestJS / Spring Boot / Go).**
-> The `Dockerfile` is a placeholder until the stack is chosen.
+> ✅ **Language: NestJS + TypeScript** (locked in). App scaffolded, `Dockerfile` filled in.
 
 ## Responsibilities
 - `GET /products` (filter/paginate), `GET /products/:id`, `GET /categories`.
@@ -19,9 +18,9 @@ src/
   db/             # entities/models, migrations/, connection/ORM setup
   config/         # DI container, env/config, bootstrap
   middlewares/    # error handler, logging
-tests/
+test/             # supertest e2e tests (unit *.spec.ts colocated under src/)
 ```
 
 ## Data
-- Postgres database `catalog_db` (`products`, `categories`). See [`.env.example`](.env.example).
+- Postgres database `product_db` (`products`, `categories`). See [`.env.example`](.env.example).
 - Seed data lives in `infra/seed`.

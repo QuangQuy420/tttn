@@ -28,6 +28,9 @@ logs/
 .vscode/
 .DS_Store
 
+# Local-only Compose overrides (auto-loaded by `docker compose up`, machine-specific)
+docker-compose.override.yml
+
 # Test / coverage
 coverage/
 .pytest_cache/

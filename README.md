@@ -39,7 +39,7 @@ register / login
 ```
             ┌─────────────┐
  browser ──▶│ api-gateway │──┬─▶ user-service      (Postgres: auth_db)
-            └─────────────┘  ├─▶ product-service   (Postgres: catalog_db)
+            └─────────────┘  ├─▶ product-service   (Postgres: product_db)
                              ├─▶ order-service      (Postgres: order_db + Redis) ──▶ payment-service (Postgres: payment_db)
                              ├─▶ face-processing-service   (FastAPI + MediaPipe, S3/MinIO)
                              └─▶ recommendation-service    (FastAPI; reads product-service)
@@ -52,9 +52,9 @@ register / login
 
 | Repo | Language | Responsibility |
 |------|----------|----------------|
-| **`api-gateway`** | _TBD — Q2 (NestJS / Spring Boot / Go)_ | Single entry point; routing, CORS, edge JWT verify, rate-limit (North-South) |
+| **`api-gateway`** | **NestJS + TypeScript** | Single entry point; routing, CORS, edge JWT verify, rate-limit (North-South) |
 | **`user-service`** | _TBD — Q2_ | Register / login, JWT, user profile |
-| **`product-service`** | _TBD — Q2_ | Products, categories, frame attributes, list/detail/search |
+| **`product-service`** | **NestJS + TypeScript** | Products, categories, frame attributes, list/detail/search |
 | **`order-service`** | _TBD — Q2_ | Cart (Redis), checkout, orders, history (delegates payment to `payment-service`) |
 | **`payment-service`** | _TBD — Q2_ | Processes checkout payments for `order-service` (mock provider), payment status/history |
 | **`face-processing-service`** | **Python + FastAPI** | Face landmark detection (MediaPipe) → face shape + measurements |
@@ -62,10 +62,10 @@ register / login
 | **`web`** | **Next.js + TypeScript** | Storefront, auth UI, upload, recommendations, virtual try-on (AR), light admin |
 | **`infra`** | Docker Compose + GitHub Actions | `docker-compose.yml`, seed data, shared API contracts, docs/ADRs (local only) |
 
-> ⛔ **Backend language for `api-gateway` / `user-service` / `product-service` /
-> `order-service` / `payment-service` is not decided yet (Open Question Q2).** Their
-> folders are scaffolded language-agnostically and their Dockerfiles are placeholders.
-> Fill them in once the team locks the stack.
+> ✅ **`api-gateway` and `product-service` are locked in as NestJS + TypeScript.**
+> ⛔ **Backend language for `user-service` / `order-service` / `payment-service` is not
+> decided yet (Open Question Q2).** Their folders are scaffolded language-agnostically and
+> their Dockerfiles are placeholders. Fill them in once the team locks the stack.
 
 ---
 
@@ -113,8 +113,12 @@ tests/         - unit (services, repos) + integration
 
 The Python services (`face-processing-service`, `recommendation-service`) mirror the same
 layering: `app/routers` → `app/services` → `app/repositories` → `app/db`, with
-`app/schemas` (Pydantic DTOs) and `app/core` (config + DI). The `web` repo (Next.js) keeps
-its own structure with an `lib/api` client layer that talks only to the gateway.
+`app/schemas` (Pydantic DTOs) and `app/core` (config + DI). The NestJS services
+(`api-gateway`, `product-service`) mirror it with Nest's own building blocks: `*.controller.ts`
+→ `*.service.ts` → `*.repository.ts` → TypeORM/Prisma entities, organized as feature
+**modules** (`*.module.ts`) with `dto/` (class-validator DTOs) and providers wired through
+Nest's DI container. The `web` repo (Next.js) keeps its own structure with an `lib/api`
+client layer that talks only to the gateway.
 
 ---
 
@@ -137,7 +141,14 @@ docker compose up --build
 - API gateway: http://localhost:8080
 - MinIO console: http://localhost:9001
 
-> ⚠️ Backend services with `Language: TBD` won't build until Q2 is decided and their
-> Dockerfiles are completed.
+> ⚠️ `user-service`, `order-service`, `payment-service`, `face-processing-service`, and
+> `recommendation-service` are gated behind the `not-ready` Compose profile (see
+> `infra/docker-compose.yml`), so a plain `docker compose up --build` skips them cleanly rather
+> than failing on their incomplete Dockerfiles/apps. Bring them up anyway once they're ready
+> for local testing with `docker compose --profile not-ready up --build`.
+>
+> If Postgres fails to start with "port is already allocated", another local Postgres is
+> already using 5432 — add a gitignored `infra/docker-compose.override.yml` remapping
+> `postgres`'s `ports` to a free host port (Compose auto-loads it, no extra flags needed).
 
 ---
