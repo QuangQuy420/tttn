@@ -34,6 +34,19 @@ describe("products api client", () => {
     expect(query.get("limit")).toBe("10");
   });
 
+  it("getProducts serializes search, minPrice and maxPrice into the query string", async () => {
+    mockedApiFetch.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, totalPages: 0 });
+
+    await getProducts({ search: "aviator", minPrice: 1_500_000, maxPrice: 2_500_000 });
+
+    const calledPath = mockedApiFetch.mock.calls[0][0] as string;
+    expect(calledPath.startsWith("/products?")).toBe(true);
+    const query = new URLSearchParams(calledPath.split("?")[1]);
+    expect(query.get("search")).toBe("aviator");
+    expect(query.get("minPrice")).toBe("1500000");
+    expect(query.get("maxPrice")).toBe("2500000");
+  });
+
   it("getProductById calls /products/:id with the given id", async () => {
     mockedApiFetch.mockResolvedValue({ id: "abc" });
 

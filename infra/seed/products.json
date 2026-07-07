@@ -38,8 +38,7 @@
         { "color": "Black", "size": "L", "extra_price": 8.00, "sku_variant": "RB-WAY-001-BLK-L" }
       ],
       "images": [
-        { "image_url": "https://cdn.smarteyewear.local/products/ray-ban-original-wayfarer/main.jpg", "is_thumbnail": true, "sort_order": 0 },
-        { "image_url": "https://cdn.smarteyewear.local/products/ray-ban-original-wayfarer/side.jpg", "is_thumbnail": false, "sort_order": 1 }
+        { "image_url": "/products/catalogs/ray-ban-original-wayfarer.png", "is_thumbnail": true, "sort_order": 0 }
       ]
     },
     {
@@ -60,8 +59,7 @@
         { "color": "Gold", "size": "L", "extra_price": 6.00, "sku_variant": "RB-AVI-002-GLD-L" }
       ],
       "images": [
-        { "image_url": "https://cdn.smarteyewear.local/products/ray-ban-aviator-classic/main.jpg", "is_thumbnail": true, "sort_order": 0 },
-        { "image_url": "https://cdn.smarteyewear.local/products/ray-ban-aviator-classic/angle.jpg", "is_thumbnail": false, "sort_order": 1 }
+        { "image_url": "/products/catalogs/ray-ban-aviator-classic.png", "is_thumbnail": true, "sort_order": 0 }
       ]
     },
     {
@@ -338,8 +336,8 @@
       "base_price": 60.00,
       "status": "PUBLISHED",
       "variants": [
-        { "color": "Jet Black", "size": "M", "extra_price": 0, "sku_variant": "WP-READ-016-JBLK-M-150" },
-        { "color": "Jet Black", "size": "M", "extra_price": 0, "sku_variant": "WP-READ-016-JBLK-M-200" }
+        { "color": "Jet Black", "size": "M / +1.50", "extra_price": 0, "sku_variant": "WP-READ-016-JBLK-M-150" },
+        { "color": "Jet Black", "size": "M / +2.00", "extra_price": 0, "sku_variant": "WP-READ-016-JBLK-M-200" }
       ],
       "images": [
         { "image_url": "https://cdn.smarteyewear.local/products/warby-parker-percey-readers/main.jpg", "is_thumbnail": true, "sort_order": 0 }

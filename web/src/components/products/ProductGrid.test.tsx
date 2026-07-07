@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import type { Product } from "@/types/product";
 import { ProductGrid } from "./ProductGrid";
 
@@ -34,5 +34,13 @@ describe("ProductGrid", () => {
     render(<ProductGrid products={[]} />);
 
     expect(screen.getByText(/no products found/i)).toBeInTheDocument();
+  });
+
+  it("falls back to the placeholder box instead of a broken image icon", () => {
+    render(<ProductGrid products={[buildProduct()]} />);
+
+    fireEvent.error(screen.getByRole("img", { name: "Aviator Classic" }));
+
+    expect(screen.getByRole("img", { name: "Aviator Classic" }).tagName).toBe("DIV");
   });
 });
