@@ -15,7 +15,7 @@ export function useProducts(params: ProductListParams): UseProductsResult {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { categoryId, frameShape, page, limit } = params;
+  const { categoryId, frameShape, page, limit, search, minPrice, maxPrice } = params;
 
   useEffect(() => {
     let cancelled = false;
@@ -24,7 +24,15 @@ export function useProducts(params: ProductListParams): UseProductsResult {
       setIsLoading(true);
       setError(null);
       try {
-        const response = await getProducts({ categoryId, frameShape, page, limit });
+        const response = await getProducts({
+          categoryId,
+          frameShape,
+          page,
+          limit,
+          search,
+          minPrice,
+          maxPrice,
+        });
         if (!cancelled) setProducts(response.items);
       } catch (err) {
         if (!cancelled) {
@@ -40,7 +48,7 @@ export function useProducts(params: ProductListParams): UseProductsResult {
     return () => {
       cancelled = true;
     };
-  }, [categoryId, frameShape, page, limit]);
+  }, [categoryId, frameShape, page, limit, search, minPrice, maxPrice]);
 
   return { products, isLoading, error };
 }

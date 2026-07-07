@@ -11,6 +11,9 @@ export function getProducts(
   if (params.frameShape) query.set("frameShape", params.frameShape);
   if (params.page) query.set("page", String(params.page));
   if (params.limit) query.set("limit", String(params.limit));
+  if (params.search) query.set("search", params.search);
+  if (params.minPrice !== undefined) query.set("minPrice", String(params.minPrice));
+  if (params.maxPrice !== undefined) query.set("maxPrice", String(params.maxPrice));
 
   const queryString = query.toString();
   return apiFetch<PaginatedResponse<Product>>(
