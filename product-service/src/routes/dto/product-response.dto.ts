@@ -1,6 +1,7 @@
 import { FrameShape } from '../../db/enums/frame-shape.enum';
 import { GenderTarget } from '../../db/enums/gender-target.enum';
 import { ProductStatus } from '../../db/enums/product-status.enum';
+import { FaceShape } from '../../db/enums/face-shape.enum';
 
 export class BrandSummaryDto {
   id: string;
@@ -36,6 +37,7 @@ export class ProductResponseDto {
   name: string;
   slug: string;
   description: string | null;
+  faceFitNote: string | null;
   frameShape: FrameShape;
   genderTarget: GenderTarget;
   material: string | null;
@@ -45,6 +47,7 @@ export class ProductResponseDto {
   category: CategorySummaryDto;
   variants: ProductVariantResponseDto[];
   images: ProductImageResponseDto[];
+  faceShapes: FaceShape[];
   createdAt: Date;
   updatedAt: Date;
 }

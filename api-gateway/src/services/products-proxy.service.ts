@@ -7,13 +7,15 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AxiosError } from 'axios';
+import * as FormData from 'form-data';
 import { firstValueFrom } from 'rxjs';
 import { AppConfig } from '../config/configuration';
 
 /**
- * Forwards `/api/products/*` and `/api/categories/*` requests to
- * `product-service`. Holds no business logic of its own — it's a thin,
- * typed HTTP client (per README: gateway owns no data, only proxies).
+ * Forwards `/api/products/*`, `/api/categories/*`, and `/api/brands/*`
+ * requests to `product-service`. Holds no business logic of its own — it's
+ * a thin, typed HTTP client (per README: gateway owns no data, only
+ * proxies).
  *
  * No auth guard here: edge JWT verification is explicitly deferred (see
  * api-gateway/README.md "see ADR on JWT" and the sprint plan's Q3) — these
@@ -41,6 +43,74 @@ export class ProductsProxyService {
 
   async getCategories(query: Record<string, unknown>): Promise<unknown> {
     return this.forwardGet('/categories', query);
+  }
+
+  async getBrands(query: Record<string, unknown>): Promise<unknown> {
+    return this.forwardGet('/brands', query);
+  }
+
+  async createProduct(body: Record<string, unknown>): Promise<unknown> {
+    const path = '/products';
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(`${this.baseUrl}${path}`, body),
+      );
+      return response.data;
+    } catch (error) {
+      throw this.toGatewayError(error as AxiosError, path);
+    }
+  }
+
+  async updateProduct(
+    id: string,
+    body: Record<string, unknown>,
+  ): Promise<unknown> {
+    const path = `/products/${id}`;
+    try {
+      const response = await firstValueFrom(
+        this.httpService.patch(`${this.baseUrl}${path}`, body),
+      );
+      return response.data;
+    } catch (error) {
+      throw this.toGatewayError(error as AxiosError, path);
+    }
+  }
+
+  async deleteProduct(id: string): Promise<unknown> {
+    const path = `/products/${id}`;
+    try {
+      const response = await firstValueFrom(
+        this.httpService.delete(`${this.baseUrl}${path}`),
+      );
+      return response.data;
+    } catch (error) {
+      throw this.toGatewayError(error as AxiosError, path);
+    }
+  }
+
+  async uploadProductImage(
+    id: string,
+    slot: string,
+    file: Express.Multer.File,
+  ): Promise<unknown> {
+    const path = `/products/${id}/images`;
+    const form = new FormData();
+    form.append('slot', slot);
+    form.append('file', file.buffer, {
+      filename: file.originalname,
+      contentType: file.mimetype,
+    });
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(`${this.baseUrl}${path}`, form, {
+          headers: form.getHeaders(),
+        }),
+      );
+      return response.data;
+    } catch (error) {
+      throw this.toGatewayError(error as AxiosError, path);
+    }
   }
 
   private async forwardGet(

@@ -9,7 +9,12 @@ export interface IProductImageRepository {
     productId: string,
     imageUrl: string,
   ): Promise<ProductImage | null>;
+  findByProductAndSortOrder(
+    productId: string,
+    sortOrder: number,
+  ): Promise<ProductImage | null>;
   create(data: Partial<ProductImage>): Promise<ProductImage>;
+  deleteById(id: string): Promise<void>;
 }
 
 @Injectable()
@@ -35,7 +40,18 @@ export class TypeOrmProductImageRepository implements IProductImageRepository {
     return this.repo.findOne({ where: { productId, imageUrl } });
   }
 
+  findByProductAndSortOrder(
+    productId: string,
+    sortOrder: number,
+  ): Promise<ProductImage | null> {
+    return this.repo.findOne({ where: { productId, sortOrder } });
+  }
+
   create(data: Partial<ProductImage>): Promise<ProductImage> {
     return this.repo.save(this.repo.create(data));
+  }
+
+  async deleteById(id: string): Promise<void> {
+    await this.repo.delete({ id });
   }
 }

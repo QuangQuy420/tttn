@@ -7,6 +7,7 @@ import { Inventory } from './inventory.entity';
 import { FaceShapeStyle } from './face-shape-style.entity';
 import { Tag } from './tag.entity';
 import { ProductTag } from './product-tag.entity';
+import { ProductFaceShape } from './product-face-shape.entity';
 import { Rating } from './rating.entity';
 
 export const entities = [
@@ -19,6 +20,7 @@ export const entities = [
   FaceShapeStyle,
   Tag,
   ProductTag,
+  ProductFaceShape,
   Rating,
 ];
 
@@ -32,5 +34,6 @@ export {
   FaceShapeStyle,
   Tag,
   ProductTag,
+  ProductFaceShape,
   Rating,
 };

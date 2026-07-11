@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
 import { Playfair_Display, Work_Sans } from "next/font/google";
-import { Footer } from "@/components/layout/Footer";
-import { Header } from "@/components/layout/Header";
 import "./globals.css";
 
 // NFR3: loaded via next/font/google (not a runtime <link> fetch) and exposed as CSS variables so
@@ -30,11 +28,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${playfairDisplay.variable} ${workSans.variable}`}>
-      <body>
-        <Header />
-        <main>{children}</main>
-        <Footer />
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

@@ -3,11 +3,15 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppConfig } from '../config/configuration';
 import { ProductsProxyService } from '../services/products-proxy.service';
-import { CategoriesController, ProductsController } from './products.controller';
+import {
+  BrandsController,
+  CategoriesController,
+  ProductsController,
+} from './products.controller';
 
 /**
- * Wires the `/api/products/*` + `/api/categories/*` proxy routes to
- * `product-service`, per the route table in README.md.
+ * Wires the `/api/products/*`, `/api/categories/*`, and `/api/brands/*`
+ * proxy routes to `product-service`, per the route table in README.md.
  */
 @Module({
   imports: [
@@ -18,7 +22,7 @@ import { CategoriesController, ProductsController } from './products.controller'
       }),
     }),
   ],
-  controllers: [ProductsController, CategoriesController],
+  controllers: [ProductsController, CategoriesController, BrandsController],
   providers: [ProductsProxyService],
 })
 export class ProductsModule {}

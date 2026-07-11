@@ -1,21 +1,37 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import {
   IProductRepository,
   ProductListFilter,
 } from '../repositories/product.repository';
 import { IProductVariantRepository } from '../repositories/product-variant.repository';
 import { IProductImageRepository } from '../repositories/product-image.repository';
+import { IProductFaceShapeRepository } from '../repositories/product-face-shape.repository';
+import { IBrandRepository } from '../repositories/brand.repository';
+import { ICategoryRepository } from '../repositories/category.repository';
 import {
   PRODUCT_REPOSITORY,
   PRODUCT_VARIANT_REPOSITORY,
   PRODUCT_IMAGE_REPOSITORY,
+  PRODUCT_FACE_SHAPE_REPOSITORY,
+  BRAND_REPOSITORY,
+  CATEGORY_REPOSITORY,
 } from '../repositories/tokens';
 import { ListProductsQueryDto } from '../routes/dto/list-products-query.dto';
 import { PaginatedResponseDto } from '../routes/dto/paginated-response.dto';
 import { ProductResponseDto } from '../routes/dto/product-response.dto';
+import { CreateProductDto } from '../routes/dto/create-product.dto';
+import { UpdateProductDto } from '../routes/dto/update-product.dto';
 import { Product } from '../db/entities/product.entity';
 import { ProductVariant } from '../db/entities/product-variant.entity';
 import { ProductImage } from '../db/entities/product-image.entity';
+import { ProductFaceShape } from '../db/entities/product-face-shape.entity';
+import { ProductStatus } from '../db/enums/product-status.enum';
 
 @Injectable()
 export class ProductsService {
@@ -26,6 +42,12 @@ export class ProductsService {
     private readonly variantRepository: IProductVariantRepository,
     @Inject(PRODUCT_IMAGE_REPOSITORY)
     private readonly imageRepository: IProductImageRepository,
+    @Inject(PRODUCT_FACE_SHAPE_REPOSITORY)
+    private readonly faceShapeRepository: IProductFaceShapeRepository,
+    @Inject(BRAND_REPOSITORY)
+    private readonly brandRepository: IBrandRepository,
+    @Inject(CATEGORY_REPOSITORY)
+    private readonly categoryRepository: ICategoryRepository,
   ) {}
 
   async findAll(
@@ -37,6 +59,7 @@ export class ProductsService {
       frameShape: query.frameShape,
       genderTarget: query.genderTarget,
       status: query.status,
+      includeAllStatuses: query.includeAllStatuses,
       minPrice: query.minPrice,
       maxPrice: query.maxPrice,
       search: query.search,
@@ -56,13 +79,14 @@ export class ProductsService {
     }
 
     const productIds = items.map((product) => product.id);
-    const [variants, images] = await Promise.all([
+    const [variants, images, faceShapes] = await Promise.all([
       this.variantRepository.findByProductIds(productIds),
       this.imageRepository.findByProductIds(productIds),
+      this.faceShapeRepository.findByProductIds(productIds),
     ]);
 
     const dtos = items.map((product) =>
-      this.toResponseDto(product, variants, images),
+      this.toResponseDto(product, variants, images, faceShapes),
     );
 
     return new PaginatedResponseDto<ProductResponseDto>(
@@ -80,18 +104,142 @@ export class ProductsService {
       throw new NotFoundException(`Product ${id} not found`);
     }
 
-    const [variants, images] = await Promise.all([
+    const [variants, images, faceShapes] = await Promise.all([
       this.variantRepository.findByProductIds([id]),
       this.imageRepository.findByProductIds([id]),
+      this.faceShapeRepository.findByProductIds([id]),
     ]);
 
-    return this.toResponseDto(product, variants, images);
+    return this.toResponseDto(product, variants, images, faceShapes);
+  }
+
+  async create(dto: CreateProductDto): Promise<ProductResponseDto> {
+    await this.assertCategoryAndBrandExist(dto.categoryId, dto.brandId);
+
+    const slug = await this.generateUniqueSlug(dto.name);
+    const sku = await this.generateUniqueSku();
+
+    const product = await this.productRepository.create({
+      brandId: dto.brandId,
+      categoryId: dto.categoryId,
+      sku,
+      name: dto.name,
+      slug,
+      description: dto.description ?? null,
+      faceFitNote: dto.faceFitNote ?? null,
+      frameShape: dto.frameShape,
+      genderTarget: dto.genderTarget,
+      material: dto.material ?? null,
+      basePrice: dto.basePrice,
+      status: dto.status ?? ProductStatus.PUBLISHED,
+    });
+
+    await this.faceShapeRepository.replaceForProduct(
+      product.id,
+      dto.faceShapes ?? [],
+    );
+
+    return this.findOne(product.id);
+  }
+
+  async update(id: string, dto: UpdateProductDto): Promise<ProductResponseDto> {
+    const existing =
+      await this.productRepository.findByIdWithBrandAndCategory(id);
+    if (!existing) {
+      throw new NotFoundException(`Product ${id} not found`);
+    }
+
+    if (dto.categoryId || dto.brandId) {
+      await this.assertCategoryAndBrandExist(
+        dto.categoryId ?? existing.categoryId,
+        dto.brandId ?? existing.brandId,
+      );
+    }
+
+    const updateData: Partial<Product> = {};
+    if (dto.name !== undefined) updateData.name = dto.name;
+    if (dto.categoryId !== undefined) updateData.categoryId = dto.categoryId;
+    if (dto.brandId !== undefined) updateData.brandId = dto.brandId;
+    if (dto.frameShape !== undefined) updateData.frameShape = dto.frameShape;
+    if (dto.genderTarget !== undefined)
+      updateData.genderTarget = dto.genderTarget;
+    if (dto.material !== undefined) updateData.material = dto.material;
+    if (dto.basePrice !== undefined) updateData.basePrice = dto.basePrice;
+    if (dto.description !== undefined) updateData.description = dto.description;
+    if (dto.faceFitNote !== undefined) updateData.faceFitNote = dto.faceFitNote;
+    if (dto.status !== undefined) updateData.status = dto.status;
+
+    if (Object.keys(updateData).length > 0) {
+      await this.productRepository.update(id, updateData);
+    }
+
+    if (dto.faceShapes !== undefined) {
+      await this.faceShapeRepository.replaceForProduct(id, dto.faceShapes);
+    }
+
+    return this.findOne(id);
+  }
+
+  async remove(id: string): Promise<void> {
+    const existing =
+      await this.productRepository.findByIdWithBrandAndCategory(id);
+    if (!existing) {
+      throw new NotFoundException(`Product ${id} not found`);
+    }
+    await this.productRepository.softDelete(id);
+  }
+
+  /** Throws `BadRequestException` (400) on an invalid/missing FK — AC8. */
+  private async assertCategoryAndBrandExist(
+    categoryId: string,
+    brandId: string,
+  ): Promise<void> {
+    const [category, brand] = await Promise.all([
+      this.categoryRepository.findById(categoryId),
+      this.brandRepository.findById(brandId),
+    ]);
+    if (!category) {
+      throw new BadRequestException(`categoryId ${categoryId} does not exist`);
+    }
+    if (!brand) {
+      throw new BadRequestException(`brandId ${brandId} does not exist`);
+    }
+  }
+
+  /** Normalizes/strips diacritics/kebab-cases `name`; appends -2/-3 on collision. */
+  private async generateUniqueSlug(name: string): Promise<string> {
+    const base = name
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/đ/gi, (match) => (match === 'đ' ? 'd' : 'D'))
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+    let slug = base;
+    let suffix = 2;
+    while (await this.productRepository.findBySlug(slug)) {
+      slug = `${base}-${suffix}`;
+      suffix += 1;
+    }
+    return slug;
+  }
+
+  /** Short random unique code — SKU isn't exposed on the admin form (Q1). */
+  private async generateUniqueSku(): Promise<string> {
+    let sku: string;
+    do {
+      sku = randomBytes(4).toString('hex').toUpperCase();
+    } while (await this.productRepository.findBySku(sku));
+    return sku;
   }
 
   private toResponseDto(
     product: Product,
     allVariants: ProductVariant[],
     allImages: ProductImage[],
+    allFaceShapes: ProductFaceShape[],
   ): ProductResponseDto {
     if (!product.brand || !product.category) {
       throw new Error(
@@ -105,6 +253,7 @@ export class ProductsService {
     dto.name = product.name;
     dto.slug = product.slug;
     dto.description = product.description;
+    dto.faceFitNote = product.faceFitNote;
     dto.frameShape = product.frameShape;
     dto.genderTarget = product.genderTarget;
     dto.material = product.material;
@@ -138,6 +287,9 @@ export class ProductsService {
         isThumbnail: image.isThumbnail,
         sortOrder: image.sortOrder,
       }));
+    dto.faceShapes = allFaceShapes
+      .filter((faceShape) => faceShape.productId === product.id)
+      .map((faceShape) => faceShape.faceShape);
     dto.createdAt = product.createdAt;
     dto.updatedAt = product.updatedAt;
 
