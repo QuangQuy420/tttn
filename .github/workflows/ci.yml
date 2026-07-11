@@ -95,6 +95,16 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql://app:app@localhost:5432/product_db
+      # S3ImageStorageRepository (admin image upload) requires these to even boot the
+      # app — see MinIO container step below (GH Actions `services:` can't override a
+      # container's CMD, which `minio/minio` needs, so it's started as a plain `docker
+      # run` step instead of a `services:` entry, matching infra/docker-compose.yml's
+      # dev defaults).
+      MINIO_ENDPOINT: http://localhost:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET_PRODUCT_IMAGES: product-images
+      MINIO_PUBLIC_URL: http://localhost:9000
     steps:
       - uses: actions/checkout@v4
 
@@ -103,6 +113,16 @@ jobs:
           node-version: '24'
           cache: 'npm'
           cache-dependency-path: product-service/package-lock.json
+
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio -p 9000:9000 -p 9001:9001 \
+            -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio server /data --console-address ":9001"
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:9000/minio/health/live && break
+            sleep 2
+          done
 
       - run: npm ci
       - run: npm run lint
