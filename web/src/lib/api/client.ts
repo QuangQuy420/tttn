@@ -27,12 +27,16 @@ function getBaseUrl(): string {
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const url = `${getBaseUrl()}${path}`;
 
+  // Multipart bodies (FormData, e.g. image uploads) must NOT get a JSON Content-Type — the
+  // browser sets its own `multipart/form-data; boundary=...` header when it sees a FormData body.
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+
   let response: Response;
   try {
     response = await fetch(url, {
       ...options,
       headers: {
-        "Content-Type": "application/json",
+        ...(isFormData ? {} : { "Content-Type": "application/json" }),
         ...options.headers,
       },
     });

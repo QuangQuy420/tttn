@@ -3,6 +3,9 @@ import { ProductsService } from './products.service';
 import { IProductRepository } from '../repositories/product.repository';
 import { IProductVariantRepository } from '../repositories/product-variant.repository';
 import { IProductImageRepository } from '../repositories/product-image.repository';
+import { IProductFaceShapeRepository } from '../repositories/product-face-shape.repository';
+import { IBrandRepository } from '../repositories/brand.repository';
+import { ICategoryRepository } from '../repositories/category.repository';
 import { Product } from '../db/entities/product.entity';
 import { ProductVariant } from '../db/entities/product-variant.entity';
 import { ProductImage } from '../db/entities/product-image.entity';
@@ -20,6 +23,7 @@ function makeProduct(overrides: Partial<Product> = {}): Product {
     name: 'Test Product',
     slug: 'test-product',
     description: null,
+    faceFitNote: null,
     frameShape: FrameShape.ROUND,
     genderTarget: GenderTarget.UNISEX,
     material: 'Metal',
@@ -75,6 +79,9 @@ describe('ProductsService', () => {
   let productRepository: jest.Mocked<IProductRepository>;
   let variantRepository: jest.Mocked<IProductVariantRepository>;
   let imageRepository: jest.Mocked<IProductImageRepository>;
+  let faceShapeRepository: jest.Mocked<IProductFaceShapeRepository>;
+  let brandRepository: jest.Mocked<IBrandRepository>;
+  let categoryRepository: jest.Mocked<ICategoryRepository>;
   let service: ProductsService;
 
   beforeEach(() => {
@@ -84,6 +91,8 @@ describe('ProductsService', () => {
       findBySku: jest.fn(),
       findBySlug: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
+      softDelete: jest.fn(),
       deleteById: jest.fn(),
     };
     variantRepository = {
@@ -95,13 +104,35 @@ describe('ProductsService', () => {
     imageRepository = {
       findByProductIds: jest.fn(),
       findByProductAndUrl: jest.fn(),
+      findByProductAndSortOrder: jest.fn(),
       create: jest.fn(),
+      deleteById: jest.fn(),
+    };
+    faceShapeRepository = {
+      findByProductIds: jest.fn().mockResolvedValue([]),
+      replaceForProduct: jest.fn(),
+    };
+    brandRepository = {
+      findAll: jest.fn(),
+      findById: jest.fn(),
+      findByName: jest.fn(),
+      create: jest.fn(),
+    };
+    categoryRepository = {
+      findAll: jest.fn(),
+      findBySlug: jest.fn(),
+      findById: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
     };
 
     service = new ProductsService(
       productRepository,
       variantRepository,
       imageRepository,
+      faceShapeRepository,
+      brandRepository,
+      categoryRepository,
     );
   });
 

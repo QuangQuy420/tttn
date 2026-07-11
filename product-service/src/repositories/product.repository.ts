@@ -12,6 +12,7 @@ export interface ProductListFilter {
   frameShape?: FrameShape;
   genderTarget?: GenderTarget;
   status?: ProductStatus;
+  includeAllStatuses?: boolean;
   minPrice?: number;
   maxPrice?: number;
   search?: string;
@@ -35,6 +36,9 @@ export interface IProductRepository {
   findBySku(sku: string): Promise<Product | null>;
   findBySlug(slug: string): Promise<Product | null>;
   create(data: Partial<Product>): Promise<Product>;
+  update(id: string, data: Partial<Product>): Promise<Product>;
+  /** Soft delete — sets `deleted_at` via TypeORM's built-in `softDelete()` (AC4, NFR4). */
+  softDelete(id: string): Promise<void>;
   /** Hard delete — only used by the seed runner to roll back a partially-seeded product. */
   deleteById(id: string): Promise<void>;
 }
@@ -69,9 +73,13 @@ export class TypeOrmProductRepository implements IProductRepository {
         genderTarget: filter.genderTarget,
       });
     }
-    qb.andWhere('product.status = :status', {
-      status: filter.status ?? ProductStatus.PUBLISHED,
-    });
+    if (filter.status) {
+      qb.andWhere('product.status = :status', { status: filter.status });
+    } else if (!filter.includeAllStatuses) {
+      qb.andWhere('product.status = :status', {
+        status: ProductStatus.PUBLISHED,
+      });
+    }
     if (filter.minPrice !== undefined) {
       qb.andWhere('product.base_price >= :minPrice', {
         minPrice: filter.minPrice,
@@ -113,6 +121,19 @@ export class TypeOrmProductRepository implements IProductRepository {
 
   create(data: Partial<Product>): Promise<Product> {
     return this.repo.save(this.repo.create(data));
+  }
+
+  async update(id: string, data: Partial<Product>): Promise<Product> {
+    await this.repo.update({ id }, data);
+    const updated = await this.findByIdWithBrandAndCategory(id);
+    if (!updated) {
+      throw new Error(`Product ${id} not found after update`);
+    }
+    return updated;
+  }
+
+  async softDelete(id: string): Promise<void> {
+    await this.repo.softDelete({ id });
   }
 
   async deleteById(id: string): Promise<void> {

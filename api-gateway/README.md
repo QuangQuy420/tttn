@@ -16,7 +16,7 @@ applies rate-limiting.
 
 | Route | Downstream service | Status |
 |---|---|---|
-| `/api/products/*`, `/api/categories/*` | `product-service` | **Implemented** (Sprint 1) — proxied via `HttpService`, no auth guard yet |
+| `/api/products/*`, `/api/categories/*`, `/api/brands/*` | `product-service` | **Implemented** (Sprint 1) — proxied via `HttpService`, no auth guard yet |
 | `/api/auth/*` | `user-service` | Reserved — not implemented, service doesn't exist yet |
 | `/api/orders/*` | `order-service` | Reserved — not implemented, service doesn't exist yet |
 | `/api/face/*` | `face-processing-service` | Reserved — not implemented, no route wired yet |

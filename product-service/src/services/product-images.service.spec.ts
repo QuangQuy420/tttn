@@ -2,11 +2,13 @@ import { BadRequestException } from '@nestjs/common';
 import { ProductImagesService } from './product-images.service';
 import { IProductVariantRepository } from '../repositories/product-variant.repository';
 import { IProductImageRepository } from '../repositories/product-image.repository';
+import { IImageStorageRepository } from '../repositories/image-storage.repository';
 import { ProductVariant } from '../db/entities/product-variant.entity';
 
 describe('ProductImagesService', () => {
   let variantRepository: jest.Mocked<IProductVariantRepository>;
   let imageRepository: jest.Mocked<IProductImageRepository>;
+  let imageStorageRepository: jest.Mocked<IImageStorageRepository>;
   let service: ProductImagesService;
 
   beforeEach(() => {
@@ -19,9 +21,18 @@ describe('ProductImagesService', () => {
     imageRepository = {
       findByProductIds: jest.fn(),
       findByProductAndUrl: jest.fn(),
+      findByProductAndSortOrder: jest.fn(),
       create: jest.fn(),
+      deleteById: jest.fn(),
     };
-    service = new ProductImagesService(variantRepository, imageRepository);
+    imageStorageRepository = {
+      upload: jest.fn(),
+    };
+    service = new ProductImagesService(
+      variantRepository,
+      imageRepository,
+      imageStorageRepository,
+    );
   });
 
   describe('create', () => {
