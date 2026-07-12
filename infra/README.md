@@ -28,6 +28,24 @@ docker compose up --build
 - Gateway:       http://localhost:8080
 - MinIO console: http://localhost:9001
 
+## Hot-reload for local dev
+
+`docker compose up --build` runs the production build of each service (compiled `dist`/`.next`,
+no source mount) — code changes need a manual rebuild. To get hot-reload instead, use the
+`docker-compose.watch.yml` overlay (`api-gateway`, `product-service`, `web` only — it switches
+their build `target` to each Dockerfile's `dev` stage and syncs source changes in):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.watch.yml watch
+```
+
+Saved changes under each service's `src/` are synced straight into the running container, where
+Nest's `--watch` / Next's `next dev` picks them up and reloads. Changing a `package.json` triggers
+a full rebuild + restart instead, since a synced file can't add packages to an already-built
+`node_modules`. This overlay is *not* auto-loaded like `docker-compose.override.yml` — it only
+applies when passed explicitly with `-f`, so plain `docker compose up --build` still gives you the
+production build.
+
 ### What actually builds/runs today
 
 - **`api-gateway`, `product-service`, `web`** — real apps (NestJS, NestJS, Next.js
