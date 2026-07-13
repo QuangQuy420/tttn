@@ -6,19 +6,24 @@ import com.tttn.userservice.entity.Profile;
 import com.tttn.userservice.entity.User;
 import com.tttn.userservice.enums.Role;
 import com.tttn.userservice.enums.UserStatus;
-import com.tttn.userservice.exception.ConflictException;
 import com.tttn.userservice.repository.ProfileRepository;
 import com.tttn.userservice.repository.UserRepository;
 import com.tttn.userservice.service.AuthService;
+import com.tttn.userservice.exception.BusinessException;
+import com.tttn.userservice.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.tttn.userservice.dto.request.LoginRequest;
+import com.tttn.userservice.dto.response.AuthResponse;
+import com.tttn.userservice.util.JwtUtil;
+
 
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
-
+    private final JwtUtil jwtUtil;
     private final UserRepository userRepository;
     private final ProfileRepository profileRepository;
     private final PasswordEncoder passwordEncoder;
@@ -30,11 +35,11 @@ public class AuthServiceImpl implements AuthService {
         String username = request.username().trim();
 
         if (userRepository.existsByEmailIgnoreCase(email)) {
-            throw new ConflictException("Email đã được sử dụng");
+            throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
 
         if (userRepository.existsByUsernameIgnoreCase(username)) {
-            throw new ConflictException("Username đã được sử dụng");
+            throw new BusinessException(ErrorCode.USERNAME_ALREADY_EXISTS);
         }
 
         User user = User.builder()
@@ -71,4 +76,44 @@ public class AuthServiceImpl implements AuthService {
 
         return value.trim();
     }
+
+@Override
+@Transactional(readOnly = true)
+public AuthResponse login(LoginRequest request) {
+    String identifier = request.identifier().trim();
+
+    User user = userRepository.findByEmailIgnoreCase(identifier)
+            .or(() -> userRepository.findByUsernameIgnoreCase(identifier))
+            .orElseThrow(() ->
+                    new BusinessException(ErrorCode.INVALID_CREDENTIALS)
+            );
+
+    if (!passwordEncoder.matches(
+            request.password(),
+            user.getPasswordHash()
+    )) {
+        throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
+    }
+
+    if (user.getStatus() != UserStatus.ACTIVE) {
+        throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
+    }
+
+    String accessToken = jwtUtil.generateAccessToken(user);
+
+    UserResponse userResponse = new UserResponse(
+            user.getId(),
+            user.getEmail(),
+            user.getUsername(),
+            user.getRole(),
+            user.getStatus()
+    );
+
+    return new AuthResponse(
+            accessToken,
+            "Bearer",
+            jwtUtil.getExpirationSeconds(),
+            userResponse
+    );
+}
 }
