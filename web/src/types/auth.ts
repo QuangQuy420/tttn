@@ -1,24 +1,34 @@
-// user-service's /api/auth/* contract doesn't exist yet (see Q6 in the sprint-1 plan) —
-// this shape is a placeholder for the stubbed client in src/lib/api/auth.ts and will need
-// to be reconciled with the real contract once user-service publishes it.
 export interface LoginRequest {
-  email: string;
+  identifier: string;
   password: string;
 }
 
 export interface RegisterRequest {
-  name: string;
+  username: string;
   email: string;
   password: string;
+  fullName?: string;
+  phone?: string;
 }
 
-export interface AuthUser {
-  id: string;
+export interface ForgotPasswordRequest {
   email: string;
-  name: string;
 }
 
-export interface AuthResponse {
+export interface ResetPasswordRequest {
   token: string;
-  user: AuthUser;
+  newPassword: string;
+}
+
+export interface LoginData {
+  accessToken?: string;
+  token?: string;
+  tokenType?: string;
+  expiresIn?: number;
+}
+
+export interface ApiResponse<T> {
+  success?: boolean;
+  message?: string;
+  data: T;
 }
