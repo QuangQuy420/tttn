@@ -48,11 +48,6 @@ public class User extends BaseEntity {
     @Column(nullable = false, length = 20)
     private UserStatus status;
 
-    @Column(name = "is_active", nullable = false)
-    private boolean active;
-
-    @OneToOne(mappedBy = "user")
-    private Profile profile;
 
     @PrePersist
     protected void setDefaults() {
@@ -63,7 +58,5 @@ public class User extends BaseEntity {
         if (status == null) {
             status = UserStatus.ACTIVE;
         }
-
-        active = true;
     }
 }
