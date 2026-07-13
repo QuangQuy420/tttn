@@ -13,10 +13,9 @@ export function Header() {
         <Link href="/" className="site-nav__link">
           Catalog
         </Link>
-        {/* No face-analysis page exists yet (see plan Q4/Q5) — shown, disabled. */}
-        <span className="site-nav__link site-nav__link--disabled" title="Coming soon" aria-disabled="true">
+        <Link href="/face-analysis" className="site-nav__link">
           Try Face Analysis
-        </span>
+        </Link>
         <Link href="#" className="site-nav__link">
           About
         </Link>
