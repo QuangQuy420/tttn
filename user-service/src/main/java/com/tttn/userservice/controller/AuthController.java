@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import com.tttn.userservice.dto.request.LoginRequest;
 import com.tttn.userservice.dto.response.AuthResponse;
+import com.tttn.userservice.dto.request.ForgotPasswordRequest;
+import com.tttn.userservice.dto.request.ResetPasswordRequest;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -45,6 +47,33 @@ public class AuthController {
                 ApiResponse.success(
                         "Đăng nhập thành công",
                         authResponse
+                )
+        );
+    }
+    @PostMapping("/forgot-password")
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(
+            @Valid @RequestBody ForgotPasswordRequest request
+    ) {
+        authService.forgotPassword(request);
+
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Nếu email tồn tại, hướng dẫn đặt lại mật khẩu đã được tạo",
+                        null
+                )
+        );
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(
+            @Valid @RequestBody ResetPasswordRequest request
+    ) {
+        authService.resetPassword(request);
+
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        "Đặt lại mật khẩu thành công",
+                        null
                 )
         );
     }

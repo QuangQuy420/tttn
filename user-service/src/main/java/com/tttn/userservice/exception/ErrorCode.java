@@ -46,6 +46,20 @@ public enum ErrorCode {
             HttpStatus.BAD_REQUEST,
             "Dữ liệu đầu vào không hợp lệ"
     ),
+    RESET_TOKEN_INVALID(
+            HttpStatus.BAD_REQUEST,
+            "Reset token không hợp lệ"
+    ),
+
+    RESET_TOKEN_EXPIRED(
+            HttpStatus.BAD_REQUEST,
+            "Reset token đã hết hạn"
+    ),
+
+    RESET_TOKEN_USED(
+            HttpStatus.BAD_REQUEST,
+            "Reset token đã được sử dụng"
+    ),
 
     INTERNAL_SERVER_ERROR(
             HttpStatus.INTERNAL_SERVER_ERROR,

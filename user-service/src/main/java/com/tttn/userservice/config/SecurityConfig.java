@@ -33,7 +33,8 @@ public class SecurityConfig {
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**"
                         ).permitAll()
-                        .anyRequest().permitAll()
+                        .requestMatchers("/api/v1/users/**").permitAll()
+                        .anyRequest().denyAll()
                 )
                 .build();
     }

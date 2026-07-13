@@ -30,7 +30,10 @@ public class UserController {
 
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<ProfileResponse>> getProfile(
-            @RequestHeader("Authorization") String authorizationHeader
+            @RequestHeader(
+                    value = "Authorization",
+                    required = false
+            ) String authorizationHeader
     ) {
         UUID userId = extractUserId(authorizationHeader);
 
@@ -44,7 +47,10 @@ public class UserController {
 
     @PutMapping("/me")
     public ResponseEntity<ApiResponse<ProfileResponse>> updateProfile(
-            @RequestHeader("Authorization") String authorizationHeader,
+            @RequestHeader(
+                    value = "Authorization",
+                    required = false
+            ) String authorizationHeader,
             @Valid @RequestBody UpdateProfileRequest request
     ) {
         UUID userId = extractUserId(authorizationHeader);
@@ -59,7 +65,10 @@ public class UserController {
 
     @PutMapping("/change-password")
     public ResponseEntity<ApiResponse<Void>> changePassword(
-            @RequestHeader("Authorization") String authorizationHeader,
+            @RequestHeader(
+                    value = "Authorization",
+                    required = false
+            ) String authorizationHeader,
             @Valid @RequestBody ChangePasswordRequest request
     ) {
         UUID userId = extractUserId(authorizationHeader);
