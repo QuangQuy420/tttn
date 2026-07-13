@@ -1,18 +1,22 @@
 export interface UserProfile {
-    id?: string;
-    username?: string;
-    email?: string;
-    fullName?: string;
-    phone?: string;
-    dateOfBirth?: string;
-    address?: string;
+    userId: string;
+    email: string;
+    username: string;
+    role: string;
+    status: string;
+    fullName?: string | null;
+    phone?: string | null;
+    avatarUrl?: string | null;
+    address?: string | null;
+    dateOfBirth?: string | null;
 }
 
 export interface UpdateProfileRequest {
     fullName?: string;
     phone?: string;
-    dateOfBirth?: string;
+    avatarUrl?: string;
     address?: string;
+    dateOfBirth?: string;
 }
 
 export interface ChangePasswordRequest {

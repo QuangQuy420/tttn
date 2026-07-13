@@ -3,35 +3,45 @@
 import { useState } from "react";
 import { ApiError } from "@/lib/api";
 
-interface UseAuthFormResult<TPayload> {
+interface UseAuthFormResult<TPayload, TResponse> {
   isSubmitting: boolean;
   error: string | null;
   success: boolean;
-  submit: (payload: TPayload) => Promise<void>;
+  submit: (payload: TPayload) => Promise<TResponse | null>;
 }
 
-// Shared submit/loading/error/success state for the login and register forms — both call
-// a stubbed src/lib/api/auth function (Q6: user-service's /api/auth/* doesn't exist yet).
 export function useAuthForm<TPayload, TResponse>(
-  action: (payload: TPayload) => Promise<TResponse>,
-): UseAuthFormResult<TPayload> {
+    action: (payload: TPayload) => Promise<TResponse>,
+): UseAuthFormResult<TPayload, TResponse> {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  async function submit(payload: TPayload) {
+  async function submit(payload: TPayload): Promise<TResponse | null> {
     setIsSubmitting(true);
     setError(null);
     setSuccess(false);
+
     try {
-      await action(payload);
+      const response = await action(payload);
       setSuccess(true);
+      return response;
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong.");
+      setError(
+          err instanceof ApiError
+              ? err.message
+              : "Something went wrong.",
+      );
+      return null;
     } finally {
       setIsSubmitting(false);
     }
   }
 
-  return { isSubmitting, error, success, submit };
+  return {
+    isSubmitting,
+    error,
+    success,
+    submit,
+  };
 }
