@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCategories } from "@/hooks/useCategories";
@@ -93,14 +93,105 @@ describe("ProductListPage", () => {
     expect(screen.getByText("Aviator Classic")).toBeInTheDocument();
   });
 
-  it("pushes the categoryId filter onto the URL when the category select changes", async () => {
+  it("pushes the categoryId filter onto the URL when a category pill is clicked", async () => {
     mockedUseProducts.mockReturnValue({ products: [sampleProduct], isLoading: false, error: null });
     const user = userEvent.setup();
 
     render(<ProductListPage />);
 
-    await user.selectOptions(screen.getByLabelText(/category/i), "cat-1");
+    await user.click(screen.getByRole("button", { name: /sunglasses/i }));
 
     expect(push).toHaveBeenCalledWith("/?categoryId=cat-1");
+  });
+
+  it("pushes minPrice/maxPrice onto the URL when a price-range pill is clicked", async () => {
+    mockedUseProducts.mockReturnValue({ products: [sampleProduct], isLoading: false, error: null });
+    const user = userEvent.setup();
+
+    render(<ProductListPage />);
+
+    await user.click(screen.getByRole("button", { name: /under 1,500,000/i }));
+
+    expect(push).toHaveBeenCalledWith("/?maxPrice=1500000");
+  });
+
+  it("pushes a debounced search filter to the URL after the user stops typing", async () => {
+    mockedUseProducts.mockReturnValue({ products: [sampleProduct], isLoading: false, error: null });
+    jest.useFakeTimers();
+    const user = userEvent.setup({ delay: null });
+
+    render(<ProductListPage />);
+
+    await user.type(screen.getByRole("searchbox", { name: /search/i }), "aviator");
+
+    act(() => {
+      jest.advanceTimersByTime(300);
+    });
+
+    expect(push).toHaveBeenCalledWith("/?search=aviator");
+
+    jest.useRealTimers();
+  });
+
+  it("cancels a pending debounced search push if the input changes again before it fires", async () => {
+    mockedUseProducts.mockReturnValue({ products: [sampleProduct], isLoading: false, error: null });
+    jest.useFakeTimers();
+    const user = userEvent.setup({ delay: null });
+
+    render(<ProductListPage />);
+
+    const input = screen.getByRole("searchbox", { name: /search/i });
+    await user.type(input, "avi");
+
+    act(() => {
+      jest.advanceTimersByTime(200);
+    });
+    expect(push).not.toHaveBeenCalled();
+
+    await user.type(input, "ator");
+
+    act(() => {
+      jest.advanceTimersByTime(200);
+    });
+    expect(push).not.toHaveBeenCalled();
+
+    act(() => {
+      jest.advanceTimersByTime(100);
+    });
+
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(push).toHaveBeenCalledWith("/?search=aviator");
+
+    jest.useRealTimers();
+  });
+
+  it("applies a pending debounced search on top of a filter pill clicked in the meantime, not the stale filters from when typing started", async () => {
+    mockedUseProducts.mockReturnValue({ products: [sampleProduct], isLoading: false, error: null });
+    jest.useFakeTimers();
+    const user = userEvent.setup({ delay: null });
+
+    const { rerender } = render(<ProductListPage />);
+
+    await user.type(screen.getByRole("searchbox", { name: /search/i }), "avi");
+
+    // Before the search debounce fires, the user clicks a category pill. In the real app this
+    // pushes a new URL and next/navigation's useSearchParams() re-renders the page with it —
+    // simulate that here by updating the mocked search params and re-rendering.
+    await user.click(screen.getByRole("button", { name: /sunglasses/i }));
+    expect(push).toHaveBeenCalledWith("/?categoryId=cat-1");
+    setSearchParams({ categoryId: "cat-1" });
+    rerender(<ProductListPage />);
+
+    act(() => {
+      jest.advanceTimersByTime(300);
+    });
+
+    // The debounced search push must be layered on top of the category filter that was applied
+    // in between, not reconstructed from the stale (pre-click) URL params.
+    expect(push).toHaveBeenLastCalledWith(
+      expect.stringMatching(/^\/\?(categoryId=cat-1&search=avi|search=avi&categoryId=cat-1)$/),
+    );
+
+    jest.useRealTimers();
   });
 });

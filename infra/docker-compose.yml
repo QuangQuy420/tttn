@@ -6,17 +6,18 @@
 # not a rewrite. Before `up`: copy infra/.env.example -> infra/.env, and each
 # <service>/.env.example -> <service>/.env.
 #
-# ⚠️ api-gateway, product-service, and web are real, building services with healthchecks.
-#    user-service/order-service/payment-service still have no language decided (Q2) — their
-#    Dockerfiles are placeholders (`file with no instructions`), which would abort a bare
-#    `docker compose up --build` before ANY container starts. face-processing-service/
-#    recommendation-service have real Dockerfiles (python:3.11-slim) that build, but no
-#    app/main.py yet, so their containers would build then crash-loop.
-#    All five are gated behind the `not-ready` Compose profile so a bare `docker compose up
+# ⚠️ api-gateway, product-service, web, and face-processing-service are real, building
+#    services with healthchecks. user-service/order-service/payment-service still have no
+#    language decided (Q2) — their Dockerfiles are placeholders (`file with no instructions`),
+#    which would abort a bare `docker compose up --build` before ANY container starts.
+#    recommendation-service has a real Dockerfile (python:3.11-slim) that builds, but no
+#    app/main.py yet, so its container would build then crash-loop.
+#    These four are gated behind the `not-ready` Compose profile so a bare `docker compose up
 #    --build` (no profile) only builds/starts Postgres/Redis/MinIO + api-gateway +
-#    product-service + web — matching this sprint's AC1. Once a service's app lands, drop its
-#    `profiles:` key here. To bring the gated ones up anyway: `docker compose --profile
-#    not-ready up --build`. See infra/README.md for the up-to-date per-service status.
+#    product-service + web + face-processing-service — matching this sprint's AC1. Once a
+#    service's app lands, drop its `profiles:` key here. To bring the gated ones up anyway:
+#    `docker compose --profile not-ready up --build`. See infra/README.md for the up-to-date
+#    per-service status.
 # ============================================================================
 
 name: smart-eyewear
@@ -110,6 +111,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      minio:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3002/health || exit 1"]
       interval: 10s
@@ -140,10 +143,17 @@ services:
   face-processing-service:
     build: ../face-processing-service
     env_file: ../face-processing-service/.env
-    profiles: [not-ready]
     depends_on:
+      postgres:
+        condition: service_healthy
       minio:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   recommendation-service:
     build: ../recommendation-service

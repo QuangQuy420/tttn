@@ -53,6 +53,8 @@ describe('SeedService', () => {
 
   beforeEach(() => {
     brandRepository = {
+      findAll: jest.fn(),
+      findById: jest.fn(),
       findByName: jest.fn().mockResolvedValue(null),
       create: jest
         .fn()
@@ -81,6 +83,8 @@ describe('SeedService', () => {
         .mockImplementation((data) =>
           Promise.resolve({ id: `product-${data.sku}`, ...data } as Product),
         ),
+      update: jest.fn(),
+      softDelete: jest.fn(),
       deleteById: jest.fn().mockResolvedValue(undefined),
     };
     variantRepository = {

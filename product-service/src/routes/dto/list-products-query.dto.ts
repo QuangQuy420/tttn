@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsEnum,
   IsInt,
   IsNumber,
@@ -34,6 +35,12 @@ export class ListProductsQueryDto {
   @IsOptional()
   @IsEnum(ProductStatus)
   status?: ProductStatus;
+
+  /** Admin-only escape hatch: see all statuses, not just PUBLISHED (AC1). Ignored if `status` is set. */
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  includeAllStatuses?: boolean;
 
   @IsOptional()
   @Type(() => Number)

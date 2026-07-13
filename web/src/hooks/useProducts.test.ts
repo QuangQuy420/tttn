@@ -89,4 +89,56 @@ describe("useProducts", () => {
       expect.objectContaining({ categoryId: "cat-1" }),
     );
   });
+
+  it("refetches when the search param changes", async () => {
+    mockedGetProducts.mockResolvedValue({
+      items: [sampleProduct],
+      total: 1,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
+    });
+
+    const { rerender } = renderHook(({ search }) => useProducts({ search }), {
+      initialProps: { search: undefined as string | undefined },
+    });
+
+    await waitFor(() => expect(mockedGetProducts).toHaveBeenCalledTimes(1));
+
+    rerender({ search: "aviator" });
+
+    await waitFor(() => expect(mockedGetProducts).toHaveBeenCalledTimes(2));
+    expect(mockedGetProducts).toHaveBeenLastCalledWith(
+      expect.objectContaining({ search: "aviator" }),
+    );
+  });
+
+  it("refetches when the minPrice/maxPrice params change", async () => {
+    mockedGetProducts.mockResolvedValue({
+      items: [sampleProduct],
+      total: 1,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
+    });
+
+    const { rerender } = renderHook(
+      ({ minPrice, maxPrice }) => useProducts({ minPrice, maxPrice }),
+      {
+        initialProps: {
+          minPrice: undefined as number | undefined,
+          maxPrice: undefined as number | undefined,
+        },
+      },
+    );
+
+    await waitFor(() => expect(mockedGetProducts).toHaveBeenCalledTimes(1));
+
+    rerender({ minPrice: 1_500_000, maxPrice: 2_500_000 });
+
+    await waitFor(() => expect(mockedGetProducts).toHaveBeenCalledTimes(2));
+    expect(mockedGetProducts).toHaveBeenLastCalledWith(
+      expect.objectContaining({ minPrice: 1_500_000, maxPrice: 2_500_000 }),
+    );
+  });
 });

@@ -14,6 +14,7 @@ import { Brand } from './brand.entity';
 import { Category } from './category.entity';
 import { ProductVariant } from './product-variant.entity';
 import { ProductImage } from './product-image.entity';
+import { ProductFaceShape } from './product-face-shape.entity';
 import { FrameShape } from '../enums/frame-shape.enum';
 import { GenderTarget } from '../enums/gender-target.enum';
 import { ProductStatus } from '../enums/product-status.enum';
@@ -61,6 +62,9 @@ export class Product {
 
   @Column({ type: 'text', nullable: true })
   description: string | null;
+
+  @Column({ name: 'face_fit_note', type: 'text', nullable: true })
+  faceFitNote: string | null;
 
   @Column({
     name: 'frame_shape',
@@ -112,4 +116,7 @@ export class Product {
 
   @OneToMany(() => ProductImage, (image) => image.product)
   images?: ProductImage[];
+
+  @OneToMany(() => ProductFaceShape, (faceShape) => faceShape.product)
+  faceShapes?: ProductFaceShape[];
 }

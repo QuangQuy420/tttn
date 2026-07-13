@@ -8,6 +8,9 @@ interface UseProductsResult {
   products: Product[];
   isLoading: boolean;
   error: string | null;
+  // Re-runs the same fetch on demand (e.g. after an admin delete) without waiting for a param
+  // change — see AdminProductsPage.
+  refetch: () => Promise<void>;
 }
 
 export function useProducts(params: ProductListParams): UseProductsResult {
@@ -15,16 +18,48 @@ export function useProducts(params: ProductListParams): UseProductsResult {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { categoryId, frameShape, page, limit } = params;
+  const { categoryId, frameShape, page, limit, search, minPrice, maxPrice, includeAllStatuses } =
+    params;
+
+  async function run() {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await getProducts({
+        categoryId,
+        frameShape,
+        page,
+        limit,
+        search,
+        minPrice,
+        maxPrice,
+        includeAllStatuses,
+      });
+      setProducts(response.items);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to load products.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
 
-    async function run() {
+    async function runEffect() {
       setIsLoading(true);
       setError(null);
       try {
-        const response = await getProducts({ categoryId, frameShape, page, limit });
+        const response = await getProducts({
+          categoryId,
+          frameShape,
+          page,
+          limit,
+          search,
+          minPrice,
+          maxPrice,
+          includeAllStatuses,
+        });
         if (!cancelled) setProducts(response.items);
       } catch (err) {
         if (!cancelled) {
@@ -35,12 +70,12 @@ export function useProducts(params: ProductListParams): UseProductsResult {
       }
     }
 
-    void run();
+    void runEffect();
 
     return () => {
       cancelled = true;
     };
-  }, [categoryId, frameShape, page, limit]);
+  }, [categoryId, frameShape, page, limit, search, minPrice, maxPrice, includeAllStatuses]);
 
-  return { products, isLoading, error };
+  return { products, isLoading, error, refetch: run };
 }

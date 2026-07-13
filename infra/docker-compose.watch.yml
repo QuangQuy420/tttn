@@ -1,0 +1,68 @@
+# ============================================================================
+# Hot-reload overlay for local dev — NOT auto-loaded (unlike docker-compose.override.yml).
+#
+# Points api-gateway, product-service, web, and face-processing-service at their Dockerfiles'
+# `dev` build target (devDependencies + framework watch mode: `nest start --watch` / `next dev` /
+# `uvicorn --reload`) instead of the default production target, and configures `docker compose
+# watch` to sync source changes into the running containers so their own watchers pick them up —
+# no manual rebuild/restart needed.
+#
+# Usage (from infra/):
+#   docker compose -f docker-compose.yml -f docker-compose.watch.yml watch
+#
+# `package.json`/`requirements.txt` changes (new/updated deps) fall back to a full image rebuild +
+# container restart, since a synced file can't add packages to an already-built
+# `node_modules`/site-packages.
+# ============================================================================
+
+services:
+  api-gateway:
+    build:
+      context: ../api-gateway
+      target: dev
+    develop:
+      watch:
+        - action: sync
+          path: ../api-gateway/src
+          target: /app/src
+        - action: rebuild
+          path: ../api-gateway/package.json
+
+  product-service:
+    build:
+      context: ../product-service
+      target: dev
+    develop:
+      watch:
+        - action: sync
+          path: ../product-service/src
+          target: /app/src
+        - action: rebuild
+          path: ../product-service/package.json
+
+  web:
+    build:
+      context: ../web
+      target: dev
+    develop:
+      watch:
+        - action: sync
+          path: ../web/src
+          target: /app/src
+        - action: sync
+          path: ../web/public
+          target: /app/public
+        - action: rebuild
+          path: ../web/package.json
+
+  face-processing-service:
+    build:
+      context: ../face-processing-service
+      target: dev
+    develop:
+      watch:
+        - action: sync
+          path: ../face-processing-service/app
+          target: /app/app
+        - action: rebuild
+          path: ../face-processing-service/requirements.txt
