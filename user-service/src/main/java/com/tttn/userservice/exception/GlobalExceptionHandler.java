@@ -31,19 +31,23 @@ public class GlobalExceptionHandler {
     ) {
         Map<String, String> errors = new LinkedHashMap<>();
 
-        for (FieldError fieldError : exception.getBindingResult().getFieldErrors()) {
-            errors.putIfAbsent(fieldError.getField(), fieldError.getDefaultMessage());
-        }
+        exception.getBindingResult()
+                .getFieldErrors()
+                .forEach(error ->
+                        errors.putIfAbsent(
+                                error.getField(),
+                                error.getDefaultMessage()
+                        )
+                );
 
         return ResponseEntity
                 .badRequest()
                 .body(new ApiResponse<>(
                         false,
-                        ErrorCode.VALIDATION_FAILED.getMessage(),
+                        "Dữ liệu đầu vào không hợp lệ",
                         errors
                 ));
     }
-
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleUnexpectedException(
             Exception exception,

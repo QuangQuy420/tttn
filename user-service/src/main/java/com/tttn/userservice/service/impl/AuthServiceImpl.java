@@ -32,7 +32,12 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public UserResponse register(RegisterRequest request) {
         String email = request.email().trim().toLowerCase();
-        String username = request.username().trim();
+        String username = request.username()
+                .trim()
+                .toLowerCase();
+        String fullName = request.fullName()
+                .trim()
+                .replaceAll("\\s+", " ");
 
         if (userRepository.existsByEmailIgnoreCase(email)) {
             throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS);
@@ -54,7 +59,7 @@ public class AuthServiceImpl implements AuthService {
 
         Profile profile = Profile.builder()
                 .user(user)
-                .fullName(request.fullName().trim())
+                .fullName(fullName)
                 .phone(normalizeNullable(request.phone()))
                 .build();
 
@@ -80,7 +85,9 @@ public class AuthServiceImpl implements AuthService {
 @Override
 @Transactional(readOnly = true)
 public AuthResponse login(LoginRequest request) {
-    String identifier = request.identifier().trim();
+    String identifier = request.identifier()
+            .trim()
+            .toLowerCase();
 
     User user = userRepository.findByEmailIgnoreCase(identifier)
             .or(() -> userRepository.findByUsernameIgnoreCase(identifier))
