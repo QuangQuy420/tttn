@@ -7,8 +7,8 @@ public record LoginRequest(
 
         @NotBlank(message = "Email hoặc username không được để trống")
         @Size(
-                max = 30,
-                message = "Email hoặc username không được vượt quá 30 ký tự"
+                max = 50,
+                message = "Email hoặc username không được vượt quá 0 ký tự"
         )
         String identifier,
 

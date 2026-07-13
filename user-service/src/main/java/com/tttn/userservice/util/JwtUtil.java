@@ -7,7 +7,7 @@ import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-
+import java.util.UUID;
 import javax.crypto.SecretKey;
 import java.util.Date;
 
@@ -31,8 +31,8 @@ public class JwtUtil {
 
         return Jwts.builder()
                 .subject(user.getUsername())
-                .claim("email", user.getEmail())
                 .claim("userId", user.getId().toString())
+                .claim("email", user.getEmail())
                 .claim("role", user.getRole().name())
                 .issuedAt(now)
                 .expiration(expiresAt)
@@ -48,7 +48,17 @@ public class JwtUtil {
             return false;
         }
     }
+    public UUID extractUserId(String token) {
+        Claims claims = extractClaims(token);
 
+        String userId = claims.get("userId", String.class);
+
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalArgumentException("JWT không chứa userId");
+        }
+
+        return UUID.fromString(userId);
+    }
     public Claims extractClaims(String token) {
         return Jwts.parser()
                 .verifyWith(getSigningKey())
