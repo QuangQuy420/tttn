@@ -1,6 +1,6 @@
 package com.tttn.userservice.enums;
 
 public enum Role {
-    USER,
+    CUSTOMER,
     ADMIN
 }

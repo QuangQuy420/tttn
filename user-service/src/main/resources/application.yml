@@ -3,18 +3,21 @@ spring:
     name: user-service
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/user_service
-    username: manhdat
-    password: 123
+    url: jdbc:postgresql://localhost:5433/user_service
+    username: ${DB_USERNAME:manhdat}
+    password: ${DB_PASSWORD:123}
     driver-class-name: org.postgresql.Driver
 
   jpa:
+    open-in-view: false
     hibernate:
       ddl-auto: update
     show-sql: true
     properties:
       hibernate:
         format_sql: true
+        jdbc:
+          time_zone: UTC
 
 server:
   port: 8081
