@@ -6,11 +6,13 @@
 > The `Dockerfile` is a placeholder until the stack is chosen.
 
 ## Responsibilities
+
 - `POST /register`, `POST /login` → issue JWT (passwords hashed with bcrypt/argon2).
 - User profile endpoints.
 - Provide a reusable JWT-verification mechanism (see ADR on JWT across polyrepo).
 
 ## Structure (route → service → repository → db, with DI / SOLID)
+
 ```
 src/
   routes/         # HTTP controllers, DTO validation (no business logic)
@@ -23,4 +25,5 @@ tests/            # unit (services/repos) + integration
 ```
 
 ## Data
+
 - Postgres database `auth_db` (table `users`). See [`.env.example`](.env.example).

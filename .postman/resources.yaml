@@ -1,0 +1,8 @@
+# Use this workspace to collaborate
+workspace:
+  id: 3de9f54b-f827-4df2-8bb5-c42b0dfdc115
+
+localResources:
+  specs:
+    - ../infra/contracts/product-service.openapi.yaml
+    - ../recommendation-service/contracts/product-service.openapi.yaml
