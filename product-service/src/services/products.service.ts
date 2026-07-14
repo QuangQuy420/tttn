@@ -14,6 +14,7 @@ import { IProductImageRepository } from '../repositories/product-image.repositor
 import { IProductFaceShapeRepository } from '../repositories/product-face-shape.repository';
 import { IBrandRepository } from '../repositories/brand.repository';
 import { ICategoryRepository } from '../repositories/category.repository';
+import { IProductEventPublisher } from '../repositories/product-event-publisher.repository';
 import {
   PRODUCT_REPOSITORY,
   PRODUCT_VARIANT_REPOSITORY,
@@ -21,6 +22,7 @@ import {
   PRODUCT_FACE_SHAPE_REPOSITORY,
   BRAND_REPOSITORY,
   CATEGORY_REPOSITORY,
+  PRODUCT_EVENT_PUBLISHER,
 } from '../repositories/tokens';
 import { ListProductsQueryDto } from '../routes/dto/list-products-query.dto';
 import { PaginatedResponseDto } from '../routes/dto/paginated-response.dto';
@@ -48,6 +50,8 @@ export class ProductsService {
     private readonly brandRepository: IBrandRepository,
     @Inject(CATEGORY_REPOSITORY)
     private readonly categoryRepository: ICategoryRepository,
+    @Inject(PRODUCT_EVENT_PUBLISHER)
+    private readonly eventPublisher: IProductEventPublisher,
   ) {}
 
   async findAll(
@@ -177,6 +181,11 @@ export class ProductsService {
       await this.faceShapeRepository.replaceForProduct(id, dto.faceShapes);
     }
 
+    await this.eventPublisher.publish({
+      type: 'product.updated',
+      productId: id,
+    });
+
     return this.findOne(id);
   }
 
@@ -187,6 +196,11 @@ export class ProductsService {
       throw new NotFoundException(`Product ${id} not found`);
     }
     await this.productRepository.softDelete(id);
+
+    await this.eventPublisher.publish({
+      type: 'product.deleted',
+      productId: id,
+    });
   }
 
   /** Throws `BadRequestException` (400) on an invalid/missing FK — AC8. */

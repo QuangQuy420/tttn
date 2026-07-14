@@ -27,6 +27,7 @@ docker compose up --build
 - Web:           http://localhost:3000
 - Gateway:       http://localhost:8080
 - MinIO console: http://localhost:9001
+- RabbitMQ UI:   http://localhost:15672 (guest/guest)
 
 ## Hot-reload for local dev
 
