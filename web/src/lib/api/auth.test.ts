@@ -1,34 +1,36 @@
-import { ApiError } from "./client";
+import { apiFetch } from "./client";
 import { login, register } from "./auth";
 
-// user-service's /api/auth/* doesn't exist yet (Q6) — these stubs are pure client-side
-// logic, so we test them directly rather than mocking a network call.
+jest.mock("./client", () => ({
+  apiFetch: jest.fn(),
+}));
 
-describe("auth api stubs", () => {
-  it("login resolves with a stub token/user for valid credentials", async () => {
-    const result = await login({ email: "jane@example.com", password: "hunter22" });
+const mockedApiFetch = apiFetch as jest.Mock;
 
-    expect(result.token).toBeTruthy();
-    expect(result.user.email).toBe("jane@example.com");
+describe("auth api client", () => {
+  afterEach(() => {
+    mockedApiFetch.mockReset();
   });
 
-  it("login rejects with an ApiError when email or password is missing", async () => {
-    await expect(login({ email: "", password: "hunter22" })).rejects.toBeInstanceOf(ApiError);
-    await expect(login({ email: "jane@example.com", password: "" })).rejects.toMatchObject({
-      status: 400,
+  it("login posts identifier/password to /auth/login", async () => {
+    mockedApiFetch.mockResolvedValue({ data: { accessToken: "t" } });
+
+    await login({ identifier: "jane@example.com", password: "hunter22" });
+
+    expect(mockedApiFetch).toHaveBeenCalledWith("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ identifier: "jane@example.com", password: "hunter22" }),
     });
   });
 
-  it("register resolves with a stub token/user for valid input", async () => {
-    const result = await register({ name: "Jane", email: "jane@example.com", password: "hunter22" });
+  it("register posts the payload to /auth/register", async () => {
+    mockedApiFetch.mockResolvedValue({ data: {} });
 
-    expect(result.token).toBeTruthy();
-    expect(result.user).toEqual({ id: "stub-user-id", email: "jane@example.com", name: "Jane" });
-  });
+    await register({ username: "jane", email: "jane@example.com", password: "hunter22" });
 
-  it("register rejects with an ApiError when a required field is missing", async () => {
-    await expect(
-      register({ name: "", email: "jane@example.com", password: "hunter22" }),
-    ).rejects.toBeInstanceOf(ApiError);
+    expect(mockedApiFetch).toHaveBeenCalledWith("/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ username: "jane", email: "jane@example.com", password: "hunter22" }),
+    });
   });
 });

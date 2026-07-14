@@ -1,22 +1,37 @@
 import { render, screen } from "@testing-library/react";
+import { useRouter } from "next/navigation";
 import { Header } from "./Header";
 
+jest.mock("next/navigation", () => ({
+  useRouter: jest.fn(),
+}));
+
+const mockedUseRouter = useRouter as jest.Mock;
+
 describe("Header", () => {
+  beforeEach(() => {
+    mockedUseRouter.mockReturnValue({ push: jest.fn(), refresh: jest.fn() });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
   it("links the logo to the homepage", () => {
     render(<Header />);
 
     expect(screen.getByRole("link", { name: /smart eyewear/i })).toHaveAttribute("href", "/");
   });
 
-  it("renders real links for Catalog, Try Face Analysis, and Login", () => {
+  it("renders real links for Sản phẩm, Phân tích khuôn mặt, and Đăng nhập", () => {
     render(<Header />);
 
-    expect(screen.getByRole("link", { name: "Catalog" })).toHaveAttribute("href", "/");
-    expect(screen.getByRole("link", { name: /try face analysis/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Sản phẩm" })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", { name: /phân tích khuôn mặt/i })).toHaveAttribute(
       "href",
       "/face-analysis",
     );
-    expect(screen.getByRole("link", { name: "Login" })).toHaveAttribute("href", "/login");
+    expect(screen.getByRole("link", { name: "Đăng nhập" })).toHaveAttribute("href", "/login");
   });
 
   it("shows the cart icon as a disabled button", () => {

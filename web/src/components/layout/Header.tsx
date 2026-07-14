@@ -12,9 +12,11 @@ export function Header() {
     const router = useRouter();
     const menuRef = useRef<HTMLDivElement>(null);
 
-    const [authenticated, setAuthenticated] = useState(
-        () => Boolean(getAccessToken()),
-    );
+    // Starts false to match the server-rendered markup (no `window` there), then syncs the
+    // real value in the effect below — reading localStorage during the initializer instead
+    // would make the client's first render diverge from the server's and trigger a hydration
+    // mismatch.
+    const [authenticated, setAuthenticated] = useState(false);
 
     const [menuOpen, setMenuOpen] = useState(false);
 
@@ -31,6 +33,8 @@ export function Header() {
                 setMenuOpen(false);
             }
         }
+
+        syncAuthState();
 
         window.addEventListener("auth-change", syncAuthState);
         document.addEventListener("mousedown", handleOutsideClick);

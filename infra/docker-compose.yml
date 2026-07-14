@@ -6,16 +6,16 @@
 # not a rewrite. Before `up`: copy infra/.env.example -> infra/.env, and each
 # <service>/.env.example -> <service>/.env.
 #
-# ⚠️ api-gateway, product-service, web, and face-processing-service are real, building
-#    services with healthchecks. user-service/order-service/payment-service still have no
-#    language decided (Q2) — their Dockerfiles are placeholders (`file with no instructions`),
-#    which would abort a bare `docker compose up --build` before ANY container starts.
+# ⚠️ api-gateway, product-service, web, face-processing-service, and user-service are real,
+#    building services with healthchecks. order-service/payment-service still have no language
+#    decided (Q2) — their Dockerfiles are placeholders (`file with no instructions`), which
+#    would abort a bare `docker compose up --build` before ANY container starts.
 #    recommendation-service has a real Dockerfile (python:3.11-slim) that builds, but no
 #    app/main.py yet, so its container would build then crash-loop.
-#    These four are gated behind the `not-ready` Compose profile so a bare `docker compose up
+#    These three are gated behind the `not-ready` Compose profile so a bare `docker compose up
 #    --build` (no profile) only builds/starts Postgres/Redis/MinIO + api-gateway +
-#    product-service + web + face-processing-service — matching this sprint's AC1. Once a
-#    service's app lands, drop its `profiles:` key here. To bring the gated ones up anyway:
+#    product-service + web + face-processing-service + user-service. Once a service's app
+#    lands, drop its `profiles:` key here. To bring the gated ones up anyway:
 #    `docker compose --profile not-ready up --build`. See infra/README.md for the up-to-date
 #    per-service status.
 # ============================================================================
@@ -93,12 +93,19 @@ services:
       start_period: 10s
 
   user-service:
-    build: ../user-service     # ⚠️ language TBD (Q2)
+    build: ../user-service     # Spring Boot (Maven), real Dockerfile now
     env_file: ../user-service/.env
-    profiles: [not-ready]
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      # No actuator dependency and no wget/curl in this eclipse-temurin JRE base image, so
+      # probe the port directly via bash's /dev/tcp — good enough to confirm Tomcat is up.
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/${PORT:-3001}' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   product-service:
     build: ../product-service
