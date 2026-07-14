@@ -1,16 +1,28 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useRouter } from "next/navigation";
 import { login } from "@/lib/api";
 import { LoginForm } from "./LoginForm";
 
+jest.mock("next/navigation", () => ({
+  useRouter: jest.fn(),
+}));
 jest.mock("@/lib/api", () => ({
   login: jest.fn(),
   ApiError: jest.requireActual("@/lib/api/client").ApiError,
 }));
 
+const mockedUseRouter = useRouter as jest.Mock;
 const mockedLogin = login as jest.Mock;
 
 describe("LoginForm", () => {
+  const push = jest.fn();
+  const refresh = jest.fn();
+
+  beforeEach(() => {
+    mockedUseRouter.mockReturnValue({ push, refresh });
+  });
+
   afterEach(() => {
     jest.clearAllMocks();
   });
@@ -19,26 +31,28 @@ describe("LoginForm", () => {
     const user = userEvent.setup();
     render(<LoginForm />);
 
-    await user.type(screen.getByLabelText(/email/i), "not-an-email");
-    await user.type(screen.getByLabelText(/password/i), "short");
-    await user.click(screen.getByRole("button", { name: /log in/i }));
+    await user.type(screen.getByLabelText(/email hoặc tên đăng nhập/i), " ");
+    await user.type(screen.getByLabelText(/mật khẩu/i), "short");
+    await user.click(screen.getByRole("button", { name: /đăng nhập/i }));
 
-    expect(screen.getByText(/valid email/i)).toBeInTheDocument();
-    expect(screen.getByText(/at least 8 characters/i)).toBeInTheDocument();
+    expect(screen.getByText(/bắt buộc/i)).toBeInTheDocument();
+    expect(screen.getByText(/ít nhất 8 ký tự/i)).toBeInTheDocument();
     expect(mockedLogin).not.toHaveBeenCalled();
   });
 
-  it("submits valid credentials to the (stubbed) auth client and shows success", async () => {
-    mockedLogin.mockResolvedValue({ token: "t", user: { id: "1", email: "jane@example.com", name: "jane" } });
+  it("submits valid credentials and redirects on success", async () => {
+    mockedLogin.mockResolvedValue({ data: { accessToken: "t" } });
     const user = userEvent.setup();
     render(<LoginForm />);
 
-    await user.type(screen.getByLabelText(/email/i), "jane@example.com");
-    await user.type(screen.getByLabelText(/password/i), "hunter22");
-    await user.click(screen.getByRole("button", { name: /log in/i }));
+    await user.type(screen.getByLabelText(/email hoặc tên đăng nhập/i), "jane@example.com");
+    await user.type(screen.getByLabelText(/mật khẩu/i), "hunter22");
+    await user.click(screen.getByRole("button", { name: /đăng nhập/i }));
 
-    expect(mockedLogin).toHaveBeenCalledWith({ email: "jane@example.com", password: "hunter22" });
-    expect(await screen.findByText(/logged in successfully/i)).toBeInTheDocument();
+    expect(mockedLogin).toHaveBeenCalledWith({ identifier: "jane@example.com", password: "hunter22" });
+    await screen.findByRole("button", { name: /đăng nhập/i });
+    expect(push).toHaveBeenCalledWith("/");
+    expect(refresh).toHaveBeenCalled();
   });
 
   it("shows the error message when the auth call rejects", async () => {
@@ -46,10 +60,11 @@ describe("LoginForm", () => {
     const user = userEvent.setup();
     render(<LoginForm />);
 
-    await user.type(screen.getByLabelText(/email/i), "jane@example.com");
-    await user.type(screen.getByLabelText(/password/i), "hunter22");
-    await user.click(screen.getByRole("button", { name: /log in/i }));
+    await user.type(screen.getByLabelText(/email hoặc tên đăng nhập/i), "jane@example.com");
+    await user.type(screen.getByLabelText(/mật khẩu/i), "hunter22");
+    await user.click(screen.getByRole("button", { name: /đăng nhập/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Invalid credentials");
+    expect(push).not.toHaveBeenCalled();
   });
 });

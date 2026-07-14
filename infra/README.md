@@ -71,12 +71,19 @@ explicitly with `-f`, so plain `docker compose up --build` still gives you the p
   `init-multiple-dbs.sh` note above; on an *existing* volume from before this database was added,
   create it once by hand: `docker compose exec postgres psql -U app -d postgres -c "CREATE DATABASE face_processing_db;"`,
   then `docker compose exec face-processing-service alembic upgrade head`).
-- **`user-service`, `order-service`, `payment-service`** — folder scaffolds only; their
-  `Dockerfile`s are fully commented-out placeholders (backend language still TBD, Q2). Running
-  `docker compose build`/`up` with **no service arguments** (the whole stack) will fail on these
-  three. `api-gateway` no longer `depends_on` `user-service` for this reason (it doesn't call it
-  yet either — edge JWT / `/api/auth/*` proxying is deferred, see Q3); it will be re-added once
-  that proxy exists.
+- **`user-service`** — real Spring Boot app (Maven, JDK 25) with a working multi-stage Dockerfile,
+  no longer gated behind `not-ready`. It has no `/actuator` health endpoint, so the Compose
+  healthcheck probes the port directly via `bash`'s `/dev/tcp` (the `eclipse-temurin` JRE base
+  image ships neither `wget` nor `curl`). `application.yml`'s `datasource`/`server.port`/`jwt.*`
+  keys are hardcoded for the other dev's local (non-Docker) setup —
+  `UserServiceApplication.main()` overrides them from `PORT`/`DATABASE_URL`/`JWT_SECRET`/
+  `JWT_EXPIRES_IN` (the same env-var convention every other service's `.env` uses) only when those
+  env vars are present, so local dev outside Docker is unaffected.
+- **`order-service`, `payment-service`** — folder scaffolds only; their `Dockerfile`s are fully
+  commented-out placeholders (backend language still TBD, Q2). Running `docker compose build`/`up`
+  with **no service arguments** (the whole stack) will fail on these two. `api-gateway` doesn't
+  `depends_on` `user-service` yet either way — it doesn't call it yet (edge JWT / `/api/auth/*`
+  proxying is deferred, see Q3); that dependency will be added once that proxy exists.
 - **`recommendation-service`** — has a real, non-placeholder Dockerfile (`python:3.11-slim` + its
   `requirements.txt`) and a layered folder scaffold (`app/routers|services|repositories|db|schemas|core`),
   so `docker compose build` on it *succeeds*. However it has no `app/main.py` yet (its Dockerfile's

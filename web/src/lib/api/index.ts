@@ -1,7 +1,21 @@
 export { ApiError, apiFetch } from "./client";
-export { login, register } from "./auth";
+
+export {
+  login,
+  register,
+  forgotPassword,
+  resetPassword,
+} from "./auth";
+
+export {
+  getMyProfile,
+  updateMyProfile,
+  changePassword,
+} from "./users";
+
 export { getBrands } from "./brands";
 export { analyzeFace } from "./face";
+
 export {
   createProduct,
   deleteProduct,
@@ -11,4 +25,5 @@ export {
   updateProduct,
   uploadProductImage,
 } from "./products";
+
 export type { ImageSlot } from "./products";
