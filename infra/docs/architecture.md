@@ -51,6 +51,8 @@ browser → api-gateway → order-service         (cart in Redis → checkout �
   shared `JWT_SECRET`/JWKS. Decide and record.
 - **Contract sharing** — `infra/contracts` consumed via git submodule or versioned copy.
 - **Face image storage** — S3, local via MinIO; private bucket + presigned URLs + lifecycle/delete policy.
+- **Event bus technology** — RabbitMQ, chosen over Kafka/NATS for East-West events; see
+  `infra/docs/adr/0002-event-bus-selection.md`.
 
 ## Layered design (per backend service)
 

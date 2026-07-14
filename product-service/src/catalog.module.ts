@@ -21,6 +21,7 @@ import { TypeOrmProductVariantRepository } from './repositories/product-variant.
 import { TypeOrmProductImageRepository } from './repositories/product-image.repository';
 import { TypeOrmProductFaceShapeRepository } from './repositories/product-face-shape.repository';
 import { S3ImageStorageRepository } from './repositories/image-storage.repository';
+import { RabbitMqProductEventPublisher } from './repositories/product-event-publisher.repository';
 import {
   BRAND_REPOSITORY,
   CATEGORY_REPOSITORY,
@@ -29,6 +30,7 @@ import {
   PRODUCT_IMAGE_REPOSITORY,
   PRODUCT_FACE_SHAPE_REPOSITORY,
   IMAGE_STORAGE_REPOSITORY,
+  PRODUCT_EVENT_PUBLISHER,
 } from './repositories/tokens';
 
 /**
@@ -72,6 +74,10 @@ import {
     {
       provide: IMAGE_STORAGE_REPOSITORY,
       useClass: S3ImageStorageRepository,
+    },
+    {
+      provide: PRODUCT_EVENT_PUBLISHER,
+      useClass: RabbitMqProductEventPublisher,
     },
   ],
   exports: [SeedService],
