@@ -10,6 +10,7 @@ export interface AppConfig {
   userServiceUrl: string;
   productServiceUrl: string;
   faceProcessingServiceUrl: string;
+  recommendationServiceUrl: string;
 }
 
 export default (): { app: AppConfig } => ({
@@ -23,5 +24,7 @@ export default (): { app: AppConfig } => ({
     productServiceUrl: process.env.PRODUCT_SERVICE_URL ?? 'http://product-service:3002',
     faceProcessingServiceUrl:
       process.env.FACE_PROCESSING_SERVICE_URL ?? 'http://face-processing-service:8000',
+    recommendationServiceUrl:
+      process.env.RECOMMENDATION_SERVICE_URL ?? 'http://recommendation-service:8000',
   },
 });

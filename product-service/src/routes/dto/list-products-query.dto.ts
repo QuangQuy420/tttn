@@ -14,6 +14,7 @@ import {
 import { FrameShape } from '../../db/enums/frame-shape.enum';
 import { GenderTarget } from '../../db/enums/gender-target.enum';
 import { ProductStatus } from '../../db/enums/product-status.enum';
+import { FaceShape } from '../../db/enums/face-shape.enum';
 
 export class ListProductsQueryDto {
   @IsOptional()
@@ -31,6 +32,10 @@ export class ListProductsQueryDto {
   @IsOptional()
   @IsEnum(GenderTarget)
   genderTarget?: GenderTarget;
+
+  @IsOptional()
+  @IsEnum(FaceShape)
+  faceShape?: FaceShape;
 
   @IsOptional()
   @IsEnum(ProductStatus)

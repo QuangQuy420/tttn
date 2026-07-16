@@ -121,15 +121,13 @@ export function ProductDetailPage({ id }: ProductDetailPageProps) {
           </section>
 
           <div className="product-detail__actions">
-            <button
-              type="button"
+            <Link
+              href={`/products/${product.id}/try-on`}
               className="btn btn--primary"
-              disabled
-              title="Sắp ra mắt"
-              aria-label="Thử kính AR (sắp ra mắt)"
+              aria-label="Thử kính AR"
             >
               Thử kính AR
-            </button>
+            </Link>
             <button
               type="button"
               className="btn btn--outline"

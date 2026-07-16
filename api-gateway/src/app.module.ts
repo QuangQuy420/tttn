@@ -5,6 +5,7 @@ import { HealthController } from './routes/health.controller';
 import { ProductsModule } from './routes/products.module';
 import { AuthModule } from './routes/auth.module';
 import { UsersModule } from './routes/users.module';
+import { RecommendationsModule } from './routes/recommendations.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { UsersModule } from './routes/users.module';
             FaceAnalysisModule,
             AuthModule,
             UsersModule,
+            RecommendationsModule,
   ],
   controllers: [HealthController],
 })

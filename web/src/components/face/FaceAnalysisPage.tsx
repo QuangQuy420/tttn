@@ -10,7 +10,9 @@ import { LoadingState } from "@/components/common/LoadingState";
 import { useFaceAnalysis } from "@/hooks/useFaceAnalysis";
 import { getAccessToken } from "@/lib/auth/session";
 import { formatFaceShapeVi } from "@/lib/labels";
+import { RecommendationPreview } from "./RecommendationPreview";
 import type { FaceAnalysisResult, FaceMeasurements } from "@/types/face";
+import type { FaceShapeTag } from "@/types/product";
 
 const MEASUREMENT_FIELDS: { key: keyof FaceMeasurements; label: string }[] = [
   { key: "face_length", label: "Chiều dài khuôn mặt" },
@@ -49,6 +51,27 @@ function MeasurementsGrid({ measurements }: { measurements: FaceMeasurements }) 
       })}
     </div>
   );
+}
+
+// On-demand recommendations for a past (history) analysis — collapsed by default so browsing
+// history doesn't fire one /recommend call per past photo; expands into a RecommendationPreview
+// (which does the actual fetch) only once the user asks for it.
+function HistoryRecommendations({ faceShape }: { faceShape: FaceShapeTag }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        className="btn btn--outline btn--small face-analysis__history-recommend-toggle"
+        onClick={() => setExpanded(true)}
+      >
+        Xem gợi ý gọng kính phù hợp
+      </button>
+    );
+  }
+
+  return <RecommendationPreview faceShape={faceShape} />;
 }
 
 // Matches .design/Try Face Analysis.dc.html. Uploads a face photo (previewed locally while the
@@ -264,20 +287,10 @@ export function FaceAnalysisPage() {
             <MeasurementsGrid measurements={result.measurements} />
           </div>
 
-          {/* recommendation-service doesn't exist yet (out of scope, plan Q2) — same
-              disabled/"Coming soon" pattern as ProductDetailPage's Try AR / Add to cart. */}
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled
-            title="Sắp ra mắt"
-            aria-label="Xem gọng kính được gợi ý (sắp ra mắt)"
-          >
-            Xem gọng kính được gợi ý
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M5 12h14M13 6l6 6-6 6" />
-            </svg>
-          </button>
+          <div className="face-analysis__card">
+            <p className="face-analysis__section-label">Gọng kính gợi ý cho bạn</p>
+            <RecommendationPreview faceShape={result.faceShape} />
+          </div>
         </>
       )}
 
@@ -315,6 +328,7 @@ export function FaceAnalysisPage() {
                   </div>
                 </div>
                 <MeasurementsGrid measurements={item.measurements} />
+                <HistoryRecommendations faceShape={item.faceShape} />
               </div>
             ))}
           </div>

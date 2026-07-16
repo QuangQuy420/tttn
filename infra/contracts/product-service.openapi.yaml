@@ -71,6 +71,13 @@ paths:
           in: query
           schema:
             $ref: "#/components/schemas/GenderTarget"
+        - name: faceShape
+          in: query
+          description: >
+            Filters to products tagged (via `ps_product_face_shapes`) as suiting this
+            face shape.
+          schema:
+            $ref: "#/components/schemas/FaceShape"
         - name: status
           in: query
           description: >
