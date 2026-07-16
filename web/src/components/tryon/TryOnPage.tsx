@@ -40,7 +40,6 @@ export function TryOnPage({ id }: TryOnPageProps) {
   const { products: otherProducts } = useProducts({ limit: SWITCHER_LIMIT });
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const hasShownCameraRef = useRef(false);
 
   const thumbnail = product?.images.find((image) => image.isThumbnail) ?? product?.images[0];
 
@@ -57,11 +56,20 @@ export function TryOnPage({ id }: TryOnPageProps) {
   // Once the camera view has rendered once, it must never be replaced by a full-page
   // loading/error state again — that would unmount the <video>/<canvas> the running camera
   // stream is attached to, orphaning it (the freshly re-mounted <video> has no srcObject, so it
-  // just shows solid black). This bit latches permanently true the first time we get past the
-  // gate below, so a *later* switch's loading/error never re-triggers it, even though `product`
+  // just shows solid black). This bit latches permanently true the first time `cameraReady`
+  // clears, so a *later* switch's loading/error never re-triggers it, even though `product`
   // briefly reads null while that switch's fetch is in flight, same as it did before anything
-  // ever loaded.
-  const hasShownCamera = hasShownCameraRef.current;
+  // ever loaded. Setting state during render like this (guarded so it only fires on the render
+  // where the condition first flips) is React's documented pattern for state that needs to
+  // remember "has this ever been true" — a ref can't be read/written during render
+  // (react-hooks/refs), and syncing it from a useEffect instead re-triggers
+  // react-hooks/set-state-in-effect. See https://react.dev/learn/you-might-not-need-an-effect.
+  const cameraReady = activeId === null || Boolean(product);
+  const [hasShownCamera, setHasShownCamera] = useState(cameraReady);
+  if (cameraReady && !hasShownCamera) {
+    setHasShownCamera(true);
+  }
+
   if (!hasShownCamera) {
     // Only a chosen product (activeId set, e.g. arrived via a product's "Thử kính AR" button)
     // can fail to load — landing on the tab with no product picked at all is not an error
@@ -69,7 +77,6 @@ export function TryOnPage({ id }: TryOnPageProps) {
     if (activeId && isLoading && !product) return <LoadingState label="Đang tải sản phẩm..." />;
     if (activeId && error && !product) return <ErrorState message={error} />;
   }
-  hasShownCameraRef.current = true;
 
   // A switch that fails after the camera is already showing shouldn't blank the page (see
   // above) — surface it as a small inline notice next to the switcher instead, keeping

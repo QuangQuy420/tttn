@@ -19,12 +19,10 @@ export function useProduct(id: string | null): UseProductResult {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (id === null) {
-      setProduct(null);
-      setError(null);
-      setIsLoading(false);
-      return;
-    }
+    // No id yet (camera-first try-on landing state) — nothing to fetch. `product`/`error`
+    // already default to null and no current caller reads `isLoading` while id is null (see
+    // TryOnPage's `activeId &&` guards), so there's nothing to reset here.
+    if (id === null) return;
 
     let cancelled = false;
 
