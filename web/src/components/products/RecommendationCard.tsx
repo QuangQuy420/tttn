@@ -2,13 +2,12 @@ import Link from "next/link";
 import { ImageWithFallback } from "@/components/common/ImageWithFallback";
 import { formatPriceVnd } from "@/lib/format/price";
 import { formatFrameShapeVi } from "@/lib/labels";
-import type { Product } from "@/types/product";
+import type { RecommendedProduct } from "@/types/recommendation";
 
-interface ProductCardProps {
-  product: Product;
-}
-
-export function ProductCard({ product }: ProductCardProps) {
+// Same card-style layout as ProductCard, but built for RecommendedProduct's narrower shape
+// (no genderTarget/category/variants — recommendation-service only returns what a card needs
+// plus a ranking `score`), so ProductCard itself isn't reused directly.
+export function RecommendationCard({ product }: { product: RecommendedProduct }) {
   const thumbnail = product.images.find((image) => image.isThumbnail) ?? product.images[0];
 
   return (
@@ -31,22 +30,9 @@ export function ProductCard({ product }: ProductCardProps) {
         </div>
       </Link>
       <div className="product-card__actions">
-        <Link
-          href={`/products/${product.id}/try-on`}
-          className="btn btn--primary btn--small"
-          aria-label="Thử kính AR"
-        >
+        <Link href={`/products/${product.id}/try-on`} className="btn btn--primary btn--small">
           Thử kính AR
         </Link>
-        <button
-          type="button"
-          className="btn btn--outline btn--small"
-          disabled
-          title="Sắp ra mắt"
-          aria-label="Thêm vào giỏ hàng (sắp ra mắt)"
-        >
-          Thêm vào giỏ hàng
-        </button>
       </div>
     </div>
   );

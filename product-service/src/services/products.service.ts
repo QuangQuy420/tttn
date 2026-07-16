@@ -62,6 +62,7 @@ export class ProductsService {
       brandId: query.brandId,
       frameShape: query.frameShape,
       genderTarget: query.genderTarget,
+      faceShape: query.faceShape,
       status: query.status,
       includeAllStatuses: query.includeAllStatuses,
       minPrice: query.minPrice,

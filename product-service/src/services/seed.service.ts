@@ -4,16 +4,19 @@ import { IBrandRepository } from '../repositories/brand.repository';
 import { ICategoryRepository } from '../repositories/category.repository';
 import { IProductRepository } from '../repositories/product.repository';
 import { IProductVariantRepository } from '../repositories/product-variant.repository';
+import { IProductFaceShapeRepository } from '../repositories/product-face-shape.repository';
 import {
   BRAND_REPOSITORY,
   CATEGORY_REPOSITORY,
   PRODUCT_REPOSITORY,
   PRODUCT_VARIANT_REPOSITORY,
+  PRODUCT_FACE_SHAPE_REPOSITORY,
 } from '../repositories/tokens';
 import { ProductImagesService } from './product-images.service';
 import { FrameShape } from '../db/enums/frame-shape.enum';
 import { GenderTarget } from '../db/enums/gender-target.enum';
 import { ProductStatus } from '../db/enums/product-status.enum';
+import { FaceShape } from '../db/enums/face-shape.enum';
 
 interface SeedBrandInput {
   name: string;
@@ -48,6 +51,7 @@ interface SeedProductInput {
   brand: string;
   category: string;
   frame_shape: string;
+  face_shapes?: string[];
   gender_target: string;
   material?: string | null;
   base_price: number;
@@ -99,6 +103,8 @@ export class SeedService {
     private readonly productRepository: IProductRepository,
     @Inject(PRODUCT_VARIANT_REPOSITORY)
     private readonly variantRepository: IProductVariantRepository,
+    @Inject(PRODUCT_FACE_SHAPE_REPOSITORY)
+    private readonly faceShapeRepository: IProductFaceShapeRepository,
     private readonly productImagesService: ProductImagesService,
   ) {}
 
@@ -264,6 +270,13 @@ export class SeedService {
           `product ${productInput.sku} status`,
         )
       : ProductStatus.DRAFT;
+    const faceShapes = (productInput.face_shapes ?? []).map((faceShape) =>
+      this.parseEnum(
+        FaceShape,
+        faceShape,
+        `product ${productInput.sku} face_shapes`,
+      ),
+    );
 
     const product = await this.productRepository.create({
       brandId,
@@ -307,6 +320,13 @@ export class SeedService {
           sortOrder: imageInput.sort_order ?? 0,
         });
         imagesCreated += 1;
+      }
+
+      if (faceShapes.length > 0) {
+        await this.faceShapeRepository.replaceForProduct(
+          product.id,
+          faceShapes,
+        );
       }
     } catch (error) {
       await this.productRepository.deleteById(product.id);

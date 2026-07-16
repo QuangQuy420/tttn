@@ -15,6 +15,7 @@ export {
 
 export { getBrands } from "./brands";
 export { analyzeFace, getFaceAnalysisHistory } from "./face";
+export { getRecommendations } from "./recommendations";
 
 export {
   createProduct,

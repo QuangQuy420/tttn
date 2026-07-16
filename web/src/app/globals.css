@@ -1303,6 +1303,24 @@ main {
   margin: 0;
 }
 
+.face-analysis__history-recommend-toggle {
+  margin-top: 0.75rem;
+}
+
+.face-analysis__recommend-preview .product-grid {
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1.25rem;
+}
+
+.face-analysis__recommend-view-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 1rem;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
 /* ==========================================================================
    Storefront header, account dropdown, authentication and profile UI
    ========================================================================== */
@@ -2309,4 +2327,37 @@ main {
 .admin-sidebar__logout:hover {
   background: rgba(247, 243, 236, 0.08);
   color: #ffffff;
+}
+
+.try-on__video-frame {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  aspect-ratio: 4 / 3;
+  margin: 0 auto;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #1c1712;
+}
+
+.try-on__video,
+.try-on__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  /* Mirror the preview like a mirror/selfie camera — matches how a user expects to see
+     themselves while lining up the glasses overlay. */
+  transform: scaleX(-1);
+}
+
+.try-on__video {
+  object-fit: cover;
+}
+
+.try-on__hint {
+  margin: 0.875rem 0 0;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  text-align: center;
 }

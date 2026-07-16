@@ -1,8 +1,7 @@
 name: CI
 
 # Lint + build + test (+ Docker image build, no push) for the services with real code:
-# api-gateway, product-service, web, and now face-processing-service. recommendation-service
-# is intentionally excluded (Q5 — no real app code yet, see infra/README.md).
+# api-gateway, product-service, web, face-processing-service, and now recommendation-service.
 # user-service/order-service/payment-service are the other dev's and also excluded (no
 # language decided yet, Q2).
 #
@@ -27,6 +26,7 @@ jobs:
       product-service: ${{ steps.filter.outputs.product-service }}
       web: ${{ steps.filter.outputs.web }}
       face-processing-service: ${{ steps.filter.outputs.face-processing-service }}
+      recommendation-service: ${{ steps.filter.outputs.recommendation-service }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -41,6 +41,8 @@ jobs:
               - 'web/**'
             face-processing-service:
               - 'face-processing-service/**'
+            recommendation-service:
+              - 'recommendation-service/**'
 
   api-gateway:
     name: api-gateway
@@ -211,3 +213,30 @@ jobs:
           context: face-processing-service
           push: false
           tags: smart-eyewear/face-processing-service:ci
+
+  recommendation-service:
+    name: recommendation-service
+    needs: changes
+    if: needs.changes.outputs.recommendation-service == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: recommendation-service
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: recommendation-service/requirements.txt
+
+      - run: pip install -r requirements.txt
+      - run: pytest
+
+      - name: Build Docker image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: recommendation-service
+          push: false
+          tags: smart-eyewear/recommendation-service:ci

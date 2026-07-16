@@ -85,10 +85,9 @@ explicitly with `-f`, so plain `docker compose up --build` still gives you the p
   with **no service arguments** (the whole stack) will fail on these two. `api-gateway` doesn't
   `depends_on` `user-service` yet either way — it doesn't call it yet (edge JWT / `/api/auth/*`
   proxying is deferred, see Q3); that dependency will be added once that proxy exists.
-- **`recommendation-service`** — has a real, non-placeholder Dockerfile (`python:3.11-slim` + its
-  `requirements.txt`) and a layered folder scaffold (`app/routers|services|repositories|db|schemas|core`),
-  so `docker compose build` on it *succeeds*. However it has no `app/main.py` yet (its Dockerfile's
-  `CMD` points at `app.main:app`, which doesn't exist), so its **container fails to start**. Out of
-  scope for this sprint — don't rely on it being up.
+- **`recommendation-service`** — real, has `POST /recommend` (face-shape -> ranked frame list,
+  calling `product-service`'s `GET /products?faceShape=...` and scoring candidates via a local
+  face-shape -> frame-shape config) and `GET /health`, no longer gated behind `not-ready`. Covered
+  by CI (lint via pytest's collection, `pytest`, Docker build).
 
 See [`docs/architecture.md`](docs/architecture.md) for the full design.

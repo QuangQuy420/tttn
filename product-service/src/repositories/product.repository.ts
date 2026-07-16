@@ -5,12 +5,14 @@ import { Product } from '../db/entities/product.entity';
 import { FrameShape } from '../db/enums/frame-shape.enum';
 import { GenderTarget } from '../db/enums/gender-target.enum';
 import { ProductStatus } from '../db/enums/product-status.enum';
+import { FaceShape } from '../db/enums/face-shape.enum';
 
 export interface ProductListFilter {
   categoryId?: string;
   brandId?: string;
   frameShape?: FrameShape;
   genderTarget?: GenderTarget;
+  faceShape?: FaceShape;
   status?: ProductStatus;
   includeAllStatuses?: boolean;
   minPrice?: number;
@@ -72,6 +74,19 @@ export class TypeOrmProductRepository implements IProductRepository {
       qb.andWhere('product.gender_target = :genderTarget', {
         genderTarget: filter.genderTarget,
       });
+    }
+    if (filter.faceShape) {
+      qb.andWhere(
+        (qb2) =>
+          `EXISTS ${qb2
+            .subQuery()
+            .select('1')
+            .from('ps_product_face_shapes', 'product_face_shape')
+            .where('product_face_shape.product_id = product.id')
+            .andWhere('product_face_shape.face_shape = :faceShape')
+            .getQuery()}`,
+        { faceShape: filter.faceShape },
+      );
     }
     if (filter.status) {
       qb.andWhere('product.status = :status', { status: filter.status });
