@@ -74,7 +74,7 @@ export class AuthProxyService {
             );
 
             return new HttpException(
-                'user-service did not respond in time',
+                'user-service không phản hồi kịp thời',
                 HttpStatus.GATEWAY_TIMEOUT,
             );
         }
@@ -84,7 +84,7 @@ export class AuthProxyService {
         );
 
         return new HttpException(
-            'user-service is unreachable',
+            'Không thể kết nối tới user-service',
             HttpStatus.SERVICE_UNAVAILABLE,
         );
     }

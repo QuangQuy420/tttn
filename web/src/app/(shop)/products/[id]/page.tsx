@@ -8,7 +8,7 @@ export default function ProductDetail() {
   const params = useParams<{ id: string }>();
   const id = params.id;
 
-  if (!id) return <ErrorState message="Product not found." />;
+  if (!id) return <ErrorState message="Không tìm thấy sản phẩm." />;
 
   return <ProductDetailPage id={id} />;
 }

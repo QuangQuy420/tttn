@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ApiError, analyzeFace } from "@/lib/api";
+import { getAccessToken } from "@/lib/auth/session";
 import type { FaceAnalysisResult } from "@/types/face";
 
 interface UseFaceAnalysisResult {
@@ -18,6 +19,13 @@ export function useFaceAnalysis(): UseFaceAnalysisResult {
   const [error, setError] = useState<string | null>(null);
 
   async function analyze(file: File) {
+    const token = getAccessToken();
+    if (!token) {
+      setResult(null);
+      setError("You must be logged in to analyze a photo.");
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     // Clear the previous result up front — otherwise, while a second photo is being
@@ -25,7 +33,7 @@ export function useFaceAnalysis(): UseFaceAnalysisResult {
     // precedence over the freshly-selected local preview) until the new request resolves.
     setResult(null);
     try {
-      const analysis = await analyzeFace(file);
+      const analysis = await analyzeFace(file, token);
       setResult(analysis);
     } catch (err) {
       setResult(null);

@@ -8,9 +8,9 @@ import { ErrorState } from "@/components/common/ErrorState";
 export default function Error({ reset }: { error: Error; reset: () => void }) {
   return (
     <div>
-      <ErrorState message="Something went wrong." />
+      <ErrorState message="Đã có lỗi xảy ra." />
       <button type="button" onClick={reset}>
-        Try again
+        Thử lại
       </button>
     </div>
   );

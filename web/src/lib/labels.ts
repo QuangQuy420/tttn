@@ -1,8 +1,8 @@
 import type { FaceShapeTag, FrameShape, GenderTarget } from "@/types/product";
 
 // Vietnamese labels for the admin area (Admin Products.dc.html / Product Edit.dc.html mockups
-// use Vietnamese copy throughout). Kept separate from lib/format/price.ts's English
-// formatFrameShape, which is used by the public (English) storefront.
+// use Vietnamese copy throughout) — also reused by the storefront (ProductFilters/ProductCard/
+// ProductDetailPage), since the whole `web` UI is Vietnamese (see CLAUDE.md).
 export const FRAME_SHAPE_LABELS_VI: Record<FrameShape, string> = {
   ROUND: "Gọng tròn",
   SQUARE: "Gọng vuông",

@@ -7,6 +7,7 @@ import { ErrorState } from "@/components/common/ErrorState";
 import { ImageWithFallback } from "@/components/common/ImageWithFallback";
 import { LoadingState } from "@/components/common/LoadingState";
 import { useProducts } from "@/hooks/useProducts";
+import { getAccessToken } from "@/lib/auth/session";
 import { formatFrameShapeVi } from "@/lib/labels";
 import { formatPriceVnd } from "@/lib/format/price";
 
@@ -39,10 +40,16 @@ export default function AdminProductsPage() {
   async function handleDelete(id: string, name: string) {
     if (!window.confirm(`Xoá sản phẩm "${name}"? Hành động này không thể hoàn tác.`)) return;
 
+    const token = getAccessToken();
+    if (!token) {
+      setDeleteError("Vui lòng đăng nhập lại.");
+      return;
+    }
+
     setDeleteError(null);
     setDeletingId(id);
     try {
-      await deleteProduct(id);
+      await deleteProduct(id, token);
       await refetch();
     } catch (err) {
       setDeleteError(err instanceof ApiError ? err.message : "Xoá sản phẩm thất bại.");

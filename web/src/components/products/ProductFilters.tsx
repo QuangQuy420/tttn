@@ -1,4 +1,4 @@
-import { formatFrameShape } from "@/lib/format/price";
+import { formatFrameShapeVi } from "@/lib/labels";
 import type { Category } from "@/types/category";
 import type { FrameShape } from "@/types/product";
 
@@ -21,9 +21,9 @@ interface PriceRange {
 
 // FR4: fixed price bands (VND), wired to the real minPrice/maxPrice query params.
 const PRICE_RANGES: PriceRange[] = [
-  { label: "Under 1,500,000 ₫", maxPrice: 1_500_000 },
-  { label: "1,500,000 – 2,500,000 ₫", minPrice: 1_500_000, maxPrice: 2_500_000 },
-  { label: "Over 2,500,000 ₫", minPrice: 2_500_000 },
+  { label: "Dưới 1.500.000 ₫", maxPrice: 1_500_000 },
+  { label: "1.500.000 – 2.500.000 ₫", minPrice: 1_500_000, maxPrice: 2_500_000 },
+  { label: "Trên 2.500.000 ₫", minPrice: 2_500_000 },
 ];
 
 function isActivePriceRange(
@@ -56,16 +56,16 @@ export function ProductFilters({
   onPriceRangeChange,
 }: ProductFiltersProps) {
   return (
-    <div className="product-filters" aria-label="Filter products">
-      <span className="product-filters__label">Filter by:</span>
+    <div className="product-filters" aria-label="Lọc sản phẩm">
+      <span className="product-filters__label">Lọc theo:</span>
 
-      <div className="filter-pills" role="group" aria-label="Category">
+      <div className="filter-pills" role="group" aria-label="Danh mục">
         <button
           type="button"
           className={`pill${categoryId === undefined ? " pill--active" : ""}`}
           onClick={() => onCategoryChange(undefined)}
         >
-          All categories
+          Tất cả danh mục
         </button>
         {categories.map((category) => (
           <button
@@ -79,13 +79,13 @@ export function ProductFilters({
         ))}
       </div>
 
-      <div className="filter-pills" role="group" aria-label="Frame shape">
+      <div className="filter-pills" role="group" aria-label="Kiểu gọng kính">
         <button
           type="button"
           className={`pill${frameShape === undefined ? " pill--active" : ""}`}
           onClick={() => onFrameShapeChange(undefined)}
         >
-          All shapes
+          Tất cả kiểu gọng
         </button>
         {FRAME_SHAPES.map((shape) => (
           <button
@@ -94,18 +94,18 @@ export function ProductFilters({
             className={`pill${frameShape === shape ? " pill--active" : ""}`}
             onClick={() => onFrameShapeChange(shape)}
           >
-            {formatFrameShape(shape)}
+            {formatFrameShapeVi(shape)}
           </button>
         ))}
       </div>
 
-      <div className="filter-pills" role="group" aria-label="Price range">
+      <div className="filter-pills" role="group" aria-label="Khoảng giá">
         <button
           type="button"
           className={`pill${minPrice === undefined && maxPrice === undefined ? " pill--active" : ""}`}
           onClick={() => onPriceRangeChange({ minPrice: undefined, maxPrice: undefined })}
         >
-          All prices
+          Tất cả mức giá
         </button>
         {PRICE_RANGES.map((range) => (
           <button

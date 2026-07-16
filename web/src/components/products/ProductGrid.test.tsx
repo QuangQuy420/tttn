@@ -33,7 +33,7 @@ describe("ProductGrid", () => {
   it("shows an empty-state message when there are no products", () => {
     render(<ProductGrid products={[]} />);
 
-    expect(screen.getByText(/no products found/i)).toBeInTheDocument();
+    expect(screen.getByText(/không tìm thấy sản phẩm/i)).toBeInTheDocument();
   });
 
   it("falls back to the placeholder box instead of a broken image icon", () => {

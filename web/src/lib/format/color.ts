@@ -3,12 +3,12 @@
 // unmapped names fall back to a neutral swatch plus a visible text label (never a hex-only
 // circle with no accessible name for a color we don't recognize).
 const COLOR_NAME_TO_HEX: Record<string, string> = {
-  black: "#2B2420",
-  gold: "#C9A24B",
-  silver: "#B8B8B8",
-  tortoise: "#6B4A2B",
-  brown: "#5A3E2B",
-  navy: "#1F2A44",
+  "đen": "#2B2420",
+  "vàng": "#C9A24B",
+  "bạc": "#B8B8B8",
+  "đồi mồi": "#6B4A2B",
+  "nâu": "#5A3E2B",
+  "xanh navy": "#1F2A44",
 };
 
 const FALLBACK_SWATCH_HEX = "#B8B0A2";

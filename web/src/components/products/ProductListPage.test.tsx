@@ -62,7 +62,7 @@ describe("ProductListPage", () => {
 
     render(<ProductListPage />);
 
-    expect(screen.getByRole("status")).toHaveTextContent(/loading/i);
+    expect(screen.getByRole("status")).toHaveTextContent(/đang tải/i);
   });
 
   it("shows an error message when the fetch fails", () => {
@@ -82,7 +82,7 @@ describe("ProductListPage", () => {
 
     render(<ProductListPage />);
 
-    expect(screen.getByText(/no products found/i)).toBeInTheDocument();
+    expect(screen.getByText(/không tìm thấy sản phẩm/i)).toBeInTheDocument();
   });
 
   it("renders the product grid once products load", () => {
@@ -110,7 +110,7 @@ describe("ProductListPage", () => {
 
     render(<ProductListPage />);
 
-    await user.click(screen.getByRole("button", { name: /under 1,500,000/i }));
+    await user.click(screen.getByRole("button", { name: /dưới 1\.500\.000/i }));
 
     expect(push).toHaveBeenCalledWith("/?maxPrice=1500000");
   });
@@ -122,7 +122,7 @@ describe("ProductListPage", () => {
 
     render(<ProductListPage />);
 
-    await user.type(screen.getByRole("searchbox", { name: /search/i }), "aviator");
+    await user.type(screen.getByRole("searchbox", { name: /tìm sản phẩm/i }), "aviator");
 
     act(() => {
       jest.advanceTimersByTime(300);
@@ -140,7 +140,7 @@ describe("ProductListPage", () => {
 
     render(<ProductListPage />);
 
-    const input = screen.getByRole("searchbox", { name: /search/i });
+    const input = screen.getByRole("searchbox", { name: /tìm sản phẩm/i });
     await user.type(input, "avi");
 
     act(() => {
@@ -172,7 +172,7 @@ describe("ProductListPage", () => {
 
     const { rerender } = render(<ProductListPage />);
 
-    await user.type(screen.getByRole("searchbox", { name: /search/i }), "avi");
+    await user.type(screen.getByRole("searchbox", { name: /tìm sản phẩm/i }), "avi");
 
     // Before the search debounce fires, the user clicks a category pill. In the real app this
     // pushes a new URL and next/navigation's useSearchParams() re-renders the page with it —

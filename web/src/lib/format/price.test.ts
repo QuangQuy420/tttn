@@ -1,4 +1,4 @@
-import { formatFrameShape, formatPriceVnd } from "./price";
+import { formatPriceVnd } from "./price";
 
 describe("formatPriceVnd", () => {
   // The exact whitespace character Intl.NumberFormat places before "₫" is ICU-version-dependent
@@ -9,12 +9,5 @@ describe("formatPriceVnd", () => {
 
   it("rounds to the nearest VND (no decimal places)", () => {
     expect(formatPriceVnd(129.5)).toMatch(/^130\s₫$/);
-  });
-});
-
-describe("formatFrameShape", () => {
-  it("maps a raw FrameShape enum value to a human-readable label", () => {
-    expect(formatFrameShape("ROUND")).toBe("Round");
-    expect(formatFrameShape("CAT_EYE")).toBe("Cat-eye");
   });
 });

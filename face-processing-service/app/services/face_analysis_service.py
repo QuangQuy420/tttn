@@ -35,7 +35,7 @@ class FaceAnalysisService:
         self._face_analysis_repo = face_analysis_repo
 
     async def analyze_and_store(
-        self, data: bytes, filename: str | None, content_type: str
+        self, user_id: uuid.UUID, data: bytes, filename: str | None, content_type: str
     ) -> AnalyzeResponse:
         """Classify `data`, store it, persist the result, and return the response DTO.
 
@@ -49,6 +49,7 @@ class FaceAnalysisService:
         image_url = self._image_storage.get_presigned_url(s3_key)
 
         row = await self._face_analysis_repo.create(
+            user_id=user_id,
             s3_key=s3_key,
             face_shape=face_shape,
             measurements=measurements.model_dump(),
@@ -62,6 +63,20 @@ class FaceAnalysisService:
             confidence=confidence,
             imageUrl=image_url,
         )
+
+    async def list_history(self, user_id: uuid.UUID) -> list[AnalyzeResponse]:
+        """Return `user_id`'s past analyses, newest first, mapped to `AnalyzeResponse`."""
+        rows = await self._face_analysis_repo.list_by_user(user_id)
+        return [
+            AnalyzeResponse(
+                id=str(row.id),
+                faceShape=row.face_shape,
+                measurements=row.measurements,
+                confidence=row.confidence,
+                imageUrl=self._image_storage.get_presigned_url(row.s3_key),
+            )
+            for row in rows
+        ]
 
 
 def get_face_analysis_service(

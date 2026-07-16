@@ -112,7 +112,7 @@ describe('ProductsProxyService', () => {
 
       expect(error).toBeInstanceOf(HttpException);
       expect(error.getStatus()).toBe(HttpStatus.SERVICE_UNAVAILABLE);
-      expect(error.getResponse()).toContain('unreachable');
+      expect(error.getResponse()).toContain('Không thể kết nối');
     });
 
     it('maps a timeout to 504 Gateway Timeout', async () => {

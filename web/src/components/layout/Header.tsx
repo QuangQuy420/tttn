@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ApiError, getMyProfile } from "@/lib/api";
 import {
     getAccessToken,
     removeAccessToken,
@@ -18,11 +19,30 @@ export function Header() {
     // mismatch.
     const [authenticated, setAuthenticated] = useState(false);
 
+    // Role is only known once we've fetched the profile — null covers both "not logged in"
+    // and "not fetched yet", so the Admin tab (FR7) stays hidden until we're sure.
+    const [role, setRole] = useState<string | null>(null);
+
     const [menuOpen, setMenuOpen] = useState(false);
 
     useEffect(() => {
         function syncAuthState() {
-            setAuthenticated(Boolean(getAccessToken()));
+            const token = getAccessToken();
+            setAuthenticated(Boolean(token));
+
+            if (!token) {
+                setRole(null);
+                return;
+            }
+
+            void getMyProfile(token)
+                .then((response) => {
+                    setRole(response.data.role?.toUpperCase() ?? null);
+                })
+                .catch((error) => {
+                    if (!(error instanceof ApiError)) throw error;
+                    setRole(null);
+                });
         }
 
         function handleOutsideClick(event: MouseEvent) {
@@ -51,6 +71,7 @@ export function Header() {
     function handleLogout() {
         removeAccessToken();
         setAuthenticated(false);
+        setRole(null);
         setMenuOpen(false);
         router.push("/login");
         router.refresh();
@@ -62,7 +83,7 @@ export function Header() {
                 SMART EYEWEAR
             </Link>
 
-            <nav className="site-nav" aria-label="Primary">
+            <nav className="site-nav" aria-label="Điều hướng chính">
                 <Link href="/" className="site-nav__link">
                     Sản phẩm
                 </Link>
@@ -75,8 +96,14 @@ export function Header() {
                 </Link>
 
                 <Link href="/about" className="site-nav__link">
-                    About
+                    Giới thiệu
                 </Link>
+
+                {authenticated && role === "ADMIN" && (
+                    <Link href="/admin/products" className="site-nav__link">
+                        Quản trị
+                    </Link>
+                )}
             </nav>
 
             <div className="site-header__actions">
@@ -187,8 +214,8 @@ export function Header() {
                     type="button"
                     className="cart-icon-button"
                     disabled
-                    title="Coming soon"
-                    aria-label="Cart (coming soon)"
+                    title="Sắp ra mắt"
+                    aria-label="Giỏ hàng (sắp ra mắt)"
                 >
                     <svg
                         width="18"

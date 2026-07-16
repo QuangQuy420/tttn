@@ -6,7 +6,7 @@ export default function Home() {
   // ProductListPage reads filters via useSearchParams(), which Next.js requires to be
   // wrapped in Suspense so the rest of the route can still be statically rendered.
   return (
-    <Suspense fallback={<LoadingState label="Loading products..." />}>
+    <Suspense fallback={<LoadingState label="Đang tải sản phẩm..." />}>
       <ProductListPage />
     </Suspense>
   );

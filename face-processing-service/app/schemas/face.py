@@ -42,12 +42,12 @@ class ErrorResponse(BaseModel):
 
 
 class NoFaceDetectedError(ErrorResponse):
-    detail: str = "No face detected in the uploaded image."
+    detail: str = "Không phát hiện khuôn mặt nào trong ảnh đã tải lên."
 
 
 class MultipleFacesDetectedError(ErrorResponse):
-    detail: str = "Multiple faces detected — please upload a photo with exactly one face."
+    detail: str = "Phát hiện nhiều khuôn mặt — vui lòng tải lên ảnh chỉ có đúng 1 khuôn mặt."
 
 
 class InvalidImageError(ErrorResponse):
-    detail: str = "Invalid image: unsupported format or file too large."
+    detail: str = "Ảnh không hợp lệ: định dạng không được hỗ trợ hoặc tệp quá lớn."

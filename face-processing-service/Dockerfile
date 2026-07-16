@@ -22,7 +22,12 @@ RUN mkdir -p models && curl -fsSL -o models/face_landmarker.task \
     https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task
 
 COPY . .
+RUN chmod +x entrypoint.sh
 EXPOSE 8000
+
+# Runs pending Alembic migrations before the app starts (see entrypoint.sh) — every
+# `docker compose up`, not just the first one.
+ENTRYPOINT ["./entrypoint.sh"]
 
 # `dev` target: used by infra/docker-compose.watch.yml (docker compose watch) for hot-reload
 # during local development — uvicorn's own `--reload` picks up files synced in by `watch`.

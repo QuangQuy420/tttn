@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ApiError, uploadProductImage, type ImageSlot } from "@/lib/api";
+import { getAccessToken } from "@/lib/auth/session";
 
 interface ImageUploadSlotProps {
   productId: string | null;
@@ -31,10 +32,16 @@ export function ImageUploadSlot({
     event.target.value = "";
     if (!file || !productId) return;
 
+    const token = getAccessToken();
+    if (!token) {
+      setError("Vui lòng đăng nhập lại.");
+      return;
+    }
+
     setIsUploading(true);
     setError(null);
     try {
-      const image = await uploadProductImage(productId, slot, file);
+      const image = await uploadProductImage(productId, slot, file, token);
       onUploaded(image.imageUrl);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Tải ảnh lên thất bại.");
