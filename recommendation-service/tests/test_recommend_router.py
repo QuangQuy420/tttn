@@ -52,6 +52,8 @@ def test_recommend_happy_path_returns_the_service_response() -> None:
 
 
 def test_recommend_rejects_an_invalid_face_shape() -> None:
+    _override_with(_FakeRecommendationService(response=RecommendResponse(items=[])))
+
     response = client.post("/recommend", json={"faceShape": "NOT_A_REAL_SHAPE"})
 
     assert response.status_code == 422

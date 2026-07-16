@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="220" viewBox="0 0 600 220">
+  <!-- Cat-eye variant of try-on-test-glasses.svg — same purpose (AC4 overlay testing),
+       different silhouette so different seeded products don't all show the same shape.
+       Outer-top corner flares upward (the "wing"), characteristic of a cat-eye frame. -->
+  <g fill="#111417" fill-opacity="0.85" stroke="#1a1a1a" stroke-width="8" stroke-linejoin="round" stroke-linecap="round">
+    <polygon points="50,140 75,45 150,35 240,70 248,140 210,180 90,182" />
+    <polygon points="550,140 525,45 450,35 360,70 352,140 390,180 510,182" />
+  </g>
+  <g fill="none" stroke="#1a1a1a" stroke-width="8" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M248 140 Q300 120 352 140" />
+    <path d="M50 140 L0 125" />
+    <path d="M550 140 L600 125" />
+  </g>
+</svg>

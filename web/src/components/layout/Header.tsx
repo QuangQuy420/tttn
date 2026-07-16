@@ -95,8 +95,8 @@ export function Header() {
                     Phân tích khuôn mặt
                 </Link>
 
-                <Link href="/about" className="site-nav__link">
-                    Giới thiệu
+                <Link href="/try-on" className="site-nav__link">
+                    Thử Kính
                 </Link>
 
                 {authenticated && role === "ADMIN" && (

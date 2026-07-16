@@ -39,7 +39,7 @@
         { "color": "Đen", "size": "L", "extra_price": 8.00, "sku_variant": "RB-WAY-001-BLK-L" }
       ],
       "images": [
-        { "image_url": "/products/catalogs/ray-ban-original-wayfarer.png", "is_thumbnail": true, "sort_order": 0 }
+        { "image_url": "/products/frames/ray-ban-original-wayfarer.png", "is_thumbnail": true, "sort_order": 0 }
       ]
     },
     {
@@ -61,7 +61,7 @@
         { "color": "Vàng", "size": "L", "extra_price": 6.00, "sku_variant": "RB-AVI-002-GLD-L" }
       ],
       "images": [
-        { "image_url": "/products/catalogs/ray-ban-aviator-classic.png", "is_thumbnail": true, "sort_order": 0 }
+        { "image_url": "/products/frames/ray-ban-aviator-classic.png", "is_thumbnail": true, "sort_order": 0 }
       ]
     },
     {
@@ -82,7 +82,7 @@
         { "color": "Vàng", "size": "S", "extra_price": 4.00, "sku_variant": "RB-RND-003-GLD-S" }
       ],
       "images": [
-        { "image_url": "https://cdn.smarteyewear.local/products/ray-ban-round-metal/main.jpg", "is_thumbnail": true, "sort_order": 0 }
+        { "image_url": "/try-on-test-glasses-round.svg", "is_thumbnail": true, "sort_order": 0 }
       ]
     },
     {
@@ -145,7 +145,7 @@
         { "color": "Đen", "size": "M", "extra_price": 0, "sku_variant": "PS-OVAL-006-BLK-M" }
       ],
       "images": [
-        { "image_url": "https://cdn.smarteyewear.local/products/persol-po3092sm/main.jpg", "is_thumbnail": true, "sort_order": 0 },
+        { "image_url": "/try-on-test-glasses-oval.svg", "is_thumbnail": true, "sort_order": 0 },
         { "image_url": "https://cdn.smarteyewear.local/products/persol-po3092sm/hinge.jpg", "is_thumbnail": false, "sort_order": 1 }
       ]
     },
@@ -167,7 +167,7 @@
         { "color": "Đỏ", "size": "S", "extra_price": 12.00, "sku_variant": "PS-CATEYE-007-RED-S" }
       ],
       "images": [
-        { "image_url": "https://cdn.smarteyewear.local/products/persol-po3259s-cat-eye/main.jpg", "is_thumbnail": true, "sort_order": 0 }
+        { "image_url": "/try-on-test-glasses-cateye.svg", "is_thumbnail": true, "sort_order": 0 }
       ]
     },
     {
@@ -272,7 +272,7 @@
         { "color": "Bạc", "size": "M", "extra_price": 0, "sku_variant": "TF-RIML-012-SLV-M" }
       ],
       "images": [
-        { "image_url": "https://cdn.smarteyewear.local/products/tom-ford-alex-rimless/main.jpg", "is_thumbnail": true, "sort_order": 0 }
+        { "image_url": "/try-on-test-glasses-rimless.svg", "is_thumbnail": true, "sort_order": 0 }
       ]
     },
     {
@@ -397,7 +397,7 @@
         { "color": "Đen nhám", "size": "M", "extra_price": 0, "sku_variant": "CA-RECT-018-MBLK-M" }
       ],
       "images": [
-        { "image_url": "https://cdn.smarteyewear.local/products/carrera-8865-sport/main.jpg", "is_thumbnail": true, "sort_order": 0 }
+        { "image_url": "/try-on-test-glasses.svg", "is_thumbnail": true, "sort_order": 0 }
       ]
     },
     {

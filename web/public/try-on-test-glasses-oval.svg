@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="220" viewBox="0 0 600 220">
+  <!-- Oval-frame variant of try-on-test-glasses.svg — same purpose (AC4 overlay testing),
+       different silhouette so different seeded products don't all show the same shape. -->
+  <g fill="none" stroke="#1a1a1a" stroke-width="8" stroke-linejoin="round" stroke-linecap="round">
+    <ellipse cx="145" cy="112" rx="100" ry="68" fill="#111417" fill-opacity="0.85" />
+    <ellipse cx="455" cy="112" rx="100" ry="68" fill="#111417" fill-opacity="0.85" />
+    <path d="M245 110 Q300 92 355 110" />
+    <path d="M45 110 L0 95" />
+    <path d="M555 110 L600 95" />
+  </g>
+</svg>
