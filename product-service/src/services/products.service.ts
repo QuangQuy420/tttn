@@ -105,7 +105,7 @@ export class ProductsService {
     const product =
       await this.productRepository.findByIdWithBrandAndCategory(id);
     if (!product) {
-      throw new NotFoundException(`Product ${id} not found`);
+      throw new NotFoundException(`Không tìm thấy sản phẩm ${id}`);
     }
 
     const [variants, images, faceShapes] = await Promise.all([
@@ -150,7 +150,7 @@ export class ProductsService {
     const existing =
       await this.productRepository.findByIdWithBrandAndCategory(id);
     if (!existing) {
-      throw new NotFoundException(`Product ${id} not found`);
+      throw new NotFoundException(`Không tìm thấy sản phẩm ${id}`);
     }
 
     if (dto.categoryId || dto.brandId) {
@@ -193,7 +193,7 @@ export class ProductsService {
     const existing =
       await this.productRepository.findByIdWithBrandAndCategory(id);
     if (!existing) {
-      throw new NotFoundException(`Product ${id} not found`);
+      throw new NotFoundException(`Không tìm thấy sản phẩm ${id}`);
     }
     await this.productRepository.softDelete(id);
 
@@ -213,10 +213,10 @@ export class ProductsService {
       this.brandRepository.findById(brandId),
     ]);
     if (!category) {
-      throw new BadRequestException(`categoryId ${categoryId} does not exist`);
+      throw new BadRequestException(`categoryId ${categoryId} không tồn tại`);
     }
     if (!brand) {
-      throw new BadRequestException(`brandId ${brandId} does not exist`);
+      throw new BadRequestException(`brandId ${brandId} không tồn tại`);
     }
   }
 

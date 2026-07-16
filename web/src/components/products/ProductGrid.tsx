@@ -7,7 +7,7 @@ interface ProductGridProps {
 
 export function ProductGrid({ products }: ProductGridProps) {
   if (products.length === 0) {
-    return <p className="product-grid__empty">No products found.</p>;
+    return <p className="product-grid__empty">Không tìm thấy sản phẩm nào.</p>;
   }
 
   return (

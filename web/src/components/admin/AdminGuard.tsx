@@ -34,7 +34,7 @@ export function AdminGuard({
             const token = getAccessToken();
 
             if (!token) {
-                router.replace("/admin/login");
+                router.replace("/login");
                 return;
             }
 
@@ -46,7 +46,7 @@ export function AdminGuard({
                     "ADMIN"
                 ) {
                     removeAccessToken();
-                    router.replace("/admin/login");
+                    router.replace("/login");
                     return;
                 }
 
@@ -60,7 +60,7 @@ export function AdminGuard({
                     removeAccessToken();
                 }
 
-                router.replace("/admin/login");
+                router.replace("/login");
             } finally {
                 setChecking(false);
             }

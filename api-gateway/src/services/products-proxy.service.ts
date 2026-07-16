@@ -145,14 +145,14 @@ export class ProductsProxyService {
     if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
       this.logger.error(`product-service timed out on ${path}: ${error.message}`);
       return new HttpException(
-        'product-service did not respond in time',
+        'product-service không phản hồi kịp thời',
         HttpStatus.GATEWAY_TIMEOUT,
       );
     }
 
     this.logger.error(`product-service unreachable on ${path}: ${error.message}`);
     return new HttpException(
-      'product-service is unreachable',
+      'Không thể kết nối tới product-service',
       HttpStatus.SERVICE_UNAVAILABLE,
     );
   }

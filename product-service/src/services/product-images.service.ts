@@ -118,12 +118,12 @@ export class ProductImagesService {
     const variant = await this.variantRepository.findById(variantId);
     if (!variant) {
       throw new BadRequestException(
-        `ProductImage.variantId ${variantId} does not exist`,
+        `ProductImage.variantId ${variantId} không tồn tại`,
       );
     }
     if (variant.productId !== productId) {
       throw new BadRequestException(
-        `ProductImage.variantId ${variantId} belongs to product ${variant.productId}, not ${productId}`,
+        `ProductImage.variantId ${variantId} thuộc về sản phẩm ${variant.productId}, không phải ${productId}`,
       );
     }
   }

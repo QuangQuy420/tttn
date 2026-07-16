@@ -37,6 +37,6 @@ describe("Header", () => {
   it("shows the cart icon as a disabled button", () => {
     render(<Header />);
 
-    expect(screen.getByRole("button", { name: /cart/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /giỏ hàng/i })).toBeDisabled();
   });
 });

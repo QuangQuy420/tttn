@@ -32,6 +32,7 @@ class FaceAnalysis(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     s3_key: Mapped[str] = mapped_column(String, nullable=False)
     face_shape: Mapped[FaceShape] = mapped_column(
         Enum(FaceShape, name="face_shape_enum"), nullable=False

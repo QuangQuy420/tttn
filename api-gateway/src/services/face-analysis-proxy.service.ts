@@ -16,9 +16,10 @@ import { AppConfig } from '../config/configuration';
  * Holds no business logic of its own — it's a thin, typed HTTP client (per
  * README: gateway owns no data, only proxies).
  *
- * No auth guard here: edge JWT verification is explicitly deferred (see
- * api-gateway/README.md "see ADR on JWT" and the sprint plan's Q3) — these
- * routes are proxied unauthenticated for now.
+ * Auth is verified upstream by `JwtGuard`; this service forwards the
+ * already-verified `userId` downstream via `X-User-Id` so
+ * `face-processing-service` can attribute/scope results without verifying
+ * JWTs itself (Q4).
  */
 @Injectable()
 export class FaceAnalysisProxyService {
@@ -32,7 +33,7 @@ export class FaceAnalysisProxyService {
     this.baseUrl = this.configService.get<AppConfig>('app')!.faceProcessingServiceUrl;
   }
 
-  async analyzeFace(file: Express.Multer.File): Promise<unknown> {
+  async analyzeFace(file: Express.Multer.File, userId: string): Promise<unknown> {
     const path = '/analyze';
     const form = new FormData();
     form.append('file', file.buffer, {
@@ -43,7 +44,22 @@ export class FaceAnalysisProxyService {
     try {
       const response = await firstValueFrom(
         this.httpService.post(`${this.baseUrl}${path}`, form, {
-          headers: form.getHeaders(),
+          headers: { ...form.getHeaders(), 'X-User-Id': userId },
+        }),
+      );
+      return response.data;
+    } catch (error) {
+      throw this.toGatewayError(error as AxiosError, path);
+    }
+  }
+
+  async getHistory(userId: string): Promise<unknown> {
+    const path = '/analyses';
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(`${this.baseUrl}${path}`, {
+          headers: { 'X-User-Id': userId },
         }),
       );
       return response.data;
@@ -70,14 +86,14 @@ export class FaceAnalysisProxyService {
     if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
       this.logger.error(`face-processing-service timed out on ${path}: ${error.message}`);
       return new HttpException(
-        'face-processing-service did not respond in time',
+        'face-processing-service không phản hồi kịp thời',
         HttpStatus.GATEWAY_TIMEOUT,
       );
     }
 
     this.logger.error(`face-processing-service unreachable on ${path}: ${error.message}`);
     return new HttpException(
-      'face-processing-service is unreachable',
+      'Không thể kết nối tới face-processing-service',
       HttpStatus.SERVICE_UNAVAILABLE,
     );
   }

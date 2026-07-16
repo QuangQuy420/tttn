@@ -9,6 +9,7 @@ import {
   getCategories,
   updateProduct,
 } from "@/lib/api";
+import { getAccessToken } from "@/lib/auth/session";
 import {
   FRAME_SHAPES,
   GENDER_TARGETS,
@@ -177,12 +178,18 @@ export function ProductEditForm({ product }: ProductEditFormProps) {
       status: form.status,
     };
 
+    const token = getAccessToken();
+    if (!token) {
+      setError("Vui lòng đăng nhập lại.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       if (savedProductId) {
-        await updateProduct(savedProductId, payload);
+        await updateProduct(savedProductId, payload, token);
       } else {
-        const created = await createProduct(payload);
+        const created = await createProduct(payload, token);
         setSavedProductId(created.id);
       }
       router.push("/admin/products");

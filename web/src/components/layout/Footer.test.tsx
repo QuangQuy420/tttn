@@ -6,7 +6,7 @@ describe("Footer", () => {
     render(<Footer />);
 
     expect(
-      screen.getByText(/your face photos are never stored or shared/i),
+      screen.getByText(/ảnh khuôn mặt của bạn không bao giờ được lưu trữ/i),
     ).toBeInTheDocument();
   });
 

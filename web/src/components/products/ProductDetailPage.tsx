@@ -6,7 +6,8 @@ import { ImageWithFallback } from "@/components/common/ImageWithFallback";
 import { LoadingState } from "@/components/common/LoadingState";
 import { useProduct } from "@/hooks/useProduct";
 import { getColorSwatch } from "@/lib/format/color";
-import { formatFrameShape, formatPriceVnd } from "@/lib/format/price";
+import { formatPriceVnd } from "@/lib/format/price";
+import { formatFrameShapeVi, GENDER_TARGET_LABELS_VI } from "@/lib/labels";
 
 interface ProductDetailPageProps {
   id: string;
@@ -15,9 +16,9 @@ interface ProductDetailPageProps {
 export function ProductDetailPage({ id }: ProductDetailPageProps) {
   const { product, isLoading, error } = useProduct(id);
 
-  if (isLoading) return <LoadingState label="Loading product..." />;
+  if (isLoading) return <LoadingState label="Đang tải sản phẩm..." />;
   if (error) return <ErrorState message={error} />;
-  if (!product) return <ErrorState message="Product not found." />;
+  if (!product) return <ErrorState message="Không tìm thấy sản phẩm." />;
 
   const sortedImages = [...product.images].sort((a, b) => a.sortOrder - b.sortOrder);
   const mainImage = product.images.find((image) => image.isThumbnail) ?? sortedImages[0];
@@ -32,13 +33,13 @@ export function ProductDetailPage({ id }: ProductDetailPageProps) {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
           <path d="M19 12H5M12 19l-7-7 7-7" />
         </svg>
-        Back to catalog
+        Về trang danh mục
       </Link>
 
       <div className="product-detail__layout">
-        <section aria-label="Product images" className="product-detail__gallery">
+        <section aria-label="Hình ảnh sản phẩm" className="product-detail__gallery">
           {sortedImages.length === 0 ? (
-            <p>No images available.</p>
+            <p>Chưa có hình ảnh nào.</p>
           ) : (
             <>
               {mainImage && (
@@ -69,7 +70,7 @@ export function ProductDetailPage({ id }: ProductDetailPageProps) {
 
         <div className="product-detail__info">
           <h1 id="product-heading">{product.name}</h1>
-          <p className="product-detail__shape">{formatFrameShape(product.frameShape)} frame</p>
+          <p className="product-detail__shape">{formatFrameShapeVi(product.frameShape)}</p>
           <p className="product-detail__price">{formatPriceVnd(product.basePrice)}</p>
           {product.description && (
             <p className="product-detail__description">{product.description}</p>
@@ -80,24 +81,24 @@ export function ProductDetailPage({ id }: ProductDetailPageProps) {
               they're kept as a compact secondary attributes list (same conservative call as the
               plan's own Q6 on the footer copyright line). */}
           <dl className="product-detail__attributes">
-            <dt>Brand</dt>
+            <dt>Thương hiệu</dt>
             <dd>{product.brand.name}</dd>
-            <dt>Category</dt>
+            <dt>Danh mục</dt>
             <dd>{product.category.name}</dd>
-            <dt>Gender</dt>
-            <dd>{product.genderTarget}</dd>
+            <dt>Giới tính</dt>
+            <dd>{GENDER_TARGET_LABELS_VI[product.genderTarget]}</dd>
             {product.material && (
               <>
-                <dt>Material</dt>
+                <dt>Chất liệu</dt>
                 <dd>{product.material}</dd>
               </>
             )}
           </dl>
 
-          <section aria-label="Available colors">
-            <p className="product-detail__colors-label">Frame color</p>
+          <section aria-label="Màu sắc có sẵn">
+            <p className="product-detail__colors-label">Màu gọng kính</p>
             {colors.length === 0 ? (
-              <p>No variants available.</p>
+              <p>Chưa có phiên bản màu nào.</p>
             ) : (
               <ul className="product-detail__swatches">
                 {colors.map((color) => {
@@ -124,19 +125,19 @@ export function ProductDetailPage({ id }: ProductDetailPageProps) {
               type="button"
               className="btn btn--primary"
               disabled
-              title="Coming soon"
-              aria-label="Try AR (coming soon)"
+              title="Sắp ra mắt"
+              aria-label="Thử kính AR (sắp ra mắt)"
             >
-              Try AR
+              Thử kính AR
             </button>
             <button
               type="button"
               className="btn btn--outline"
               disabled
-              title="Coming soon"
-              aria-label="Add to cart (coming soon)"
+              title="Sắp ra mắt"
+              aria-label="Thêm vào giỏ hàng (sắp ra mắt)"
             >
-              Add to cart
+              Thêm vào giỏ hàng
             </button>
           </div>
         </div>

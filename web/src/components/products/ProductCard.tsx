@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ImageWithFallback } from "@/components/common/ImageWithFallback";
-import { formatFrameShape, formatPriceVnd } from "@/lib/format/price";
+import { formatPriceVnd } from "@/lib/format/price";
+import { formatFrameShapeVi } from "@/lib/labels";
 import type { Product } from "@/types/product";
 
 interface ProductCardProps {
@@ -25,7 +26,7 @@ export function ProductCard({ product }: ProductCardProps) {
         )}
         <div className="product-card__body">
           <h3 className="product-card__name">{product.name}</h3>
-          <p className="product-card__shape">{formatFrameShape(product.frameShape)} frame</p>
+          <p className="product-card__shape">{formatFrameShapeVi(product.frameShape)}</p>
           <p className="product-card__price">{formatPriceVnd(product.basePrice)}</p>
         </div>
       </Link>
@@ -34,19 +35,19 @@ export function ProductCard({ product }: ProductCardProps) {
           type="button"
           className="btn btn--primary btn--small"
           disabled
-          title="Coming soon"
-          aria-label="Try AR (coming soon)"
+          title="Sắp ra mắt"
+          aria-label="Thử kính AR (sắp ra mắt)"
         >
-          Try AR
+          Thử kính AR
         </button>
         <button
           type="button"
           className="btn btn--outline btn--small"
           disabled
-          title="Coming soon"
-          aria-label="Add to cart (coming soon)"
+          title="Sắp ra mắt"
+          aria-label="Thêm vào giỏ hàng (sắp ra mắt)"
         >
-          Add to cart
+          Thêm vào giỏ hàng
         </button>
       </div>
     </div>

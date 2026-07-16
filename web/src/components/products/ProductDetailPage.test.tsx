@@ -37,7 +37,7 @@ describe("ProductDetailPage", () => {
 
     render(<ProductDetailPage id="p1" />);
 
-    expect(screen.getByRole("status")).toHaveTextContent(/loading/i);
+    expect(screen.getByRole("status")).toHaveTextContent(/đang tải/i);
   });
 
   it("shows an error message when the fetch fails", () => {
@@ -76,8 +76,8 @@ describe("ProductDetailPage", () => {
 
     render(<ProductDetailPage id="p1" />);
 
-    expect(screen.getByText("No images available.")).toBeInTheDocument();
-    expect(screen.getByText("No variants available.")).toBeInTheDocument();
+    expect(screen.getByText("Chưa có hình ảnh nào.")).toBeInTheDocument();
+    expect(screen.getByText("Chưa có phiên bản màu nào.")).toBeInTheDocument();
   });
 
   it("renders one swatch per distinct variant color, with a text fallback for unmapped names", () => {

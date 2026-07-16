@@ -14,6 +14,12 @@ import { apiFetch } from "./client";
 // (main | angle1 | angle2 | angle3 -> sortOrder 0-3, main is the thumbnail).
 export type ImageSlot = "main" | "angle1" | "angle2" | "angle3";
 
+function authHeaders(token: string): HeadersInit {
+  return {
+    Authorization: `Bearer ${token}`,
+  };
+}
+
 export function getProducts(
   params: ProductListParams = {},
 ): Promise<PaginatedResponse<Product>> {
@@ -41,23 +47,33 @@ export function getCategories(): Promise<Category[]> {
   return apiFetch<Category[]>("/categories");
 }
 
-export function createProduct(payload: CreateProductPayload): Promise<Product> {
+export function createProduct(
+  payload: CreateProductPayload,
+  token: string,
+): Promise<Product> {
   return apiFetch<Product>("/products", {
     method: "POST",
+    headers: authHeaders(token),
     body: JSON.stringify(payload),
   });
 }
 
-export function updateProduct(id: string, payload: UpdateProductPayload): Promise<Product> {
+export function updateProduct(
+  id: string,
+  payload: UpdateProductPayload,
+  token: string,
+): Promise<Product> {
   return apiFetch<Product>(`/products/${encodeURIComponent(id)}`, {
     method: "PATCH",
+    headers: authHeaders(token),
     body: JSON.stringify(payload),
   });
 }
 
-export function deleteProduct(id: string): Promise<void> {
+export function deleteProduct(id: string, token: string): Promise<void> {
   return apiFetch<void>(`/products/${encodeURIComponent(id)}`, {
     method: "DELETE",
+    headers: authHeaders(token),
   });
 }
 
@@ -67,12 +83,14 @@ export function uploadProductImage(
   id: string,
   slot: ImageSlot,
   file: File,
+  token: string,
 ): Promise<ProductImage> {
   const form = new FormData();
   form.append("slot", slot);
   form.append("file", file);
   return apiFetch<ProductImage>(`/products/${encodeURIComponent(id)}/images`, {
     method: "POST",
+    headers: authHeaders(token),
     body: form,
   });
 }

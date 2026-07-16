@@ -23,13 +23,8 @@ export default function AdminLayout({
 
   function handleLogout() {
     removeAccessToken();
-    router.replace("/admin/login");
+    router.replace("/login");
     router.refresh();
-  }
-
-  // Không cần Guard cho trang login
-  if (pathname === "/admin/login") {
-    return <>{children}</>;
   }
 
   return (

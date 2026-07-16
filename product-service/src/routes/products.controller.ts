@@ -76,15 +76,15 @@ export class ProductsController {
     @UploadedFile() file: Express.Multer.File,
   ): Promise<ProductImageResponseDto> {
     if (!file) {
-      throw new BadRequestException('file is required');
+      throw new BadRequestException('Cần có tệp tin');
     }
     if (!ALLOWED_IMAGE_MIME_TYPES.includes(file.mimetype)) {
       throw new BadRequestException(
-        `file must be one of ${ALLOWED_IMAGE_MIME_TYPES.join(', ')}`,
+        `Tệp phải là 1 trong các định dạng: ${ALLOWED_IMAGE_MIME_TYPES.join(', ')}`,
       );
     }
     if (file.size > MAX_IMAGE_SIZE_BYTES) {
-      throw new BadRequestException('file must be 5 MB or smaller');
+      throw new BadRequestException('Tệp phải nhỏ hơn hoặc bằng 5 MB');
     }
 
     const image = await this.productImagesService.uploadAndAttach(

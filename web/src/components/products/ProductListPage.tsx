@@ -105,24 +105,24 @@ export function ProductListPage() {
     <>
       <section className="hero">
         <div className="hero__content">
-          <p className="hero__eyebrow">Eyewear Collection</p>
+          <p className="hero__eyebrow">Bộ sưu tập kính mắt</p>
           <h1 id="catalog-heading" className="hero__title">
-            Find the frame
+            Tìm gọng kính
             <br />
-            that fits your face
+            phù hợp với khuôn mặt bạn
           </h1>
           <p className="hero__subtext">
-            Upload a portrait photo and we will analyze your face shape and recommend the frames
-            that suit you best — then try them on right in your browser before you buy.
+            Tải lên 1 ảnh chân dung, chúng tôi sẽ phân tích dáng khuôn mặt của bạn và gợi ý những
+            gọng kính phù hợp nhất — sau đó thử ngay trên trình duyệt trước khi mua.
           </p>
           <button
             type="button"
             className="btn btn--primary"
             disabled
-            title="Coming soon"
-            aria-label="Start face analysis (coming soon)"
+            title="Sắp ra mắt"
+            aria-label="Bắt đầu phân tích khuôn mặt (sắp ra mắt)"
           >
-            Start Face Analysis
+            Bắt đầu phân tích khuôn mặt
           </button>
         </div>
         <div className="hero__visual" aria-hidden="true" />
@@ -146,8 +146,8 @@ export function ProductListPage() {
           <input
             type="search"
             className="search-input"
-            aria-label="Search products"
-            placeholder="Search by name or frame style"
+            aria-label="Tìm sản phẩm"
+            placeholder="Tìm theo tên hoặc kiểu gọng kính"
             value={searchInput}
             onChange={(event) => setSearchInput(event.target.value)}
           />
@@ -163,7 +163,7 @@ export function ProductListPage() {
           onFrameShapeChange={(nextFrameShape) => updateFilters({ frameShape: nextFrameShape })}
           onPriceRangeChange={(range) => updateFilters(range)}
         />
-        {isLoading && <LoadingState label="Loading products..." />}
+        {isLoading && <LoadingState label="Đang tải sản phẩm..." />}
         {!isLoading && error && <ErrorState message={error} />}
         {!isLoading && !error && <ProductGrid products={products} />}
       </section>

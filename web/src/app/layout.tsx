@@ -18,7 +18,7 @@ const workSans = Work_Sans({
 
 export const metadata: Metadata = {
   title: "Smart Eyewear",
-  description: "Browse eyewear, find your face shape, and try frames on virtually.",
+  description: "Xem kính mắt, tìm dáng khuôn mặt của bạn, và thử kính trực tiếp trên trình duyệt.",
 };
 
 export default function RootLayout({
@@ -27,7 +27,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${playfairDisplay.variable} ${workSans.variable}`}>
+    <html lang="vi" className={`${playfairDisplay.variable} ${workSans.variable}`}>
       <body>{children}</body>
     </html>
   );
