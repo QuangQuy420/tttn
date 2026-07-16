@@ -114,6 +114,17 @@ export function useFaceTracking({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- FaceLandmarker type imported lazily below
     let faceLandmarker: any = null;
 
+    // MediaPipe's WASM runtime routes some of its own harmless init-time logs (e.g. "INFO:
+    // Created TensorFlow Lite XNNPACK delegate for CPU.") through console.error rather than
+    // console.info, which Next.js's dev overlay then surfaces as a blocking "Console Error"
+    // card. Drop only that "INFO:"-prefixed noise for the life of this tracking session;
+    // every other console.error call still goes through untouched.
+    const originalConsoleError = console.error;
+    console.error = (...args: unknown[]) => {
+      if (typeof args[0] === "string" && args[0].startsWith("INFO:")) return;
+      originalConsoleError(...args);
+    };
+
     async function start() {
       setStatus("requesting-camera");
       setErrorMessage(null);
@@ -207,7 +218,9 @@ export function useFaceTracking({
 
             // Reference width factor picked so the drawn image roughly spans the eye-to-eye
             // width plus temple margin on each side, a common heuristic for 2D glasses overlays.
-            const drawWidth = eyeDistance * 2.2;
+            // Real glasses' front width (lens + bridge) runs ~1.3-1.4x the outer-eye-corner
+            // distance — 2.2 was tried first and drew the frame comically oversized.
+            const drawWidth = eyeDistance * 1.4;
             const drawHeight = drawWidth * (overlayImage.naturalHeight / overlayImage.naturalWidth);
 
             ctx.save();
@@ -231,6 +244,7 @@ export function useFaceTracking({
       if (rafId !== null) cancelAnimationFrame(rafId);
       if (stream) stream.getTracks().forEach((track) => track.stop());
       if (faceLandmarker) faceLandmarker.close();
+      console.error = originalConsoleError;
     };
   }, [enabled, videoRef, canvasRef]);
 

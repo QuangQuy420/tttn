@@ -99,11 +99,13 @@ services:
       product-service:
         condition: service_healthy
     healthcheck:
+      # start_period matches product-service: `nest start --watch` recompiles TS from scratch
+      # on every container start, too slow for the old 10s to reliably clear.
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 30s
 
   user-service:
     build: ../user-service     # Spring Boot (Maven), real Dockerfile now
@@ -136,11 +138,14 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
+      # start_period is generous: `nest start --watch` recompiles TS from scratch on every
+      # container start (~15-20s cold), on top of the DB connect + pending-migrations check —
+      # too slow for the old 10s to reliably clear before compose gives up waiting.
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3002/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 30s
 
   order-service:
     build: ../order-service    # ⚠️ language TBD (Q2)
@@ -198,11 +203,13 @@ services:
       api-gateway:
         condition: service_healthy
     healthcheck:
+      # start_period bumped for the same reason as api-gateway/product-service: cold `next dev`
+      # startup can be slower than the old 10s allows.
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 30s
 
 volumes:
   pgdata:

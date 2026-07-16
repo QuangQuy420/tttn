@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="220" viewBox="0 0 600 220">
+  <!-- Rimless variant of try-on-test-glasses.svg — same purpose (AC4 overlay testing),
+       lighter/thinner strokes and a straight metal bridge bar instead of a bold frame ring,
+       so different seeded products don't all show the same shape. -->
+  <g fill="#111417" fill-opacity="0.5" stroke="#555" stroke-width="2">
+    <rect x="40" y="55" width="210" height="120" rx="46" />
+    <rect x="350" y="55" width="210" height="120" rx="46" />
+  </g>
+  <g fill="none" stroke="#888" stroke-width="5" stroke-linecap="round">
+    <path d="M250 95 L350 95" />
+    <path d="M40 95 L0 82" />
+    <path d="M560 95 L600 82" />
+  </g>
+</svg>
