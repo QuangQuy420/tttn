@@ -13,6 +13,7 @@ public class RestClientConfig {
             @Value("${services.payment-service.base-url}")
             String baseUrl
     ) {
+
         return RestClient.builder()
                 .baseUrl(baseUrl)
                 .build();

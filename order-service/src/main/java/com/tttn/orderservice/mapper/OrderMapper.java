@@ -20,10 +20,11 @@ public class OrderMapper {
                 .map(this::toItemResponse)
                 .toList();
 
-        List<OrderStatusHistoryResponse> histories = order.getStatusHistories()
-                .stream()
-                .map(this::toStatusHistoryResponse)
-                .toList();
+        List<OrderStatusHistoryResponse> histories =
+                order.getStatusHistories()
+                        .stream()
+                        .map(this::toStatusHistoryResponse)
+                        .toList();
 
         return new OrderResponse(
                 order.getId(),
@@ -63,7 +64,11 @@ public class OrderMapper {
         return new OrderItemResponse(
                 item.getId(),
                 item.getProductId(),
+                item.getVariantId(),
                 item.getProductName(),
+                item.getSkuVariant(),
+                item.getColor(),
+                item.getSize(),
                 item.getProductImageUrl(),
                 item.getUnitPrice(),
                 item.getQuantity(),
