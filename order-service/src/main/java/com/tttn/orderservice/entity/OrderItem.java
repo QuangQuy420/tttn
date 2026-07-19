@@ -69,4 +69,15 @@ public class OrderItem {
             subtotal = unitPrice.multiply(BigDecimal.valueOf(quantity));
         }
     }
+    @Column(name = "variant_id", nullable = false)
+    private UUID variantId;
+
+    @Column(name = "sku_variant", length = 100)
+    private String skuVariant;
+
+    @Column(name = "color", length = 100)
+    private String color;
+
+    @Column(name = "size", length = 100)
+    private String size;
 }
