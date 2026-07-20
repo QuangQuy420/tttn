@@ -80,11 +80,22 @@ explicitly with `-f`, so plain `docker compose up --build` still gives you the p
   `UserServiceApplication.main()` overrides them from `PORT`/`DATABASE_URL`/`JWT_SECRET`/
   `JWT_EXPIRES_IN` (the same env-var convention every other service's `.env` uses) only when those
   env vars are present, so local dev outside Docker is unaffected.
-- **`order-service`, `payment-service`** — folder scaffolds only; their `Dockerfile`s are fully
-  commented-out placeholders (backend language still TBD, Q2). Running `docker compose build`/`up`
-  with **no service arguments** (the whole stack) will fail on these two. `api-gateway` doesn't
-  `depends_on` `user-service` yet either way — it doesn't call it yet (edge JWT / `/api/auth/*`
-  proxying is deferred, see Q3); that dependency will be added once that proxy exists.
+- **`order-service`** — real Spring Boot app (Maven, JDK 25) with a working multi-stage
+  Dockerfile, no longer gated behind `not-ready`. Same pattern as `user-service`: no `/actuator`
+  health endpoint wired into the Compose healthcheck, so it probes the port directly via `bash`'s
+  `/dev/tcp`. `application.yml`'s `datasource`/`redis` keys bind to `SERVER_PORT`/`DB_URL`/
+  `DB_USERNAME`/`DB_PASSWORD`/`REDIS_HOST`/`REDIS_PORT` — `OrderServiceApplication.main()` maps
+  the monorepo-wide `PORT`/`DATABASE_URL`/`REDIS_URL` convention (`order-service/.env.example`)
+  onto those properties only when the env vars are present, so local dev outside Docker is
+  unaffected. It does **not** `depends_on` `payment-service` in Compose: `PaymentClient` calls it
+  lazily on checkout, not at startup, so there's no hard dependency — and `payment-service` is
+  still gated behind `not-ready`, so a hard dependency would've pulled its broken build into
+  `order-service`'s startup.
+- **`payment-service`** — folder scaffold only; its `Dockerfile` is a fully commented-out
+  placeholder (backend language still TBD, Q2). Running `docker compose build`/`up` with **no
+  service arguments** (the whole stack) will fail on it. `api-gateway` doesn't `depends_on`
+  `user-service` yet either way — it doesn't call it yet (edge JWT / `/api/auth/*` proxying is
+  deferred, see Q3); that dependency will be added once that proxy exists.
 - **`recommendation-service`** — real, has `POST /recommend` (face-shape -> ranked frame list,
   calling `product-service`'s `GET /products?faceShape=...` and scoring candidates via a local
   face-shape -> frame-shape config) and `GET /health`, no longer gated behind `not-ready`. Covered
