@@ -1,0 +1,64 @@
+server:
+  port: ${SERVER_PORT:8083}
+
+spring:
+  application:
+    name: order-service
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5434/order_db}
+    username: ${DB_USERNAME:manhdat}
+    password: ${DB_PASSWORD:123}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6380}
+      password: ${REDIS_PASSWORD:}
+      timeout: 3s
+
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - info
+
+  endpoint:
+    health:
+      show-details: always
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+services:
+  product-service:
+    base-url: ${PRODUCT_SERVICE_URL:http://localhost:3002}
+
+  payment-service:
+    base-url: ${PAYMENT_SERVICE_URL:http://localhost:8084}
+
+cart:
+  key-prefix: "cart:"
+  expiration-days: ${CART_EXPIRATION_DAYS:7}
