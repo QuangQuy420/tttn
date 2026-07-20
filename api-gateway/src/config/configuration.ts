@@ -9,6 +9,7 @@ export interface AppConfig {
   jwtSecret: string;
   userServiceUrl: string;
   productServiceUrl: string;
+  orderServiceUrl: string;
   faceProcessingServiceUrl: string;
   recommendationServiceUrl: string;
 }
@@ -22,6 +23,7 @@ export default (): { app: AppConfig } => ({
     userServiceUrl:
         process.env.USER_SERVICE_URL ?? 'http://localhost:8081',
     productServiceUrl: process.env.PRODUCT_SERVICE_URL ?? 'http://product-service:3002',
+    orderServiceUrl: process.env.ORDER_SERVICE_URL ?? 'http://order-service:3003',
     faceProcessingServiceUrl:
       process.env.FACE_PROCESSING_SERVICE_URL ?? 'http://face-processing-service:8000',
     recommendationServiceUrl:

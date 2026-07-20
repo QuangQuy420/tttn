@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
+import { AddToCartModal } from "@/components/cart/AddToCartModal";
 import { ErrorState } from "@/components/common/ErrorState";
 import { ImageWithFallback } from "@/components/common/ImageWithFallback";
 import { LoadingState } from "@/components/common/LoadingState";
@@ -15,6 +17,7 @@ interface ProductDetailPageProps {
 
 export function ProductDetailPage({ id }: ProductDetailPageProps) {
   const { product, isLoading, error } = useProduct(id);
+  const [isAddToCartOpen, setIsAddToCartOpen] = useState(false);
 
   if (isLoading) return <LoadingState label="Đang tải sản phẩm..." />;
   if (error) return <ErrorState message={error} />;
@@ -131,15 +134,18 @@ export function ProductDetailPage({ id }: ProductDetailPageProps) {
             <button
               type="button"
               className="btn btn--outline"
-              disabled
-              title="Sắp ra mắt"
-              aria-label="Thêm vào giỏ hàng (sắp ra mắt)"
+              onClick={() => setIsAddToCartOpen(true)}
+              aria-label="Thêm vào giỏ hàng"
             >
               Thêm vào giỏ hàng
             </button>
           </div>
         </div>
       </div>
+
+      {isAddToCartOpen && (
+        <AddToCartModal product={product} onClose={() => setIsAddToCartOpen(false)} />
+      )}
     </article>
   );
 }

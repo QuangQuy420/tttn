@@ -4,12 +4,14 @@ import com.tttn.orderservice.dto.request.CreatePaymentRequest;
 import com.tttn.orderservice.dto.response.PaymentCreationResponse;
 import com.tttn.orderservice.exception.ExternalServiceException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 @Component
+@ConditionalOnProperty(name = "payment.fake-enabled", havingValue = "false")
 @RequiredArgsConstructor
 public class PaymentClientImpl implements PaymentClient {
 

@@ -62,3 +62,6 @@ services:
 cart:
   key-prefix: "cart:"
   expiration-days: ${CART_EXPIRATION_DAYS:7}
+
+payment:
+  fake-enabled: ${PAYMENT_FAKE_ENABLED:true}

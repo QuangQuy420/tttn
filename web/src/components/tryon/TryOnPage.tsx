@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRef, useState } from "react";
+import { AddToCartModal } from "@/components/cart/AddToCartModal";
 import { ErrorState } from "@/components/common/ErrorState";
 import { ImageWithFallback } from "@/components/common/ImageWithFallback";
 import { LoadingState } from "@/components/common/LoadingState";
@@ -38,6 +39,7 @@ export function TryOnPage({ id }: TryOnPageProps) {
   const [activeId, setActiveId] = useState<string | null>(id ?? null);
   const { product, isLoading, error } = useProduct(activeId);
   const { products: otherProducts } = useProducts({ limit: SWITCHER_LIMIT });
+  const [isAddToCartOpen, setIsAddToCartOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -125,15 +127,18 @@ export function TryOnPage({ id }: TryOnPageProps) {
             <button
               type="button"
               className="btn btn--outline"
-              disabled
-              title="Sắp ra mắt"
-              aria-label="Thêm vào giỏ hàng (sắp ra mắt)"
+              onClick={() => setIsAddToCartOpen(true)}
+              aria-label="Thêm vào giỏ hàng"
             >
               Thêm vào giỏ hàng
             </button>
           </div>
         )}
       </div>
+
+      {product && isAddToCartOpen && (
+        <AddToCartModal product={product} onClose={() => setIsAddToCartOpen(false)} />
+      )}
 
       {switchableProducts.length > 0 && (
         <div className="face-analysis__card">

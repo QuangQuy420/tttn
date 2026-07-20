@@ -1,4 +1,5 @@
 import type { FaceShapeTag, FrameShape, GenderTarget } from "@/types/product";
+import type { OrderStatus } from "@/types/order";
 
 // Vietnamese labels for the admin area (Admin Products.dc.html / Product Edit.dc.html mockups
 // use Vietnamese copy throughout) — also reused by the storefront (ProductFilters/ProductCard/
@@ -69,3 +70,29 @@ export const GENDER_TARGET_LABELS_VI: Record<GenderTarget, string> = {
 };
 
 export const GENDER_TARGETS: GenderTarget[] = ["UNISEX", "MALE", "FEMALE"];
+
+// Order status labels — mirrors order-service's OrderStatus enum (see @/types/order).
+export const ORDER_STATUS_LABELS_VI: Record<OrderStatus, string> = {
+  PENDING: "Chờ xác nhận",
+  CONFIRMED: "Đã xác nhận",
+  PROCESSING: "Đang xử lý",
+  SHIPPING: "Đang giao",
+  DELIVERED: "Đã giao",
+  COMPLETED: "Hoàn tất",
+  CANCELLED: "Đã hủy",
+};
+
+export function formatOrderStatusVi(status: OrderStatus): string {
+  return ORDER_STATUS_LABELS_VI[status];
+}
+
+// Fixed display order for the order-status filter select.
+export const ORDER_STATUSES: OrderStatus[] = [
+  "PENDING",
+  "CONFIRMED",
+  "PROCESSING",
+  "SHIPPING",
+  "DELIVERED",
+  "COMPLETED",
+  "CANCELLED",
+];

@@ -6,17 +6,15 @@
 # not a rewrite. Before `up`: copy infra/.env.example -> infra/.env, and each
 # <service>/.env.example -> <service>/.env.
 #
-# ⚠️ api-gateway, product-service, web, face-processing-service, user-service, and
-#    recommendation-service are real, building services (recommendation-service has no
-#    healthcheck yet, unlike the others). order-service/payment-service still have no language
-#    decided (Q2) — their Dockerfiles are placeholders (`file with no instructions`), which
-#    would abort a bare `docker compose up --build` before ANY container starts.
-#    These two are gated behind the `not-ready` Compose profile so a bare `docker compose up
-#    --build` (no profile) only builds/starts Postgres/Redis/MinIO + api-gateway +
-#    product-service + web + face-processing-service + user-service + recommendation-service.
-#    Once a service's app lands, drop its `profiles:` key here. To bring the gated ones up
-#    anyway: `docker compose --profile not-ready up --build`. See infra/README.md for the
-#    up-to-date per-service status.
+# ⚠️ api-gateway, product-service, web, face-processing-service, user-service,
+#    recommendation-service, and order-service are real, building services
+#    (recommendation-service has no healthcheck yet, unlike the others). payment-service still
+#    has no language decided (Q2) — its Dockerfile is a placeholder (`file with no
+#    instructions`), which would abort a bare `docker compose up --build` before ANY container
+#    starts. It's gated behind the `not-ready` Compose profile so a bare `docker compose up
+#    --build` (no profile) builds/starts everything except it. Once its app lands, drop its
+#    `profiles:` key here. To bring it up anyway: `docker compose --profile not-ready up --build`.
+#    See infra/README.md for the up-to-date per-service status.
 # ============================================================================
 
 name: smart-eyewear
@@ -148,16 +146,24 @@ services:
       start_period: 30s
 
   order-service:
-    build: ../order-service    # ⚠️ language TBD (Q2)
+    build: ../order-service    # Spring Boot (Maven), real Dockerfile now
     env_file: ../order-service/.env
-    profiles: [not-ready]
+    # payment-service intentionally NOT listed here: it's still a placeholder (Q2) and would
+    # drag its broken build into order-service's startup. PaymentClient calls it lazily on
+    # checkout, so there's no hard startup dependency — re-add once payment-service is real.
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-      payment-service:
-        condition: service_started
+    healthcheck:
+      # Same rationale as user-service: no wget/curl in this eclipse-temurin JRE base image,
+      # so probe the port directly via bash's /dev/tcp to confirm Tomcat is up.
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/${PORT:-3003}' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   payment-service:
     build: ../payment-service  # ⚠️ language TBD (Q2)
