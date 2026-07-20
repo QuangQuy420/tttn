@@ -34,9 +34,9 @@ describe("Header", () => {
     expect(screen.getByRole("link", { name: "Đăng nhập" })).toHaveAttribute("href", "/login");
   });
 
-  it("shows the cart icon as a disabled button", () => {
+  it("links the cart icon to the cart page", () => {
     render(<Header />);
 
-    expect(screen.getByRole("button", { name: /giỏ hàng/i })).toBeDisabled();
+    expect(screen.getByRole("link", { name: /giỏ hàng/i })).toHaveAttribute("href", "/cart");
   });
 });

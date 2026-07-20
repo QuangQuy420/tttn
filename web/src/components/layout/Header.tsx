@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useCart } from "@/hooks/useCart";
 import { ApiError, getMyProfile } from "@/lib/api";
 import {
     getAccessToken,
@@ -24,6 +25,11 @@ export function Header() {
     const [role, setRole] = useState<string | null>(null);
 
     const [menuOpen, setMenuOpen] = useState(false);
+
+    // useCart() reads the access token itself and no-ops (empty cart, no fetch) when there
+    // isn't one, so it's safe to call unconditionally here — it already skips cart endpoint
+    // calls for a logged-out user.
+    const { totalQuantity } = useCart();
 
     useEffect(() => {
         function syncAuthState() {
@@ -210,12 +216,10 @@ export function Header() {
                     </div>
                 )}
 
-                <button
-                    type="button"
+                <Link
+                    href="/cart"
                     className="cart-icon-button"
-                    disabled
-                    title="Sắp ra mắt"
-                    aria-label="Giỏ hàng (sắp ra mắt)"
+                    aria-label="Giỏ hàng"
                 >
                     <svg
                         width="18"
@@ -231,9 +235,9 @@ export function Header() {
                     </svg>
 
                     <span className="cart-icon-button__badge">
-            0
+            {totalQuantity}
           </span>
-                </button>
+                </Link>
             </div>
         </header>
     );

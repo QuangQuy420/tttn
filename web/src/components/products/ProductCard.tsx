@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { useState } from "react";
+import { AddToCartModal } from "@/components/cart/AddToCartModal";
 import { ImageWithFallback } from "@/components/common/ImageWithFallback";
 import { formatPriceVnd } from "@/lib/format/price";
 import { formatFrameShapeVi } from "@/lib/labels";
@@ -10,6 +12,7 @@ interface ProductCardProps {
 
 export function ProductCard({ product }: ProductCardProps) {
   const thumbnail = product.images.find((image) => image.isThumbnail) ?? product.images[0];
+  const [isAddToCartOpen, setIsAddToCartOpen] = useState(false);
 
   return (
     <div className="product-card">
@@ -41,13 +44,16 @@ export function ProductCard({ product }: ProductCardProps) {
         <button
           type="button"
           className="btn btn--outline btn--small"
-          disabled
-          title="Sắp ra mắt"
-          aria-label="Thêm vào giỏ hàng (sắp ra mắt)"
+          onClick={() => setIsAddToCartOpen(true)}
+          aria-label="Thêm vào giỏ hàng"
         >
           Thêm vào giỏ hàng
         </button>
       </div>
+
+      {isAddToCartOpen && (
+        <AddToCartModal product={product} onClose={() => setIsAddToCartOpen(false)} />
+      )}
     </div>
   );
 }

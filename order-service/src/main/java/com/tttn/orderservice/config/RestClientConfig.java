@@ -18,4 +18,15 @@ public class RestClientConfig {
                 .baseUrl(baseUrl)
                 .build();
     }
+
+    @Bean
+    public RestClient productRestClient(
+            @Value("${services.product-service.base-url}")
+            String baseUrl
+    ) {
+
+        return RestClient.builder()
+                .baseUrl(baseUrl)
+                .build();
+    }
 }

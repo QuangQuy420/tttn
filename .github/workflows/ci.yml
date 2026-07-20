@@ -1,9 +1,9 @@
 name: CI
 
 # Lint + build + test (+ Docker image build, no push) for the services with real code:
-# api-gateway, product-service, web, face-processing-service, and now recommendation-service.
-# user-service/order-service/payment-service are the other dev's and also excluded (no
-# language decided yet, Q2).
+# api-gateway, product-service, web, face-processing-service, recommendation-service, and now
+# order-service. user-service/payment-service are the other dev's and still excluded (user-service
+# has no CI job yet either; payment-service has no language decided, Q2).
 #
 # Each service's job is path-filtered (via dorny/paths-filter) so it only runs when its
 # own folder changes.
@@ -27,6 +27,7 @@ jobs:
       web: ${{ steps.filter.outputs.web }}
       face-processing-service: ${{ steps.filter.outputs.face-processing-service }}
       recommendation-service: ${{ steps.filter.outputs.recommendation-service }}
+      order-service: ${{ steps.filter.outputs.order-service }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -43,6 +44,8 @@ jobs:
               - 'face-processing-service/**'
             recommendation-service:
               - 'recommendation-service/**'
+            order-service:
+              - 'order-service/**'
 
   api-gateway:
     name: api-gateway
@@ -240,3 +243,69 @@ jobs:
           context: recommendation-service
           push: false
           tags: smart-eyewear/recommendation-service:ci
+
+  order-service:
+    name: order-service
+    needs: changes
+    if: needs.changes.outputs.order-service == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: order-service
+    # order-service needs a live Postgres (Flyway migrations run on context startup, e.g.
+    # OrderServiceApplicationTests) and Redis (CartServiceImpl) to boot at all — same reasoning
+    # as product-service's Postgres/RabbitMQ/MinIO containers above.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: order_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # application.yml's datasource/redis keys bind to these granular names, not the monorepo's
+      # PORT/DATABASE_URL/REDIS_URL convention — see OrderServiceApplication.applyEnvOverrides(),
+      # which maps one to the other but only runs from main(), not from @SpringBootTest's context
+      # loader, so tests need these set directly.
+      DB_URL: jdbc:postgresql://localhost:5432/order_db
+      DB_USERNAME: app
+      DB_PASSWORD: app
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '25'
+          cache: 'maven'
+          cache-dependency-path: order-service/pom.xml
+
+      - run: chmod +x mvnw
+      - run: ./mvnw -B compile
+      - run: ./mvnw -B test
+      - run: ./mvnw -B package -DskipTests
+
+      - name: Build Docker image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: order-service
+          push: false
+          tags: smart-eyewear/order-service:ci
