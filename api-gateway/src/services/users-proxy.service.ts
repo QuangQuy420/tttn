@@ -14,6 +14,7 @@ import { AppConfig } from '../config/configuration';
 export class UsersProxyService {
     private readonly logger = new Logger(UsersProxyService.name);
     private readonly baseUrl: string;
+    private readonly internalApiKey: string;
 
     constructor(
         private readonly httpService: HttpService,
@@ -21,6 +22,8 @@ export class UsersProxyService {
     ) {
         this.baseUrl =
             this.configService.get<AppConfig>('app')!.userServiceUrl;
+        this.internalApiKey =
+            this.configService.get<AppConfig>('app')!.internalApiKey;
     }
 
     getProfile(authorization?: string): Promise<unknown> {
@@ -49,14 +52,95 @@ export class UsersProxyService {
         );
     }
 
+    listRoles(authorization?: string): Promise<unknown> {
+        return this.forwardGet('/api/v1/roles', authorization);
+    }
+
+    listUsers(
+        query: Record<string, unknown>,
+        authorization?: string,
+    ): Promise<unknown> {
+        return this.forwardGet('/api/v1/users', authorization, query);
+    }
+
+    createRole(
+        body: Record<string, unknown>,
+        authorization?: string,
+    ): Promise<unknown> {
+        return this.forwardPost('/api/v1/roles', body, authorization);
+    }
+
+    updateRole(
+        id: string,
+        body: Record<string, unknown>,
+        authorization?: string,
+    ): Promise<unknown> {
+        return this.forwardPut(`/api/v1/roles/${id}`, body, authorization);
+    }
+
+    deleteRole(id: string, authorization?: string): Promise<unknown> {
+        return this.forwardDelete(`/api/v1/roles/${id}`, authorization);
+    }
+
+    listPermissions(authorization?: string): Promise<unknown> {
+        return this.forwardGet('/api/v1/permissions', authorization);
+    }
+
+    assignRoleToUser(
+        userId: string,
+        body: Record<string, unknown>,
+        authorization?: string,
+    ): Promise<unknown> {
+        return this.forwardPost(
+            `/api/v1/users/${userId}/roles`,
+            body,
+            authorization,
+        );
+    }
+
+    removeRoleFromUser(
+        userId: string,
+        roleId: string,
+        authorization?: string,
+    ): Promise<unknown> {
+        return this.forwardDelete(
+            `/api/v1/users/${userId}/roles/${roleId}`,
+            authorization,
+        );
+    }
+
+    /**
+     * Internal, service-to-service call — not exposed to end users. Asks
+     * user-service for the caller's *current* flattened permission code
+     * list, fresh on every call (no JWT-embedded snapshot), so role changes
+     * apply immediately. Requires `X-Internal-Key` (T11's gate on
+     * user-service's `/internal/**` routes).
+     */
+    async getPermissions(userId: string): Promise<string[]> {
+        const path = `/internal/v1/users/${userId}/permissions`;
+        try {
+            const response = await firstValueFrom(
+                this.httpService.get(`${this.baseUrl}${path}`, {
+                    headers: { 'X-Internal-Key': this.internalApiKey },
+                }),
+            );
+
+            return response.data as string[];
+        } catch (error) {
+            throw this.toGatewayError(error as AxiosError, path);
+        }
+    }
+
     private async forwardGet(
         path: string,
         authorization?: string,
+        params?: Record<string, unknown>,
     ): Promise<unknown> {
         try {
             const response = await firstValueFrom(
                 this.httpService.get(`${this.baseUrl}${path}`, {
                     headers: this.buildHeaders(authorization),
+                    params,
                 }),
             );
 
@@ -74,6 +158,41 @@ export class UsersProxyService {
         try {
             const response = await firstValueFrom(
                 this.httpService.put(`${this.baseUrl}${path}`, body, {
+                    headers: this.buildHeaders(authorization),
+                }),
+            );
+
+            return response.data;
+        } catch (error) {
+            throw this.toGatewayError(error as AxiosError, path);
+        }
+    }
+
+    private async forwardPost(
+        path: string,
+        body: Record<string, unknown>,
+        authorization?: string,
+    ): Promise<unknown> {
+        try {
+            const response = await firstValueFrom(
+                this.httpService.post(`${this.baseUrl}${path}`, body, {
+                    headers: this.buildHeaders(authorization),
+                }),
+            );
+
+            return response.data;
+        } catch (error) {
+            throw this.toGatewayError(error as AxiosError, path);
+        }
+    }
+
+    private async forwardDelete(
+        path: string,
+        authorization?: string,
+    ): Promise<unknown> {
+        try {
+            const response = await firstValueFrom(
+                this.httpService.delete(`${this.baseUrl}${path}`, {
                     headers: this.buildHeaders(authorization),
                 }),
             );

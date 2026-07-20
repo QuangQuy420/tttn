@@ -11,7 +11,7 @@ spring:
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: true
     properties:
       hibernate:
@@ -19,8 +19,14 @@ spring:
         jdbc:
           time_zone: UTC
 
+  flyway:
+    baseline-on-migrate: true
+    baseline-version: 1
+
 server:
   port: 8081
 jwt:
   secret: VGhpc0lzQVNlY3VyZUp3dFNlY3JldEtleUZvclRUVE4yMDI2MTIzNDU2Nzg5MDEyMzQ1
   expiration: 3600000
+internal:
+  api-key: tB/ZjjCaQB6lFG1j+8XABglVfc/FIqzdUBI7jl7OS/jk3XFKisbCQ/JYQ9OBpVdd

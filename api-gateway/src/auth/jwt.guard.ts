@@ -12,15 +12,17 @@ import { AppConfig } from '../config/configuration';
 export interface AuthenticatedUser {
   userId: string;
   email: string;
-  role: string;
 }
 
 /**
  * Edge JWT verification (Q1, chose option A: verify at api-gateway, no
  * separate service). Reads `Authorization: Bearer <token>`, verifies the
  * signature against the shared `JWT_SECRET`, and attaches the decoded
- * `{ userId, email, role }` claims onto `request.user` for downstream
- * guards/controllers to read.
+ * `{ userId, email }` claims onto `request.user` for downstream
+ * guards/controllers to read. The JWT no longer carries a `role`/`roles`
+ * claim — authorization is decided live via `PermissionsGuard`
+ * (`permissions.guard.ts`), which asks user-service for the caller's
+ * *current* permissions on every gated request, not from a token snapshot.
  *
  * `user-service`'s `JwtUtil.getSigningKey()` Base64-decodes `JWT_SECRET`
  * before using it as the HMAC-SHA256 key (`Keys.hmacShaKeyFor(Decoders
@@ -48,7 +50,6 @@ export class JwtGuard implements CanActivate {
       (request as Request & { user: AuthenticatedUser }).user = {
         userId: payload.userId as string,
         email: payload.email as string,
-        role: payload.role as string,
       };
       return true;
     } catch {

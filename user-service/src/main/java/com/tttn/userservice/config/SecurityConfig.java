@@ -7,9 +7,16 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
 public class SecurityConfig {
+
+    private final InternalApiKeyFilter internalApiKeyFilter;
+
+    public SecurityConfig(InternalApiKeyFilter internalApiKeyFilter) {
+        this.internalApiKeyFilter = internalApiKeyFilter;
+    }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -25,6 +32,7 @@ public class SecurityConfig {
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
+                .addFilterBefore(internalApiKeyFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/api/v1/auth/**",
@@ -34,6 +42,9 @@ public class SecurityConfig {
                                 "/v3/api-docs/**"
                         ).permitAll()
                         .requestMatchers("/api/v1/users/**").permitAll()
+                        .requestMatchers("/api/v1/roles/**").permitAll()
+                        .requestMatchers("/api/v1/permissions").permitAll()
+                        .requestMatchers("/internal/**").permitAll()
                         .anyRequest().denyAll()
                 )
                 .build();

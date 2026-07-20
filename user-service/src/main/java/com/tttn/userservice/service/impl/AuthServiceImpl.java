@@ -3,10 +3,11 @@ package com.tttn.userservice.service.impl;
 import com.tttn.userservice.dto.request.RegisterRequest;
 import com.tttn.userservice.dto.response.UserResponse;
 import com.tttn.userservice.entity.Profile;
+import com.tttn.userservice.entity.Role;
 import com.tttn.userservice.entity.User;
-import com.tttn.userservice.enums.Role;
 import com.tttn.userservice.enums.UserStatus;
 import com.tttn.userservice.repository.ProfileRepository;
+import com.tttn.userservice.repository.RoleRepository;
 import com.tttn.userservice.repository.UserRepository;
 import com.tttn.userservice.service.AuthService;
 import com.tttn.userservice.exception.BusinessException;
@@ -30,6 +31,8 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Base64;
+import java.util.HashSet;
+import java.util.List;
 
 
 @Slf4j
@@ -40,9 +43,11 @@ public class AuthServiceImpl implements AuthService {
     private final JwtUtil jwtUtil;
     private final UserRepository userRepository;
     private final ProfileRepository profileRepository;
+    private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private static final int RESET_TOKEN_EXPIRATION_MINUTES = 15;
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final String DEFAULT_ROLE_NAME = "CUSTOMER";
 
     @Override
     @Transactional
@@ -63,11 +68,14 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException(ErrorCode.USERNAME_ALREADY_EXISTS);
         }
 
+        Role defaultRole = roleRepository.findByNameIgnoreCase(DEFAULT_ROLE_NAME)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ROLE_NOT_FOUND));
+
         User user = User.builder()
                 .email(email)
                 .username(username)
                 .passwordHash(passwordEncoder.encode(request.password()))
-                .role(Role.CUSTOMER)
+                .roles(new HashSet<>(List.of(defaultRole)))
                 .status(UserStatus.ACTIVE)
                 .build();
 
@@ -85,9 +93,16 @@ public class AuthServiceImpl implements AuthService {
                 user.getId(),
                 user.getEmail(),
                 user.getUsername(),
-                user.getRole(),
+                toRoleNames(user),
                 user.getStatus()
         );
+    }
+
+    private List<String> toRoleNames(User user) {
+        return user.getRoles()
+                .stream()
+                .map(Role::getName)
+                .toList();
     }
 
     private String normalizeNullable(String value) {
@@ -128,7 +143,7 @@ public AuthResponse login(LoginRequest request) {
             user.getId(),
             user.getEmail(),
             user.getUsername(),
-            user.getRole(),
+            toRoleNames(user),
             user.getStatus()
     );
 

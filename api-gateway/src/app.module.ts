@@ -6,6 +6,7 @@ import { ProductsModule } from './routes/products.module';
 import { OrdersModule } from './routes/orders.module';
 import { AuthModule } from './routes/auth.module';
 import { UsersModule } from './routes/users.module';
+import { RolesModule } from './routes/roles.module';
 import { RecommendationsModule } from './routes/recommendations.module';
 
 @Module({
@@ -16,6 +17,7 @@ import { RecommendationsModule } from './routes/recommendations.module';
             FaceAnalysisModule,
             AuthModule,
             UsersModule,
+            RolesModule,
             RecommendationsModule,
   ],
   controllers: [HealthController],

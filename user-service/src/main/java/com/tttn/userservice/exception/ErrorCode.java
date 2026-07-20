@@ -64,6 +64,41 @@ public enum ErrorCode {
     INTERNAL_SERVER_ERROR(
             HttpStatus.INTERNAL_SERVER_ERROR,
             "Đã xảy ra lỗi hệ thống"
+    ),
+
+    ROLE_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "Không tìm thấy vai trò"
+    ),
+
+    ROLE_ALREADY_EXISTS(
+            HttpStatus.CONFLICT,
+            "Tên vai trò đã tồn tại"
+    ),
+
+    ROLE_IN_USE(
+            HttpStatus.CONFLICT,
+            "Không thể xóa vai trò đang được gán cho người dùng"
+    ),
+
+    PERMISSION_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "Không tìm thấy quyền"
+    ),
+
+    USER_ROLE_NOT_ASSIGNED(
+            HttpStatus.NOT_FOUND,
+            "Người dùng chưa được gán vai trò này"
+    ),
+
+    FORBIDDEN(
+            HttpStatus.FORBIDDEN,
+            "Bạn không có quyền thực hiện thao tác này"
+    ),
+
+    INVALID_INTERNAL_KEY(
+            HttpStatus.FORBIDDEN,
+            "Yêu cầu nội bộ không hợp lệ"
     );
 
 
