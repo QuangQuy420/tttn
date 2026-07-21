@@ -120,12 +120,13 @@ export class UsersProxyService {
         const path = `/internal/v1/users/${userId}/permissions`;
         try {
             const response = await firstValueFrom(
-                this.httpService.get(`${this.baseUrl}${path}`, {
-                    headers: { 'X-Internal-Key': this.internalApiKey },
-                }),
+                this.httpService.get<{ data: { permissions: string[] } }>(
+                    `${this.baseUrl}${path}`,
+                    { headers: { 'X-Internal-Key': this.internalApiKey } },
+                ),
             );
 
-            return response.data as string[];
+            return response.data.data.permissions;
         } catch (error) {
             throw this.toGatewayError(error as AxiosError, path);
         }
