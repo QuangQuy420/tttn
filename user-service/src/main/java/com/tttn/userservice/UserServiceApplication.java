@@ -42,6 +42,11 @@ public class UserServiceApplication {
             System.setProperty("jwt.secret", jwtSecret);
         }
 
+        String internalApiKey = System.getenv("INTERNAL_API_KEY");
+        if (internalApiKey != null && !internalApiKey.isBlank()) {
+            System.setProperty("internal.api-key", internalApiKey);
+        }
+
         String jwtExpiresIn = System.getenv("JWT_EXPIRES_IN");
         if (jwtExpiresIn != null && !jwtExpiresIn.isBlank()) {
             System.setProperty("jwt.expiration", String.valueOf(parseDurationMillis(jwtExpiresIn)));

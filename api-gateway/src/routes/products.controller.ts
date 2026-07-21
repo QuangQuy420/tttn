@@ -15,15 +15,16 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtGuard } from '../auth/jwt.guard';
-import { Roles } from '../auth/roles.decorator';
-import { RolesGuard } from '../auth/roles.guard';
+import { RequirePermission } from '../auth/permissions.decorator';
+import { PermissionsGuard } from '../auth/permissions.guard';
 import { ProductsProxyService } from '../services/products-proxy.service';
 
 /**
  * Thin controllers: parse the incoming request (path params, query string)
  * and delegate to `ProductsProxyService` — no forwarding/HTTP logic here.
- * Write endpoints require an authenticated `ADMIN`; read endpoints stay
- * public (FR6).
+ * Write endpoints require the caller to currently hold `product:manage`
+ * (checked live against user-service, see `PermissionsGuard`); read
+ * endpoints stay public (FR6).
  */
 @Controller('api/products')
 export class ProductsController {
@@ -40,15 +41,15 @@ export class ProductsController {
   }
 
   @Post()
-  @UseGuards(JwtGuard, RolesGuard)
-  @Roles('ADMIN')
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @RequirePermission('product:manage')
   create(@Body() body: Record<string, unknown>): Promise<unknown> {
     return this.productsProxyService.createProduct(body);
   }
 
   @Patch(':id')
-  @UseGuards(JwtGuard, RolesGuard)
-  @Roles('ADMIN')
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @RequirePermission('product:manage')
   update(
     @Param('id') id: string,
     @Body() body: Record<string, unknown>,
@@ -57,16 +58,16 @@ export class ProductsController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtGuard, RolesGuard)
-  @Roles('ADMIN')
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @RequirePermission('product:manage')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id') id: string): Promise<unknown> {
     return this.productsProxyService.deleteProduct(id);
   }
 
   @Post(':id/images')
-  @UseGuards(JwtGuard, RolesGuard)
-  @Roles('ADMIN')
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @RequirePermission('product:manage')
   @UseInterceptors(FileInterceptor('file'))
   uploadImage(
     @Param('id') id: string,

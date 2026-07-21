@@ -2,8 +2,11 @@ package com.tttn.userservice.service.impl;
 
 import com.tttn.userservice.dto.request.ChangePasswordRequest;
 import com.tttn.userservice.dto.request.UpdateProfileRequest;
+import com.tttn.userservice.dto.response.PaginatedResponse;
 import com.tttn.userservice.dto.response.ProfileResponse;
+import com.tttn.userservice.dto.response.UserResponse;
 import com.tttn.userservice.entity.Profile;
+import com.tttn.userservice.entity.Role;
 import com.tttn.userservice.entity.User;
 import com.tttn.userservice.exception.BusinessException;
 import com.tttn.userservice.exception.ErrorCode;
@@ -11,10 +14,13 @@ import com.tttn.userservice.repository.ProfileRepository;
 import com.tttn.userservice.repository.UserRepository;
 import com.tttn.userservice.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -109,6 +115,27 @@ public class UserServiceImpl implements UserService {
         userRepository.save(user);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public PaginatedResponse<UserResponse> listUsers(int page, int limit) {
+        Page<User> userPage = userRepository.findAll(
+                PageRequest.of(page - 1, limit)
+        );
+
+        List<UserResponse> items = userPage.getContent()
+                .stream()
+                .map(this::toUserResponse)
+                .toList();
+
+        return new PaginatedResponse<>(
+                items,
+                userPage.getTotalElements(),
+                page,
+                limit,
+                userPage.getTotalPages()
+        );
+    }
+
     private User findUser(UUID userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() ->
@@ -131,7 +158,7 @@ public class UserServiceImpl implements UserService {
                 user.getId(),
                 user.getEmail(),
                 user.getUsername(),
-                user.getRole(),
+                toRoleNames(user),
                 user.getStatus(),
                 profile.getFullName(),
                 profile.getPhone(),
@@ -139,6 +166,23 @@ public class UserServiceImpl implements UserService {
                 profile.getAddress(),
                 profile.getDateOfBirth()
         );
+    }
+
+    private UserResponse toUserResponse(User user) {
+        return new UserResponse(
+                user.getId(),
+                user.getEmail(),
+                user.getUsername(),
+                toRoleNames(user),
+                user.getStatus()
+        );
+    }
+
+    private List<String> toRoleNames(User user) {
+        return user.getRoles()
+                .stream()
+                .map(Role::getName)
+                .toList();
     }
 
     private String normalizeNullable(String value) {

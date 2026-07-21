@@ -7,6 +7,7 @@ export interface AppConfig {
   corsOrigin: string;
   downstreamTimeoutMs: number;
   jwtSecret: string;
+  internalApiKey: string;
   userServiceUrl: string;
   productServiceUrl: string;
   orderServiceUrl: string;
@@ -20,6 +21,7 @@ export default (): { app: AppConfig } => ({
     corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:3000',
     downstreamTimeoutMs: parseInt(process.env.DOWNSTREAM_TIMEOUT_MS ?? '5000', 10),
     jwtSecret: process.env.JWT_SECRET ?? 'change-me-in-.env',
+    internalApiKey: process.env.INTERNAL_API_KEY ?? 'change-me-in-.env',
     userServiceUrl:
         process.env.USER_SERVICE_URL ?? 'http://localhost:8081',
     productServiceUrl: process.env.PRODUCT_SERVICE_URL ?? 'http://product-service:3002',

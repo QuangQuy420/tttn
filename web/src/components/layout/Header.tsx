@@ -10,6 +10,11 @@ import {
     removeAccessToken,
 } from "@/lib/auth/session";
 
+// Same role-name gate as AdminGuard.tsx (see its comment) — the browser only ever sees
+// role names, not permission codes, so "Quản trị" shows for the same set of roles that are
+// actually let into /admin.
+const ADMIN_ROLE_NAMES = ["ADMIN"];
+
 export function Header() {
     const router = useRouter();
     const menuRef = useRef<HTMLDivElement>(null);
@@ -20,9 +25,9 @@ export function Header() {
     // mismatch.
     const [authenticated, setAuthenticated] = useState(false);
 
-    // Role is only known once we've fetched the profile — null covers both "not logged in"
-    // and "not fetched yet", so the Admin tab (FR7) stays hidden until we're sure.
-    const [role, setRole] = useState<string | null>(null);
+    // Roles are only known once we've fetched the profile — null covers both "not logged
+    // in" and "not fetched yet", so the Admin tab (FR7) stays hidden until we're sure.
+    const [roles, setRoles] = useState<string[] | null>(null);
 
     const [menuOpen, setMenuOpen] = useState(false);
 
@@ -37,17 +42,19 @@ export function Header() {
             setAuthenticated(Boolean(token));
 
             if (!token) {
-                setRole(null);
+                setRoles(null);
                 return;
             }
 
             void getMyProfile(token)
                 .then((response) => {
-                    setRole(response.data.role?.toUpperCase() ?? null);
+                    setRoles(
+                        response.data.roles?.map((r) => r.toUpperCase()) ?? null,
+                    );
                 })
                 .catch((error) => {
                     if (!(error instanceof ApiError)) throw error;
-                    setRole(null);
+                    setRoles(null);
                 });
         }
 
@@ -77,7 +84,7 @@ export function Header() {
     function handleLogout() {
         removeAccessToken();
         setAuthenticated(false);
-        setRole(null);
+        setRoles(null);
         setMenuOpen(false);
         router.push("/login");
         router.refresh();
@@ -105,7 +112,7 @@ export function Header() {
                     Thử Kính
                 </Link>
 
-                {authenticated && role === "ADMIN" && (
+                {authenticated && roles?.some((r) => ADMIN_ROLE_NAMES.includes(r)) && (
                     <Link href="/admin/products" className="site-nav__link">
                         Quản trị
                     </Link>

@@ -43,3 +43,14 @@ export {
   getOrderById,
   getOrders,
 } from "./orders";
+
+export {
+  createRole,
+  deleteRole,
+  listPermissions,
+  listRoles,
+  updateRole,
+} from "./roles";
+
+export { assignRoleToUser, listUsers, removeRoleFromUser } from "./admin-users";
+export type { AdminUser } from "./admin-users";

@@ -1019,6 +1019,37 @@ main {
   border-color: var(--color-text);
 }
 
+/* Permission checkbox grid — RoleFormModal on /admin/roles (T21) */
+.admin-permission-grid {
+  display: grid;
+  gap: 0.625rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.admin-permission-item {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.625rem 0.75rem;
+}
+
+.admin-permission-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+
+.admin-permission-checkbox input[type="checkbox"] {
+  margin-top: 0.2rem;
+}
+
+.admin-permission-item__description {
+  color: var(--color-text-muted);
+}
+
 /* Face analysis page (.design/Try Face Analysis.dc.html) */
 .face-analysis {
   max-width: 900px;
