@@ -1,16 +1,14 @@
 {
-  "$comment": "Seed data for product-service (product_db). Consumed by product-service's seed runner (T11). One product = one object with nested variants[] and images[]; brand/category are referenced by name so the seed runner can look up/create the parent rows. frame_shape is the FRAME shape (enum: ROUND|SQUARE|OVAL|CAT_EYE|AVIATOR|RECTANGLE|WAYFARER|RIMLESS) — not the face_shape taxonomy used later by ps_face_shape_styles.",
+  "$comment": "Seed data for product-service (product_db). Consumed by product-service's seed runner (T11). One product = one object with nested variants[] and images[]; brand/category are referenced by name so the seed runner can look up/create the parent rows. frame_shape is the FRAME shape (enum: ROUND|SQUARE|OVAL|CAT_EYE|AVIATOR|RECTANGLE|WAYFARER|RIMLESS) — not the face_shape taxonomy used later by ps_face_shape_styles. base_price/extra_price are in VND (no decimals in practice, stored as numeric(10,2)).",
   "brands": [
-    { "name": "Ray-Ban", "logo_url": "https://cdn.smarteyewear.local/brands/ray-ban/logo.png", "description": "Thương hiệu kính mắt biểu tượng của Mỹ, nổi tiếng với dòng Wayfarer và Aviator." },
-    { "name": "Oakley", "logo_url": "https://cdn.smarteyewear.local/brands/oakley/logo.png", "description": "Kính mắt thể thao, hiệu suất cao, tập trung vào công nghệ tròng kính." },
+    { "name": "Carrera", "logo_url": "https://cdn.smarteyewear.local/brands/carrera/logo.png", "description": "Thương hiệu kính mắt Áo mang di sản đua xe và thể thao tốc độ." },
+    { "name": "Warby Parker", "logo_url": "https://cdn.smarteyewear.local/brands/warby-parker/logo.png", "description": "Thương hiệu kính mắt bán trực tiếp tới người dùng, kiểu dáng cổ điển, giá phải chăng." },
     { "name": "Persol", "logo_url": "https://cdn.smarteyewear.local/brands/persol/logo.png", "description": "Hãng kính mắt Ý nổi tiếng với gọng kính Acetate thủ công." },
     { "name": "Gucci", "logo_url": "https://cdn.smarteyewear.local/brands/gucci/logo.png", "description": "Dòng kính mắt của hãng thời trang xa xỉ Ý." },
     { "name": "Prada", "logo_url": "https://cdn.smarteyewear.local/brands/prada/logo.png", "description": "Hãng thời trang xa xỉ Ý với thiết kế gọng kính táo bạo, mang tính kiến trúc." },
-    { "name": "Tom Ford", "logo_url": "https://cdn.smarteyewear.local/brands/tom-ford/logo.png", "description": "Thương hiệu xa xỉ Mỹ với gọng kính tinh tế, cá tính." },
-    { "name": "Warby Parker", "logo_url": "https://cdn.smarteyewear.local/brands/warby-parker/logo.png", "description": "Thương hiệu kính mắt bán trực tiếp tới người dùng, kiểu dáng cổ điển, giá phải chăng." },
-    { "name": "Carrera", "logo_url": "https://cdn.smarteyewear.local/brands/carrera/logo.png", "description": "Thương hiệu kính mắt Áo mang di sản đua xe và thể thao tốc độ." },
+    { "name": "Oliver Peoples", "logo_url": "https://cdn.smarteyewear.local/brands/oliver-peoples/logo.png", "description": "Thương hiệu kính mắt Los Angeles mang phong cách cổ điển, tinh tế như 1 boutique." },
     { "name": "Vogue Eyewear", "logo_url": "https://cdn.smarteyewear.local/brands/vogue-eyewear/logo.png", "description": "Kính mắt thời trang, bắt kịp xu hướng, phù hợp đeo hàng ngày." },
-    { "name": "Oliver Peoples", "logo_url": "https://cdn.smarteyewear.local/brands/oliver-peoples/logo.png", "description": "Thương hiệu kính mắt Los Angeles mang phong cách cổ điển, tinh tế như 1 boutique." }
+    { "name": "EyeBuyDirect", "logo_url": "https://cdn.smarteyewear.local/brands/eyebuydirect/logo.png", "description": "Thương hiệu kính mắt trực tuyến giá tốt, đa dạng kiểu dáng, giao hàng nhanh." }
   ],
   "categories": [
     { "name": "Kính mát", "slug": "sunglasses", "parent": null },
@@ -21,506 +19,231 @@
   ],
   "products": [
     {
-      "sku": "RB-WAY-001",
-      "name": "Ray-Ban Original Wayfarer",
-      "slug": "ray-ban-original-wayfarer",
-      "description": "Wayfarer nguyên bản với chất liệu Acetate đen cổ điển, biểu tượng unisex từ năm 1952.",
-      "brand": "Ray-Ban",
-      "category": "Kính mát",
-      "frame_shape": "WAYFARER",
-      "face_shapes": ["ROUND", "OVAL", "HEART", "DIAMOND", "OBLONG"],
+      "sku": "EB-RIML-025",
+      "name": "EyeBuyDirect Halden Semi-Rimless",
+      "slug": "eyebuydirect-halden-semi-rimless",
+      "description": "Gọng kim loại bán khung (semi-rimless) dáng tròn mềm mại, càng kính đồi mồi, nhẹ và dễ phối.",
+      "brand": "EyeBuyDirect",
+      "category": "Gọng kính",
+      "frame_shape": "RIMLESS",
+      "face_shapes": ["OVAL", "ROUND", "HEART"],
       "gender_target": "UNISEX",
-      "material": "Nhựa Acetate",
-      "base_price": 163.00,
+      "material": "Kim loại",
+      "base_price": 590000.00,
       "status": "PUBLISHED",
       "variants": [
-        { "color": "Đen", "size": "M", "extra_price": 0, "sku_variant": "RB-WAY-001-BLK-M" },
-        { "color": "Đồi mồi", "size": "M", "extra_price": 5.00, "sku_variant": "RB-WAY-001-TOR-M" },
-        { "color": "Đen", "size": "L", "extra_price": 8.00, "sku_variant": "RB-WAY-001-BLK-L" }
+        { "color": "Bạc", "size": "M", "extra_price": 0, "sku_variant": "EB-RIML-025-SLV-M" }
       ],
       "images": [
-        { "image_url": "/products/frames/ray-ban-original-wayfarer.png", "is_thumbnail": true, "sort_order": 0 }
+        { "image_url": "/products/frames/eyebuydirect-halden-semi-rimless-main.png", "is_thumbnail": true, "sort_order": 0 },
+        { "image_url": "/products/frames/eyebuydirect-halden-semi-rimless-angle1.jpg", "is_thumbnail": false, "sort_order": 1 },
+        { "image_url": "/products/frames/eyebuydirect-halden-semi-rimless-angle2.jpg", "is_thumbnail": false, "sort_order": 2 },
+        { "image_url": "/products/frames/eyebuydirect-halden-semi-rimless-angle3.jpg", "is_thumbnail": false, "sort_order": 3 }
       ]
     },
     {
-      "sku": "RB-AVI-002",
-      "name": "Ray-Ban Aviator Classic",
-      "slug": "ray-ban-aviator-classic",
-      "description": "Kính phi công dáng giọt lệ vượt thời gian, gọng kim loại vàng và tròng kính xanh G-15.",
-      "brand": "Ray-Ban",
-      "category": "Kính mát",
+      "sku": "VG-AVI-026",
+      "name": "Vogue Eyewear VO4272 Aviator",
+      "slug": "vogue-eyewear-vo4272-aviator",
+      "description": "Gọng kim loại dáng phi công phá cách với cầu mũi kép, phong cách hiện đại, nhẹ nhàng.",
+      "brand": "Vogue Eyewear",
+      "category": "Gọng kính",
       "frame_shape": "AVIATOR",
       "face_shapes": ["SQUARE", "OVAL", "OBLONG"],
       "gender_target": "UNISEX",
       "material": "Kim loại",
-      "base_price": 178.00,
+      "base_price": 890000.00,
       "status": "PUBLISHED",
       "variants": [
-        { "color": "Vàng", "size": "M", "extra_price": 0, "sku_variant": "RB-AVI-002-GLD-M" },
-        { "color": "Bạc", "size": "M", "extra_price": 0, "sku_variant": "RB-AVI-002-SLV-M" },
-        { "color": "Vàng", "size": "L", "extra_price": 6.00, "sku_variant": "RB-AVI-002-GLD-L" }
+        { "color": "Bạc", "size": "M", "extra_price": 0, "sku_variant": "VG-AVI-026-SLV-M" }
       ],
       "images": [
-        { "image_url": "/products/frames/ray-ban-aviator-classic.png", "is_thumbnail": true, "sort_order": 0 }
+        { "image_url": "/products/frames/vogue-eyewear-vo4272-aviator-main.png", "is_thumbnail": true, "sort_order": 0 },
+        { "image_url": "/products/frames/vogue-eyewear-vo4272-aviator-angle1.jpg", "is_thumbnail": false, "sort_order": 1 },
+        { "image_url": "/products/frames/vogue-eyewear-vo4272-aviator-angle2.jpg", "is_thumbnail": false, "sort_order": 2 },
+        { "image_url": "/products/frames/vogue-eyewear-vo4272-aviator-angle3.jpg", "is_thumbnail": false, "sort_order": 3 }
       ]
     },
     {
-      "sku": "RB-RND-003",
-      "name": "Ray-Ban Round Metal",
-      "slug": "ray-ban-round-metal",
-      "description": "Gọng kim loại tròn lấy cảm hứng từ John Lennon, thiết kế mảnh.",
-      "brand": "Ray-Ban",
+      "sku": "VG-CATEYE-027",
+      "name": "Vogue Eyewear VO5285 Cat-Eye",
+      "slug": "vogue-eyewear-vo5285-cat-eye",
+      "description": "Gọng nhựa Acetate mắt mèo trong suốt tông hồng cánh sen, trẻ trung, cá tính.",
+      "brand": "Vogue Eyewear",
+      "category": "Gọng kính",
+      "frame_shape": "CAT_EYE",
+      "face_shapes": ["ROUND", "OVAL", "HEART"],
+      "gender_target": "FEMALE",
+      "material": "Nhựa Acetate",
+      "base_price": 850000.00,
+      "status": "PUBLISHED",
+      "variants": [
+        { "color": "Hồng cánh sen", "size": "S", "extra_price": 0, "sku_variant": "VG-CATEYE-027-PNK-S" }
+      ],
+      "images": [
+        { "image_url": "/products/frames/vogue-eyewear-vo5285-cat-eye-main.png", "is_thumbnail": true, "sort_order": 0 },
+        { "image_url": "/products/frames/vogue-eyewear-vo5285-cat-eye-angle1.jpg", "is_thumbnail": false, "sort_order": 1 },
+        { "image_url": "/products/frames/vogue-eyewear-vo5285-cat-eye-angle2.jpg", "is_thumbnail": false, "sort_order": 2 },
+        { "image_url": "/products/frames/vogue-eyewear-vo5285-cat-eye-angle3.jpg", "is_thumbnail": false, "sort_order": 3 }
+      ]
+    },
+    {
+      "sku": "CA-AVI-028",
+      "name": "Carrera CA8867 Navigator",
+      "slug": "carrera-ca8867-navigator",
+      "description": "Gọng kim loại dáng navigator cầu đôi, tông nâu ánh kim sang trọng, phù hợp phong cách nam tính, hiện đại.",
+      "brand": "Carrera",
+      "category": "Gọng kính",
+      "frame_shape": "AVIATOR",
+      "face_shapes": ["SQUARE", "OVAL", "OBLONG"],
+      "gender_target": "MALE",
+      "material": "Kim loại",
+      "base_price": 1650000.00,
+      "status": "PUBLISHED",
+      "variants": [
+        { "color": "Nâu ánh kim", "size": "M", "extra_price": 0, "sku_variant": "CA-AVI-028-BRZ-M" }
+      ],
+      "images": [
+        { "image_url": "/products/frames/mt7480_0-removebg-preview.png", "is_thumbnail": true, "sort_order": 0 },
+        { "image_url": "/products/frames/mt7480_1.jpg", "is_thumbnail": false, "sort_order": 1 },
+        { "image_url": "/products/frames/mt7480_2.jpg", "is_thumbnail": false, "sort_order": 2 },
+        { "image_url": "/products/frames/mt7480_3.jpg", "is_thumbnail": false, "sort_order": 3 }
+      ]
+    },
+    {
+      "sku": "WP-RND-029",
+      "name": "Warby Parker Griffin Clear",
+      "slug": "warby-parker-griffin-clear",
+      "description": "Gọng nhựa Acetate trong suốt tối giản, dáng vuông tròn nhẹ nhàng, dễ phối với mọi trang phục hàng ngày.",
+      "brand": "Warby Parker",
       "category": "Gọng kính",
       "frame_shape": "ROUND",
       "face_shapes": ["SQUARE", "OVAL", "HEART", "DIAMOND", "OBLONG"],
       "gender_target": "UNISEX",
-      "material": "Kim loại",
-      "base_price": 154.00,
-      "status": "PUBLISHED",
-      "variants": [
-        { "color": "Xám súng", "size": "S", "extra_price": 0, "sku_variant": "RB-RND-003-GUN-S" },
-        { "color": "Vàng", "size": "S", "extra_price": 4.00, "sku_variant": "RB-RND-003-GLD-S" }
-      ],
-      "images": [
-        { "image_url": "/try-on-test-glasses-round.svg", "is_thumbnail": true, "sort_order": 0 }
-      ]
-    },
-    {
-      "sku": "OK-SQR-004",
-      "name": "Oakley Holbrook",
-      "slug": "oakley-holbrook",
-      "description": "Gọng thể thao vuông cá tính với công nghệ tròng kính Prizm.",
-      "brand": "Oakley",
-      "category": "Kính thể thao",
-      "frame_shape": "SQUARE",
-      "face_shapes": ["ROUND", "OVAL"],
-      "gender_target": "MALE",
-      "material": "O Matter (nhựa polymer)",
-      "base_price": 203.00,
-      "status": "PUBLISHED",
-      "variants": [
-        { "color": "Đen nhám", "size": "M", "extra_price": 0, "sku_variant": "OK-SQR-004-MBK-M" },
-        { "color": "Vân gỗ", "size": "M", "extra_price": 10.00, "sku_variant": "OK-SQR-004-WOOD-M" }
-      ],
-      "images": [
-        { "image_url": "https://cdn.smarteyewear.local/products/oakley-holbrook/main.jpg", "is_thumbnail": true, "sort_order": 0 },
-        { "image_url": "https://cdn.smarteyewear.local/products/oakley-holbrook/lens.jpg", "is_thumbnail": false, "sort_order": 1 }
-      ]
-    },
-    {
-      "sku": "OK-RECT-005",
-      "name": "Oakley Flak 2.0 XL",
-      "slug": "oakley-flak-2-0-xl",
-      "description": "Kính che chắn chữ nhật hiệu suất cao, dành cho thể thao cường độ cao.",
-      "brand": "Oakley",
-      "category": "Kính thể thao",
-      "frame_shape": "RECTANGLE",
-      "face_shapes": ["ROUND", "OVAL"],
-      "gender_target": "MALE",
-      "material": "O Matter (nhựa polymer)",
-      "base_price": 216.00,
-      "status": "PUBLISHED",
-      "variants": [
-        { "color": "Đen/Xám", "size": "L", "extra_price": 0, "sku_variant": "OK-RECT-005-BLKGRY-L" }
-      ],
-      "images": [
-        { "image_url": "https://cdn.smarteyewear.local/products/oakley-flak-2-0-xl/main.jpg", "is_thumbnail": true, "sort_order": 0 }
-      ]
-    },
-    {
-      "sku": "PS-OVAL-006",
-      "name": "Persol PO3092SM",
-      "slug": "persol-po3092sm",
-      "description": "Gọng Acetate oval tinh tế với bản lề hình mũi tên đặc trưng.",
-      "brand": "Persol",
-      "category": "Kính mát",
-      "frame_shape": "OVAL",
-      "face_shapes": ["SQUARE", "OVAL", "HEART", "DIAMOND"],
-      "gender_target": "MALE",
       "material": "Nhựa Acetate",
-      "base_price": 289.00,
+      "base_price": 990000.00,
       "status": "PUBLISHED",
       "variants": [
-        { "color": "Havana", "size": "M", "extra_price": 0, "sku_variant": "PS-OVAL-006-HAV-M" },
-        { "color": "Đen", "size": "M", "extra_price": 0, "sku_variant": "PS-OVAL-006-BLK-M" }
+        { "color": "Trong suốt xám", "size": "M", "extra_price": 0, "sku_variant": "WP-RND-029-GRYCRY-M" }
       ],
       "images": [
-        { "image_url": "/try-on-test-glasses-oval.svg", "is_thumbnail": true, "sort_order": 0 },
-        { "image_url": "https://cdn.smarteyewear.local/products/persol-po3092sm/hinge.jpg", "is_thumbnail": false, "sort_order": 1 }
+        { "image_url": "/products/frames/pl6426_0-removebg-preview.png", "is_thumbnail": true, "sort_order": 0 },
+        { "image_url": "/products/frames/pl6426_1.jpg", "is_thumbnail": false, "sort_order": 1 },
+        { "image_url": "/products/frames/pl6426_2.jpg", "is_thumbnail": false, "sort_order": 2 },
+        { "image_url": "/products/frames/pl6426_3.jpg", "is_thumbnail": false, "sort_order": 3 }
       ]
     },
     {
-      "sku": "PS-CATEYE-007",
-      "name": "Persol PO3259S Cat Eye",
+      "sku": "PS-CATEYE-030",
+      "name": "Persol PO3259S Cat-Eye",
       "slug": "persol-po3259s-cat-eye",
-      "description": "Dáng mắt mèo nữ tính với chất liệu Acetate bóng.",
+      "description": "Dáng mắt mèo nữ tính với chất liệu Acetate đỏ bóng, tôn nét cá tính và trẻ trung.",
       "brand": "Persol",
-      "category": "Kính mát",
+      "category": "Gọng kính",
       "frame_shape": "CAT_EYE",
       "face_shapes": ["ROUND", "SQUARE", "OVAL", "DIAMOND", "OBLONG"],
       "gender_target": "FEMALE",
       "material": "Nhựa Acetate",
-      "base_price": 305.00,
+      "base_price": 3200000.00,
       "status": "PUBLISHED",
       "variants": [
-        { "color": "Đồi mồi", "size": "S", "extra_price": 0, "sku_variant": "PS-CATEYE-007-TOR-S" },
-        { "color": "Đỏ", "size": "S", "extra_price": 12.00, "sku_variant": "PS-CATEYE-007-RED-S" }
+        { "color": "Đỏ", "size": "S", "extra_price": 0, "sku_variant": "PS-CATEYE-030-RED-S" }
       ],
       "images": [
-        { "image_url": "/try-on-test-glasses-cateye.svg", "is_thumbnail": true, "sort_order": 0 }
+        { "image_url": "/products/frames/pl8380_0-removebg-preview.png", "is_thumbnail": true, "sort_order": 0 },
+        { "image_url": "/products/frames/pl8380_1.jpg", "is_thumbnail": false, "sort_order": 1 },
+        { "image_url": "/products/frames/pl8380_2.jpg", "is_thumbnail": false, "sort_order": 2 },
+        { "image_url": "/products/frames/pl8380_3.jpg", "is_thumbnail": false, "sort_order": 3 }
       ]
     },
     {
-      "sku": "GC-CATEYE-008",
-      "name": "Gucci GG0850S Cat Eye",
-      "slug": "gucci-gg0850s-cat-eye",
-      "description": "Gọng mắt mèo khổ lớn với chi tiết càng kính sọc Gucci đặc trưng.",
-      "brand": "Gucci",
-      "category": "Kính mát",
-      "frame_shape": "CAT_EYE",
-      "face_shapes": ["ROUND", "SQUARE", "OVAL", "DIAMOND", "OBLONG"],
-      "gender_target": "FEMALE",
-      "material": "Nhựa Acetate",
-      "base_price": 410.00,
-      "status": "PUBLISHED",
-      "variants": [
-        { "color": "Đen", "size": "M", "extra_price": 0, "sku_variant": "GC-CATEYE-008-BLK-M" },
-        { "color": "Ngà", "size": "M", "extra_price": 15.00, "sku_variant": "GC-CATEYE-008-IVY-M" }
-      ],
-      "images": [
-        { "image_url": "https://cdn.smarteyewear.local/products/gucci-gg0850s-cat-eye/main.jpg", "is_thumbnail": true, "sort_order": 0 },
-        { "image_url": "https://cdn.smarteyewear.local/products/gucci-gg0850s-cat-eye/detail.jpg", "is_thumbnail": false, "sort_order": 1 }
-      ]
-    },
-    {
-      "sku": "GC-RND-009",
-      "name": "Gucci GG0737O Round Optical",
-      "slug": "gucci-gg0737o-round-optical",
-      "description": "Gọng kính cận kim loại tròn mảnh, có sọc càng kính tinh tế.",
+      "sku": "GC-SQR-031",
+      "name": "Gucci GG1170O Oversized Square",
+      "slug": "gucci-gg1170o-oversized-square",
+      "description": "Gọng Acetate khổ lớn tông đồi mồi nâu đậm, thiết kế nổi bật, sang trọng, thời thượng.",
       "brand": "Gucci",
       "category": "Gọng kính",
-      "frame_shape": "ROUND",
-      "face_shapes": ["SQUARE", "OVAL", "HEART", "DIAMOND", "OBLONG"],
-      "gender_target": "UNISEX",
-      "material": "Titan",
-      "base_price": 375.00,
-      "status": "PUBLISHED",
-      "variants": [
-        { "color": "Vàng", "size": "S", "extra_price": 0, "sku_variant": "GC-RND-009-GLD-S" }
-      ],
-      "images": [
-        { "image_url": "https://cdn.smarteyewear.local/products/gucci-gg0737o-round-optical/main.jpg", "is_thumbnail": true, "sort_order": 0 }
-      ]
-    },
-    {
-      "sku": "PR-RECT-010",
-      "name": "Prada PR 01OS Rectangle",
-      "slug": "prada-pr-01os-rectangle",
-      "description": "Kính mát chữ nhật sắc nét với cầu kính kim loại tối giản.",
-      "brand": "Prada",
-      "category": "Kính mát",
-      "frame_shape": "RECTANGLE",
-      "face_shapes": ["ROUND", "OVAL"],
-      "gender_target": "MALE",
-      "material": "Kim loại",
-      "base_price": 340.00,
-      "status": "PUBLISHED",
-      "variants": [
-        { "color": "Đen", "size": "M", "extra_price": 0, "sku_variant": "PR-RECT-010-BLK-M" },
-        { "color": "Xám súng", "size": "L", "extra_price": 10.00, "sku_variant": "PR-RECT-010-GUN-L" }
-      ],
-      "images": [
-        { "image_url": "https://cdn.smarteyewear.local/products/prada-pr-01os-rectangle/main.jpg", "is_thumbnail": true, "sort_order": 0 }
-      ]
-    },
-    {
-      "sku": "PR-SQR-011",
-      "name": "Prada PR 17WS Square",
-      "slug": "prada-pr-17ws-square",
-      "description": "Gọng Acetate vuông cá tính với phụ kiện logo trên càng kính.",
-      "brand": "Prada",
-      "category": "Kính mát",
       "frame_shape": "SQUARE",
       "face_shapes": ["ROUND", "OVAL"],
       "gender_target": "FEMALE",
       "material": "Nhựa Acetate",
-      "base_price": 355.00,
+      "base_price": 4800000.00,
       "status": "PUBLISHED",
       "variants": [
-        { "color": "Đen", "size": "M", "extra_price": 0, "sku_variant": "PR-SQR-011-BLK-M" },
-        { "color": "Havana", "size": "M", "extra_price": 0, "sku_variant": "PR-SQR-011-HAV-M" }
+        { "color": "Đồi mồi nâu đậm", "size": "M", "extra_price": 0, "sku_variant": "GC-SQR-031-DTOR-M" }
       ],
       "images": [
-        { "image_url": "https://cdn.smarteyewear.local/products/prada-pr-17ws-square/main.jpg", "is_thumbnail": true, "sort_order": 0 },
-        { "image_url": "https://cdn.smarteyewear.local/products/prada-pr-17ws-square/back.jpg", "is_thumbnail": false, "sort_order": 1 }
+        { "image_url": "/products/frames/pl8586_0-removebg-preview.png", "is_thumbnail": true, "sort_order": 0 },
+        { "image_url": "/products/frames/pl8586_1.jpg", "is_thumbnail": false, "sort_order": 1 },
+        { "image_url": "/products/frames/pl8586_2.jpg", "is_thumbnail": false, "sort_order": 2 }
       ]
     },
     {
-      "sku": "TF-RIML-012",
-      "name": "Tom Ford Alex Rimless",
-      "slug": "tom-ford-alex-rimless",
-      "description": "Gọng kính cận không viền tối giản, càng kính bằng titan.",
-      "brand": "Tom Ford",
+      "sku": "PR-SQR-032",
+      "name": "Prada PR 15WS Square",
+      "slug": "prada-pr-15ws-square",
+      "description": "Gọng Acetate vuông họa tiết đồi mồi cam đất, đường nét sắc sảo, cá tính.",
+      "brand": "Prada",
       "category": "Gọng kính",
-      "frame_shape": "RIMLESS",
-      "face_shapes": ["OVAL", "HEART"],
-      "gender_target": "MALE",
-      "material": "Titan",
-      "base_price": 420.00,
+      "frame_shape": "SQUARE",
+      "face_shapes": ["ROUND", "OVAL"],
+      "gender_target": "FEMALE",
+      "material": "Nhựa Acetate",
+      "base_price": 4200000.00,
       "status": "PUBLISHED",
       "variants": [
-        { "color": "Bạc", "size": "M", "extra_price": 0, "sku_variant": "TF-RIML-012-SLV-M" }
+        { "color": "Đồi mồi cam đất", "size": "M", "extra_price": 0, "sku_variant": "PR-SQR-032-ETOR-M" }
       ],
       "images": [
-        { "image_url": "/try-on-test-glasses-rimless.svg", "is_thumbnail": true, "sort_order": 0 }
+        { "image_url": "/products/frames/pl8733_0-removebg-preview.png", "is_thumbnail": true, "sort_order": 0 },
+        { "image_url": "/products/frames/pl8733_1.jpg", "is_thumbnail": false, "sort_order": 1 },
+        { "image_url": "/products/frames/pl8733_2.jpg", "is_thumbnail": false, "sort_order": 2 },
+        { "image_url": "/products/frames/pl8733_3.jpg", "is_thumbnail": false, "sort_order": 3 }
       ]
     },
     {
-      "sku": "TF-AVI-013",
-      "name": "Tom Ford Dashel Aviator",
-      "slug": "tom-ford-dashel-aviator",
-      "description": "Kính phi công hiện đại với cầu kính đôi và tròng kính gradient.",
-      "brand": "Tom Ford",
-      "category": "Kính mát",
+      "sku": "OP-RECT-033",
+      "name": "Oliver Peoples OV5183 Rectangle",
+      "slug": "oliver-peoples-ov5183-rectangle",
+      "description": "Gọng Acetate chữ nhật đen bóng cổ điển, thiết kế thanh lịch, phù hợp mọi khuôn mặt.",
+      "brand": "Oliver Peoples",
+      "category": "Gọng kính",
+      "frame_shape": "RECTANGLE",
+      "face_shapes": ["ROUND", "OVAL"],
+      "gender_target": "UNISEX",
+      "material": "Nhựa Acetate",
+      "base_price": 4100000.00,
+      "status": "PUBLISHED",
+      "variants": [
+        { "color": "Đen bóng", "size": "M", "extra_price": 0, "sku_variant": "OP-RECT-033-BLK-M" }
+      ],
+      "images": [
+        { "image_url": "/products/frames/pl8924_0-removebg-preview.png", "is_thumbnail": true, "sort_order": 0 },
+        { "image_url": "/products/frames/pl8924_1.jpg", "is_thumbnail": false, "sort_order": 1 },
+        { "image_url": "/products/frames/pl8924_3.jpg", "is_thumbnail": false, "sort_order": 2 }
+      ]
+    },
+    {
+      "sku": "PS-AVI-034",
+      "name": "Persol PO3252S Double Bridge",
+      "slug": "persol-po3252s-double-bridge",
+      "description": "Gọng Acetate dáng navigator cầu đôi tông đồi mồi vàng cam, phong cách cổ điển, nam tính.",
+      "brand": "Persol",
+      "category": "Gọng kính",
       "frame_shape": "AVIATOR",
       "face_shapes": ["SQUARE", "OVAL", "OBLONG"],
       "gender_target": "MALE",
-      "material": "Kim loại",
-      "base_price": 395.00,
-      "status": "PUBLISHED",
-      "variants": [
-        { "color": "Vàng", "size": "L", "extra_price": 0, "sku_variant": "TF-AVI-013-GLD-L" },
-        { "color": "Đen", "size": "L", "extra_price": 0, "sku_variant": "TF-AVI-013-BLK-L" }
-      ],
-      "images": [
-        { "image_url": "https://cdn.smarteyewear.local/products/tom-ford-dashel-aviator/main.jpg", "is_thumbnail": true, "sort_order": 0 }
-      ]
-    },
-    {
-      "sku": "WP-WAY-014",
-      "name": "Warby Parker Percey",
-      "slug": "warby-parker-percey",
-      "description": "Gọng kính cận giá phải chăng, lấy cảm hứng từ dáng wayfarer cổ điển.",
-      "brand": "Warby Parker",
-      "category": "Gọng kính",
-      "frame_shape": "WAYFARER",
-      "face_shapes": ["ROUND", "OVAL", "HEART", "DIAMOND", "OBLONG"],
-      "gender_target": "UNISEX",
       "material": "Nhựa Acetate",
-      "base_price": 95.00,
+      "base_price": 3400000.00,
       "status": "PUBLISHED",
       "variants": [
-        { "color": "Đồi mồi whiskey", "size": "M", "extra_price": 0, "sku_variant": "WP-WAY-014-WTOR-M" },
-        { "color": "Đen tuyền", "size": "M", "extra_price": 0, "sku_variant": "WP-WAY-014-JBLK-M" }
+        { "color": "Đồi mồi vàng cam", "size": "L", "extra_price": 0, "sku_variant": "PS-AVI-034-ATOR-L" }
       ],
       "images": [
-        { "image_url": "https://cdn.smarteyewear.local/products/warby-parker-percey/main.jpg", "is_thumbnail": true, "sort_order": 0 }
-      ]
-    },
-    {
-      "sku": "WP-RND-015",
-      "name": "Warby Parker Begley",
-      "slug": "warby-parker-begley",
-      "description": "Gọng kính cận Acetate tròn, dáng hơi khổ lớn.",
-      "brand": "Warby Parker",
-      "category": "Gọng kính",
-      "frame_shape": "ROUND",
-      "face_shapes": ["SQUARE", "OVAL", "HEART", "DIAMOND", "OBLONG"],
-      "gender_target": "UNISEX",
-      "material": "Nhựa Acetate",
-      "base_price": 95.00,
-      "status": "PUBLISHED",
-      "variants": [
-        { "color": "Trong suốt", "size": "S", "extra_price": 0, "sku_variant": "WP-RND-015-CRY-S" },
-        { "color": "Đen nhám", "size": "S", "extra_price": 0, "sku_variant": "WP-RND-015-BMAT-S" }
-      ],
-      "images": [
-        { "image_url": "https://cdn.smarteyewear.local/products/warby-parker-begley/main.jpg", "is_thumbnail": true, "sort_order": 0 }
-      ]
-    },
-    {
-      "sku": "WP-READ-016",
-      "name": "Warby Parker Percey Readers",
-      "slug": "warby-parker-percey-readers",
-      "description": "Gọng Percey lắp tròng kính đọc sách không cần đơn thuốc.",
-      "brand": "Warby Parker",
-      "category": "Kính đọc sách",
-      "frame_shape": "WAYFARER",
-      "face_shapes": ["ROUND", "OVAL", "HEART", "DIAMOND", "OBLONG"],
-      "gender_target": "UNISEX",
-      "material": "Nhựa Acetate",
-      "base_price": 60.00,
-      "status": "PUBLISHED",
-      "variants": [
-        { "color": "Đen tuyền", "size": "M / +1.50", "extra_price": 0, "sku_variant": "WP-READ-016-JBLK-M-150" },
-        { "color": "Đen tuyền", "size": "M / +2.00", "extra_price": 0, "sku_variant": "WP-READ-016-JBLK-M-200" }
-      ],
-      "images": [
-        { "image_url": "https://cdn.smarteyewear.local/products/warby-parker-percey-readers/main.jpg", "is_thumbnail": true, "sort_order": 0 }
-      ]
-    },
-    {
-      "sku": "CA-SQR-017",
-      "name": "Carrera 1067/S",
-      "slug": "carrera-1067-s",
-      "description": "Kính mát vuông phong cách thể thao với điểm nhấn màu tương phản trên càng kính.",
-      "brand": "Carrera",
-      "category": "Kính mát",
-      "frame_shape": "SQUARE",
-      "face_shapes": ["ROUND", "OVAL"],
-      "gender_target": "MALE",
-      "material": "Nhựa đúc",
-      "base_price": 129.00,
-      "status": "PUBLISHED",
-      "variants": [
-        { "color": "Đen/Đỏ", "size": "M", "extra_price": 0, "sku_variant": "CA-SQR-017-BLKRED-M" }
-      ],
-      "images": [
-        { "image_url": "https://cdn.smarteyewear.local/products/carrera-1067-s/main.jpg", "is_thumbnail": true, "sort_order": 0 }
-      ]
-    },
-    {
-      "sku": "CA-RECT-018",
-      "name": "Carrera 8865 Sport",
-      "slug": "carrera-8865-sport",
-      "description": "Gọng thể thao chữ nhật siêu nhẹ, phù hợp vận động.",
-      "brand": "Carrera",
-      "category": "Kính thể thao",
-      "frame_shape": "RECTANGLE",
-      "face_shapes": ["ROUND", "OVAL"],
-      "gender_target": "MALE",
-      "material": "TR90",
-      "base_price": 110.00,
-      "status": "PUBLISHED",
-      "variants": [
-        { "color": "Xám nhám", "size": "M", "extra_price": 0, "sku_variant": "CA-RECT-018-MGRY-M" },
-        { "color": "Đen nhám", "size": "M", "extra_price": 0, "sku_variant": "CA-RECT-018-MBLK-M" }
-      ],
-      "images": [
-        { "image_url": "/try-on-test-glasses.svg", "is_thumbnail": true, "sort_order": 0 }
-      ]
-    },
-    {
-      "sku": "VG-CATEYE-019",
-      "name": "Vogue Eyewear VO5361S",
-      "slug": "vogue-eyewear-vo5361s",
-      "description": "Kính mát mắt mèo trẻ trung với chất liệu Acetate 2 tông màu.",
-      "brand": "Vogue Eyewear",
-      "category": "Kính mát",
-      "frame_shape": "CAT_EYE",
-      "face_shapes": ["ROUND", "SQUARE", "OVAL", "DIAMOND", "OBLONG"],
-      "gender_target": "FEMALE",
-      "material": "Nhựa Acetate",
-      "base_price": 89.00,
-      "status": "PUBLISHED",
-      "variants": [
-        { "color": "Havana hồng", "size": "S", "extra_price": 0, "sku_variant": "VG-CATEYE-019-PHAV-S" },
-        { "color": "Đen", "size": "S", "extra_price": 0, "sku_variant": "VG-CATEYE-019-BLK-S" }
-      ],
-      "images": [
-        { "image_url": "https://cdn.smarteyewear.local/products/vogue-eyewear-vo5361s/main.jpg", "is_thumbnail": true, "sort_order": 0 }
-      ]
-    },
-    {
-      "sku": "VG-OVAL-020",
-      "name": "Vogue Eyewear VO5239 Oval Optical",
-      "slug": "vogue-eyewear-vo5239-oval-optical",
-      "description": "Gọng kính cận kim loại oval mềm mại, nhẹ, phù hợp đeo hàng ngày.",
-      "brand": "Vogue Eyewear",
-      "category": "Gọng kính",
-      "frame_shape": "OVAL",
-      "face_shapes": ["SQUARE", "OVAL", "HEART", "DIAMOND"],
-      "gender_target": "FEMALE",
-      "material": "Kim loại",
-      "base_price": 79.00,
-      "status": "PUBLISHED",
-      "variants": [
-        { "color": "Vàng hồng", "size": "S", "extra_price": 0, "sku_variant": "VG-OVAL-020-RGLD-S" }
-      ],
-      "images": [
-        { "image_url": "https://cdn.smarteyewear.local/products/vogue-eyewear-vo5239-oval-optical/main.jpg", "is_thumbnail": true, "sort_order": 0 }
-      ]
-    },
-    {
-      "sku": "OP-RND-021",
-      "name": "Oliver Peoples Gregory Peck",
-      "slug": "oliver-peoples-gregory-peck",
-      "description": "Gọng Acetate tròn phong cách vintage, dáng nhỏ.",
-      "brand": "Oliver Peoples",
-      "category": "Gọng kính",
-      "frame_shape": "ROUND",
-      "face_shapes": ["SQUARE", "OVAL", "HEART", "DIAMOND", "OBLONG"],
-      "gender_target": "UNISEX",
-      "material": "Nhựa Acetate",
-      "base_price": 349.00,
-      "status": "PUBLISHED",
-      "variants": [
-        { "color": "Đồi mồi mật ong", "size": "XS", "extra_price": 0, "sku_variant": "OP-RND-021-HTOR-XS" },
-        { "color": "Đen", "size": "XS", "extra_price": 0, "sku_variant": "OP-RND-021-BLK-XS" }
-      ],
-      "images": [
-        { "image_url": "https://cdn.smarteyewear.local/products/oliver-peoples-gregory-peck/main.jpg", "is_thumbnail": true, "sort_order": 0 }
-      ]
-    },
-    {
-      "sku": "OP-RIML-022",
-      "name": "Oliver Peoples Coleridge Rimless",
-      "slug": "oliver-peoples-coleridge-rimless",
-      "description": "Gọng kính cận không viền tinh giản, chất liệu titan xước mờ.",
-      "brand": "Oliver Peoples",
-      "category": "Gọng kính",
-      "frame_shape": "RIMLESS",
-      "face_shapes": ["OVAL", "HEART"],
-      "gender_target": "MALE",
-      "material": "Titan",
-      "base_price": 399.00,
-      "status": "PUBLISHED",
-      "variants": [
-        { "color": "Xám súng", "size": "M", "extra_price": 0, "sku_variant": "OP-RIML-022-GUN-M" }
-      ],
-      "images": [
-        { "image_url": "https://cdn.smarteyewear.local/products/oliver-peoples-coleridge-rimless/main.jpg", "is_thumbnail": true, "sort_order": 0 }
-      ]
-    },
-    {
-      "sku": "RB-KID-023",
-      "name": "Ray-Ban Junior Wayfarer",
-      "slug": "ray-ban-junior-wayfarer",
-      "description": "Wayfarer thu nhỏ dành cho trẻ em, tròng kính chống va đập.",
-      "brand": "Ray-Ban",
-      "category": "Kính trẻ em",
-      "frame_shape": "WAYFARER",
-      "face_shapes": ["ROUND", "OVAL", "HEART", "DIAMOND", "OBLONG"],
-      "gender_target": "UNISEX",
-      "material": "Nhựa đúc",
-      "base_price": 89.00,
-      "status": "PUBLISHED",
-      "variants": [
-        { "color": "Xanh dương", "size": "XS", "extra_price": 0, "sku_variant": "RB-KID-023-BLU-XS" },
-        { "color": "Đỏ", "size": "XS", "extra_price": 0, "sku_variant": "RB-KID-023-RED-XS" }
-      ],
-      "images": [
-        { "image_url": "https://cdn.smarteyewear.local/products/ray-ban-junior-wayfarer/main.jpg", "is_thumbnail": true, "sort_order": 0 }
-      ]
-    },
-    {
-      "sku": "OK-SQR-024",
-      "name": "Oakley Kids Flak Junior",
-      "slug": "oakley-kids-flak-junior",
-      "description": "Gọng thể thao vuông cỡ nhỏ cho trẻ em hiếu động.",
-      "brand": "Oakley",
-      "category": "Kính trẻ em",
-      "frame_shape": "SQUARE",
-      "face_shapes": ["ROUND", "OVAL"],
-      "gender_target": "UNISEX",
-      "material": "O Matter (nhựa polymer)",
-      "base_price": 99.00,
-      "status": "PUBLISHED",
-      "variants": [
-        { "color": "Đen/Xanh dương", "size": "XS", "extra_price": 0, "sku_variant": "OK-SQR-024-BLKBLU-XS" }
-      ],
-      "images": [
-        { "image_url": "https://cdn.smarteyewear.local/products/oakley-kids-flak-junior/main.jpg", "is_thumbnail": true, "sort_order": 0 }
+        { "image_url": "/products/frames/pm1176_0-removebg-preview.png", "is_thumbnail": true, "sort_order": 0 },
+        { "image_url": "/products/frames/pm1176_1.jpg", "is_thumbnail": false, "sort_order": 1 },
+        { "image_url": "/products/frames/pm1176_2.jpg", "is_thumbnail": false, "sort_order": 2 },
+        { "image_url": "/products/frames/pm1176_3.jpg", "is_thumbnail": false, "sort_order": 3 }
       ]
     }
   ]

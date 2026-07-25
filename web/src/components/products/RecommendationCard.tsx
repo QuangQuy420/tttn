@@ -4,10 +4,18 @@ import { formatPriceVnd } from "@/lib/format/price";
 import { formatFrameShapeVi } from "@/lib/labels";
 import type { RecommendedProduct } from "@/types/recommendation";
 
+interface RecommendationCardProps {
+  product: RecommendedProduct;
+  // Present only on the face-analysis page (RecommendationPreview → RecommendationGrid), where a
+  // second "Thử lên ảnh này" action draws the frame onto the already-uploaded static photo —
+  // absent on /recommendations, which keeps only the existing live-camera "Thử kính AR" action.
+  onTryOnPhoto?: (product: RecommendedProduct) => void;
+}
+
 // Same card-style layout as ProductCard, but built for RecommendedProduct's narrower shape
 // (no genderTarget/category/variants — recommendation-service only returns what a card needs
 // plus a ranking `score`), so ProductCard itself isn't reused directly.
-export function RecommendationCard({ product }: { product: RecommendedProduct }) {
+export function RecommendationCard({ product, onTryOnPhoto }: RecommendationCardProps) {
   const thumbnail = product.images.find((image) => image.isThumbnail) ?? product.images[0];
 
   return (
@@ -33,6 +41,15 @@ export function RecommendationCard({ product }: { product: RecommendedProduct })
         <Link href={`/products/${product.id}/try-on`} className="btn btn--primary btn--small">
           Thử kính AR
         </Link>
+        {onTryOnPhoto && (
+          <button
+            type="button"
+            className="btn btn--outline btn--small"
+            onClick={() => onTryOnPhoto(product)}
+          >
+            Thử lên ảnh này
+          </button>
+        )}
       </div>
     </div>
   );

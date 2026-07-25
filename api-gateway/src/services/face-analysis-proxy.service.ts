@@ -68,6 +68,21 @@ export class FaceAnalysisProxyService {
     }
   }
 
+  async deleteHistoryItem(id: string, userId: string): Promise<unknown> {
+    const path = `/analyses/${id}`;
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.delete(`${this.baseUrl}${path}`, {
+          headers: { 'X-User-Id': userId },
+        }),
+      );
+      return response.data;
+    } catch (error) {
+      throw this.toGatewayError(error as AxiosError, path);
+    }
+  }
+
   /**
    * Maps a downstream failure to a clear gateway-side error instead of
    * letting it surface as an unhandled 500:

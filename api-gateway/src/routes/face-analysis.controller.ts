@@ -1,4 +1,16 @@
-import { Controller, Get, Post, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import {
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Req,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
 import { AuthenticatedUser, JwtGuard } from '../auth/jwt.guard';
@@ -26,5 +38,15 @@ export class FaceAnalysisController {
   @UseGuards(JwtGuard)
   history(@Req() request: Request & { user: AuthenticatedUser }): Promise<unknown> {
     return this.faceAnalysisProxyService.getHistory(request.user.userId);
+  }
+
+  @Delete('history/:id')
+  @UseGuards(JwtGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteHistoryItem(
+    @Param('id') id: string,
+    @Req() request: Request & { user: AuthenticatedUser },
+  ): Promise<unknown> {
+    return this.faceAnalysisProxyService.deleteHistoryItem(id, request.user.userId);
   }
 }

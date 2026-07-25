@@ -54,6 +54,10 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      # Lets the browser load face-images/product-images via img.crossOrigin="anonymous"
+      # (canvas/WebGL overlay in `web`) — without this, MinIO sends no CORS headers and the
+      # browser refuses the cross-origin image load outright.
+      MINIO_API_CORS_ALLOW_ORIGIN: ${MINIO_API_CORS_ALLOW_ORIGIN}
     ports:
       - "9000:9000"   # S3 API
       - "9001:9001"   # web console

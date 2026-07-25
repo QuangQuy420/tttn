@@ -31,3 +31,13 @@ export function getFaceAnalysisHistory(token: string): Promise<FaceAnalysisResul
     headers: authHeaders(token),
   });
 }
+
+// Forwards to api-gateway's DELETE /api/face-analysis/history/:id, which proxies to
+// face-processing-service's DELETE /analyses/{id} — deletes one of the calling user's own past
+// analyses (its DB row and stored photo). Returns 204 No Content on success.
+export function deleteFaceAnalysisHistory(id: string, token: string): Promise<void> {
+  return apiFetch<void>(`/face-analysis/history/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+}

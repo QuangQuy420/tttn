@@ -13,7 +13,11 @@ import uuid
 from fastapi import APIRouter, Depends, Header, HTTPException, UploadFile, status
 
 from app.schemas.face import AnalyzeResponse
-from app.services.face_analysis_service import FaceAnalysisService, get_face_analysis_service
+from app.services.face_analysis_service import (
+    FaceAnalysisService,
+    HistoryItemNotFoundError,
+    get_face_analysis_service,
+)
 from app.services.face_shape_service import (
     InvalidImageError,
     MultipleFacesDetectedError,
@@ -92,3 +96,19 @@ async def list_analyses(
 ) -> list[AnalyzeResponse]:
     user_id = _require_user_id(x_user_id)
     return await service.list_history(user_id)
+
+
+@router.delete("/analyses/{analysis_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_analysis(
+    analysis_id: uuid.UUID,
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+    service: FaceAnalysisService = Depends(get_face_analysis_service),
+) -> None:
+    user_id = _require_user_id(x_user_id)
+    try:
+        await service.delete_history_item(user_id=user_id, analysis_id=analysis_id)
+    except HistoryItemNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy lịch sử phân tích.",
+        ) from exc

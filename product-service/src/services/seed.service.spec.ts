@@ -116,10 +116,10 @@ describe('SeedService', () => {
     mockedReadFileSync.mockReset();
   });
 
-  it('rejects a seed file with fewer than 20 products (AC3 guard)', async () => {
-    mockedReadFileSync.mockReturnValue(JSON.stringify(buildValidSeedFile(19)));
+  it('rejects a seed file with fewer than 10 products (AC3 guard)', async () => {
+    mockedReadFileSync.mockReturnValue(JSON.stringify(buildValidSeedFile(9)));
 
-    await expect(service.run('seed.json')).rejects.toThrow(/at least 20/);
+    await expect(service.run('seed.json')).rejects.toThrow(/at least 10/);
     expect(productRepository.create).not.toHaveBeenCalled();
   });
 
@@ -130,17 +130,17 @@ describe('SeedService', () => {
   });
 
   it('seeds brands, categories, products, variants, and images (happy path)', async () => {
-    mockedReadFileSync.mockReturnValue(JSON.stringify(buildValidSeedFile(20)));
+    mockedReadFileSync.mockReturnValue(JSON.stringify(buildValidSeedFile(10)));
 
     const summary = await service.run('seed.json');
 
     expect(summary.brandsCreated).toBe(1);
     expect(summary.categoriesCreated).toBe(1);
-    expect(summary.productsCreated).toBe(20);
+    expect(summary.productsCreated).toBe(10);
     expect(summary.productsFailed).toBe(0);
-    expect(summary.variantsCreated).toBe(20);
-    expect(summary.imagesCreated).toBe(20);
-    expect(productImagesService.create).toHaveBeenCalledTimes(20);
+    expect(summary.variantsCreated).toBe(10);
+    expect(summary.imagesCreated).toBe(10);
+    expect(productImagesService.create).toHaveBeenCalledTimes(10);
   });
 
   it('is idempotent: skips brands/categories/products that already exist', async () => {

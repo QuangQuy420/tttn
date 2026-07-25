@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { FaceLandmarkerResult, NormalizedLandmark } from "@mediapipe/tasks-vision";
+import type { FaceLandmarkerResult } from "@mediapipe/tasks-vision";
+import { computeOverlayTransform, MAX_FACES_TO_DETECT } from "@/lib/faceOverlay";
 
 // Google's CDN copies of the MediaPipe WASM runtime + Face Landmarker model (plan Q3 default —
 // simplest for a dev machine with internet access; self-hosting under public/models/ is an easy
@@ -10,16 +11,6 @@ const WASM_BASE_URL =
   "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm";
 const MODEL_ASSET_PATH =
   "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
-
-// Outer eye corner landmark indices in MediaPipe's 468/478-point face mesh topology — same
-// numbering scheme face-processing-service already documents server-side
-// (face_shape_service.py). Used to derive where/how large/how tilted to draw the glasses image.
-const LEFT_EYE_OUTER_CORNER = 33;
-const RIGHT_EYE_OUTER_CORNER = 263;
-
-// numFaces raised to 2 (not 1) purely so 2+ faces can be *distinguished* from exactly 1 for the
-// "only one face at a time" hint — same reasoning face_shape_service.py already uses server-side.
-const MAX_FACES_TO_DETECT = 2;
 
 export type FaceTrackingStatus =
   | "idle"
@@ -42,30 +33,6 @@ interface UseFaceTrackingOptions {
 interface UseFaceTrackingResult {
   status: FaceTrackingStatus;
   errorMessage: string | null;
-}
-
-// Position/scale/rotation for the overlay image, derived from the two outer-eye-corner
-// landmarks — position = their midpoint, scale = distance between them, rotation = angle of the
-// line between them (see plan's "library research" section for the exact formula).
-function computeOverlayTransform(
-  landmarks: NormalizedLandmark[],
-  videoWidth: number,
-  videoHeight: number,
-) {
-  const left = landmarks[LEFT_EYE_OUTER_CORNER];
-  const right = landmarks[RIGHT_EYE_OUTER_CORNER];
-
-  const leftX = left.x * videoWidth;
-  const leftY = left.y * videoHeight;
-  const rightX = right.x * videoWidth;
-  const rightY = right.y * videoHeight;
-
-  const centerX = (leftX + rightX) / 2;
-  const centerY = (leftY + rightY) / 2;
-  const eyeDistance = Math.hypot(rightX - leftX, rightY - leftY);
-  const angle = Math.atan2(rightY - leftY, rightX - leftX);
-
-  return { centerX, centerY, eyeDistance, angle };
 }
 
 // Isolates all MediaPipe + <canvas> rendering logic in one place (coder.md §4: "keep the

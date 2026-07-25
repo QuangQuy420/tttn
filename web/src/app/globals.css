@@ -1161,6 +1161,20 @@ main {
   padding: 1rem;
 }
 
+.face-analysis__tryon-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.face-analysis__tryon-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
 .face-analysis__privacy-note {
   display: flex;
   align-items: flex-start;
