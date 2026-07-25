@@ -1,18 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ApiError, getFaceAnalysisHistory } from "@/lib/api";
+import { ApiError, deleteFaceAnalysisHistory, getFaceAnalysisHistory } from "@/lib/api";
 import { ErrorState } from "@/components/common/ErrorState";
 import { ImageWithFallback } from "@/components/common/ImageWithFallback";
 import { LoadingState } from "@/components/common/LoadingState";
 import { useFaceAnalysis } from "@/hooks/useFaceAnalysis";
+import { useStaticFaceOverlay } from "@/hooks/useStaticFaceOverlay";
 import { getAccessToken } from "@/lib/auth/session";
 import { formatFaceShapeVi } from "@/lib/labels";
 import { RecommendationPreview } from "./RecommendationPreview";
 import type { FaceAnalysisResult, FaceMeasurements } from "@/types/face";
-import type { FaceShapeTag } from "@/types/product";
+import type { RecommendedProduct } from "@/types/recommendation";
 
 const MEASUREMENT_FIELDS: { key: keyof FaceMeasurements; label: string }[] = [
   { key: "face_length", label: "Chiều dài khuôn mặt" },
@@ -53,26 +54,12 @@ function MeasurementsGrid({ measurements }: { measurements: FaceMeasurements }) 
   );
 }
 
-// On-demand recommendations for a past (history) analysis — collapsed by default so browsing
-// history doesn't fire one /recommend call per past photo; expands into a RecommendationPreview
-// (which does the actual fetch) only once the user asks for it.
-function HistoryRecommendations({ faceShape }: { faceShape: FaceShapeTag }) {
-  const [expanded, setExpanded] = useState(false);
-
-  if (!expanded) {
-    return (
-      <button
-        type="button"
-        className="btn btn--outline btn--small face-analysis__history-recommend-toggle"
-        onClick={() => setExpanded(true)}
-      >
-        Xem gợi ý gọng kính phù hợp
-      </button>
-    );
-  }
-
-  return <RecommendationPreview faceShape={faceShape} />;
-}
+// Vietnamese hints for the static-photo try-on overlay's non-"ready" statuses, mirroring
+// TryOnPage.tsx's STATUS_HINTS pattern for the live-camera case (FR3/AC4).
+const TRY_ON_STATUS_HINTS: Partial<Record<string, string>> = {
+  "loading-model": "Đang tải mô hình nhận diện khuôn mặt...",
+  detecting: "Đang nhận diện khuôn mặt trong ảnh...",
+};
 
 // Matches .design/Try Face Analysis.dc.html. Uploads a face photo (previewed locally while the
 // request is in flight), then shows the shape/confidence + measurements on success.
@@ -91,6 +78,49 @@ export function FaceAnalysisPage() {
   const [history, setHistory] = useState<FaceAnalysisResult[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Separate from `historyError` on purpose: `historyError` gates whether the whole history
+  // list renders at all (see the JSX below), so a failed delete must not reuse it — that would
+  // hide every other item's "Xóa"/"Xem lại" button behind one error message.
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // A clicked history item becomes the page's single active result (FR5) — takes precedence
+  // over `result` until either another history item is clicked or a fresh upload succeeds (AC6).
+  const [selectedHistoryItem, setSelectedHistoryItem] = useState<FaceAnalysisResult | null>(null);
+
+  // A fresh analyze() success must take back over as the active result (AC6). Adjusted during
+  // render (not a useEffect — react-hooks/set-state-in-effect) by tracking the previous `result`
+  // in state (not a ref — react-hooks/refs forbids reading/writing a ref during render, same
+  // reasoning TryOnPage.tsx's `hasShownCamera` comment documents), so it clears in the same
+  // render `result` changes in, with no extra render pass.
+  const [previousResult, setPreviousResult] = useState(result);
+  if (result !== previousResult) {
+    setPreviousResult(result);
+    if (result) setSelectedHistoryItem(null);
+  }
+
+  const activeResult = selectedHistoryItem ?? result;
+
+  // Static-photo try-on (FR1/FR2): which recommended frame (if any) is being tried on the active
+  // photo. Reset whenever the active photo itself changes, so switching photos never leaves a
+  // stale overlay drawn from the previous photo's landmarks (T6). Same render-time-adjustment
+  // pattern as above.
+  const [selectedFrame, setSelectedFrame] = useState<RecommendedProduct | null>(null);
+  const [previousActiveResult, setPreviousActiveResult] = useState(activeResult);
+  if (activeResult !== previousActiveResult) {
+    setPreviousActiveResult(activeResult);
+    if (selectedFrame) setSelectedFrame(null);
+  }
+
+  const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
+  const overlayThumbnail = selectedFrame
+    ? selectedFrame.images.find((image) => image.isThumbnail) ?? selectedFrame.images[0]
+    : null;
+  const { status: overlayStatus, errorMessage: overlayErrorMessage } = useStaticFaceOverlay({
+    photoUrl: selectedFrame ? (activeResult?.imageUrl ?? null) : null,
+    overlayImageUrl: overlayThumbnail?.imageUrl ?? null,
+    canvasRef: overlayCanvasRef,
+  });
 
   useEffect(() => {
     async function verifyLoggedIn() {
@@ -153,8 +183,31 @@ export function FaceAnalysisPage() {
     await analyze(file);
   }
 
-  const displayImageUrl = result?.imageUrl ?? previewUrl;
-  const confidencePct = result ? Math.round(result.confidence * 100) : null;
+  // Deletes one history item (AC1). Confirms first, then removes it from `history` on success and
+  // clears `selectedHistoryItem` if that item was the one being previewed (AC6).
+  async function handleDeleteHistoryItem(id: string) {
+    if (!window.confirm("Xóa kết quả phân tích này? Hành động này không thể hoàn tác.")) return;
+
+    const token = getAccessToken();
+    if (!token) return;
+
+    setDeletingId(id);
+    setDeleteError(null);
+    try {
+      await deleteFaceAnalysisHistory(id, token);
+      setHistory((prev) => prev.filter((item) => item.id !== id));
+      setSelectedHistoryItem((prev) => (prev?.id === id ? null : prev));
+    } catch (err) {
+      setDeleteError(err instanceof ApiError ? err.message : "Không thể xóa kết quả phân tích này.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  // Derive from `activeResult` (not just `result`) so a selected history item's photo also shows
+  // here, not only a fresh upload's (plan T6 note).
+  const displayImageUrl = activeResult?.imageUrl ?? previewUrl;
+  const confidencePct = activeResult ? Math.round(activeResult.confidence * 100) : null;
   const isLowConfidence = confidencePct !== null && confidencePct < 70;
 
   // Not logged in — don't render the upload UI at all (AC1). We already redirect above; this
@@ -202,7 +255,9 @@ export function FaceAnalysisPage() {
         </div>
         <div className="face-analysis__preview-frame">
           <div className="face-analysis__preview-box">
-            {displayImageUrl ? (
+            {selectedFrame ? (
+              <canvas ref={overlayCanvasRef} className="face-analysis__preview-image" />
+            ) : displayImageUrl ? (
               <ImageWithFallback
                 src={displayImageUrl}
                 alt="Ảnh khuôn mặt đã tải lên"
@@ -216,6 +271,24 @@ export function FaceAnalysisPage() {
             )}
           </div>
         </div>
+        {selectedFrame && (
+          <div className="face-analysis__tryon-bar">
+            {overlayStatus !== "ready" && (
+              <p role="status" className="face-analysis__tryon-hint">
+                {overlayStatus === "no-face" || overlayStatus === "multiple-faces" || overlayStatus === "error"
+                  ? overlayErrorMessage
+                  : TRY_ON_STATUS_HINTS[overlayStatus]}
+              </p>
+            )}
+            <button
+              type="button"
+              className="btn btn--outline btn--small"
+              onClick={() => setSelectedFrame(null)}
+            >
+              Xem ảnh gốc
+            </button>
+          </div>
+        )}
         <p className="face-analysis__privacy-note">
           <svg
             width="15"
@@ -235,7 +308,7 @@ export function FaceAnalysisPage() {
       {isLoading && <LoadingState label="Đang phân tích ảnh của bạn..." />}
       {!isLoading && error && <ErrorState message={error} />}
 
-      {!isLoading && !error && result && (
+      {!isLoading && !error && activeResult && (
         <>
           <div className="face-analysis__card face-analysis__result-card">
             <div className="face-analysis__result-icon" aria-hidden="true">
@@ -245,7 +318,7 @@ export function FaceAnalysisPage() {
             </div>
             <div className="face-analysis__result-shape">
               <p className="face-analysis__result-label">Dáng khuôn mặt</p>
-              <p className="face-analysis__result-value">{formatFaceShapeVi(result.faceShape)}</p>
+              <p className="face-analysis__result-value">{formatFaceShapeVi(activeResult.faceShape)}</p>
             </div>
             <div className="face-analysis__result-confidence">
               <p className="face-analysis__result-label">Độ tin cậy</p>
@@ -284,12 +357,12 @@ export function FaceAnalysisPage() {
 
           <div className="face-analysis__card">
             <p className="face-analysis__section-label">Số đo khuôn mặt</p>
-            <MeasurementsGrid measurements={result.measurements} />
+            <MeasurementsGrid measurements={activeResult.measurements} />
           </div>
 
           <div className="face-analysis__card">
             <p className="face-analysis__section-label">Gọng kính gợi ý cho bạn</p>
-            <RecommendationPreview faceShape={result.faceShape} />
+            <RecommendationPreview faceShape={activeResult.faceShape} onTryOnPhoto={setSelectedFrame} />
           </div>
         </>
       )}
@@ -298,6 +371,7 @@ export function FaceAnalysisPage() {
         <p className="face-analysis__section-label">Lịch sử phân tích của bạn</p>
         {historyLoading && <LoadingState label="Đang tải lịch sử phân tích của bạn..." />}
         {!historyLoading && historyError && <ErrorState message={historyError} />}
+        {!historyLoading && !historyError && deleteError && <ErrorState message={deleteError} />}
         {!historyLoading && !historyError && history.length === 0 && (
           <p className="face-analysis__preview-placeholder">
             Bạn chưa phân tích ảnh nào.
@@ -326,9 +400,22 @@ export function FaceAnalysisPage() {
                       <p className="face-analysis__history-value">{Math.round(item.confidence * 100)}%</p>
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    className="btn btn--outline btn--small"
+                    onClick={() => setSelectedHistoryItem(item)}
+                  >
+                    Xem lại
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--outline btn--small"
+                    onClick={() => handleDeleteHistoryItem(item.id)}
+                    disabled={deletingId === item.id}
+                  >
+                    {deletingId === item.id ? "Đang xóa..." : "Xóa"}
+                  </button>
                 </div>
-                <MeasurementsGrid measurements={item.measurements} />
-                <HistoryRecommendations faceShape={item.faceShape} />
               </div>
             ))}
           </div>

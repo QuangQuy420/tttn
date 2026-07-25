@@ -6,13 +6,15 @@ import { RecommendationCard } from "./RecommendationCard";
 // differ from ProductGrid's).
 interface RecommendationGridProps {
   products: RecommendedProduct[];
+  // Forwarded to each RecommendationCard — see RecommendationCard.tsx for when this is present.
+  onTryOnPhoto?: (product: RecommendedProduct) => void;
 }
 
-export function RecommendationGrid({ products }: RecommendationGridProps) {
+export function RecommendationGrid({ products, onTryOnPhoto }: RecommendationGridProps) {
   return (
     <div className="product-grid">
       {products.map((product) => (
-        <RecommendationCard key={product.id} product={product} />
+        <RecommendationCard key={product.id} product={product} onTryOnPhoto={onTryOnPhoto} />
       ))}
     </div>
   );

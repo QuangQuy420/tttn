@@ -127,7 +127,10 @@ export class TypeOrmProductRepository implements IProductRepository {
   }
 
   findBySku(sku: string): Promise<Product | null> {
-    return this.repo.findOne({ where: { sku } });
+    // withDeleted: the UNIQUE(sku) constraint isn't relaxed for soft-deleted rows, so a
+    // soft-deleted product still occupies its sku — excluding it here would let callers
+    // (seed idempotency check, admin-form sku generator) collide with it and 500 on insert.
+    return this.repo.findOne({ where: { sku }, withDeleted: true });
   }
 
   findBySlug(slug: string): Promise<Product | null> {

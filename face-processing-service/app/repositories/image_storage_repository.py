@@ -25,6 +25,9 @@ class IImageStorageRepository(Protocol):
     def get_presigned_url(self, key: str) -> str:
         """Return a time-limited GET URL for a previously-uploaded object."""
 
+    def delete(self, key: str) -> None:
+        """Delete the object stored under `key`."""
+
 
 class S3ImageStorageRepository:
     """boto3-backed `IImageStorageRepository` against MinIO (S3-compatible).
@@ -79,6 +82,9 @@ class S3ImageStorageRepository:
             Params={"Bucket": self._bucket, "Key": key},
             ExpiresIn=_PRESIGNED_URL_EXPIRY_SECONDS,
         )
+
+    def delete(self, key: str) -> None:
+        self._client.delete_object(Bucket=self._bucket, Key=key)
 
 
 @lru_cache

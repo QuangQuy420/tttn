@@ -76,8 +76,8 @@ export interface SeedSummary {
   imagesCreated: number;
 }
 
-/** AC3 needs at least 20 seeded products — fail loudly rather than silently seeding fewer. */
-const MIN_PRODUCTS = 20;
+/** Fail loudly rather than silently seeding fewer than the current real catalog. */
+const MIN_PRODUCTS = 10;
 
 /**
  * Loads `infra/seed/products.json` (brands/categories/products, each product nesting

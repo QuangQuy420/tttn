@@ -7,18 +7,22 @@ import { LoadingState } from "@/components/common/LoadingState";
 import { RecommendationGrid } from "@/components/products/RecommendationGrid";
 import { useRecommendations } from "@/hooks/useRecommendations";
 import type { FaceShapeTag } from "@/types/product";
+import type { RecommendedProduct } from "@/types/recommendation";
 
 const PREVIEW_LIMIT = 4;
 
 interface RecommendationPreviewProps {
   faceShape: FaceShapeTag;
+  // Forwarded to RecommendationGrid/RecommendationCard — present only on the face-analysis page,
+  // where FaceAnalysisPage uses it to pick a frame to try on the active photo.
+  onTryOnPhoto?: (product: RecommendedProduct) => void;
 }
 
 // Always fetches as soon as it mounts (or `faceShape` changes) — callers decide WHEN that
 // happens, not this component: mounted immediately for a fresh analysis result (auto-show at the
 // moment of highest intent), or only mounted after a "Xem gợi ý" click for a history item
 // (on-demand, so browsing history doesn't fire one /recommend call per past photo).
-export function RecommendationPreview({ faceShape }: RecommendationPreviewProps) {
+export function RecommendationPreview({ faceShape, onTryOnPhoto }: RecommendationPreviewProps) {
   const { items, isLoading, error, recommend } = useRecommendations();
 
   useEffect(() => {
@@ -35,7 +39,7 @@ export function RecommendationPreview({ faceShape }: RecommendationPreviewProps)
       )}
       {!isLoading && !error && items.length > 0 && (
         <>
-          <RecommendationGrid products={items.slice(0, PREVIEW_LIMIT)} />
+          <RecommendationGrid products={items.slice(0, PREVIEW_LIMIT)} onTryOnPhoto={onTryOnPhoto} />
           <Link
             href={`/recommendations?faceShape=${faceShape}`}
             className="face-analysis__recommend-view-all"

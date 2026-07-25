@@ -14,7 +14,7 @@ export {
 } from "./users";
 
 export { getBrands } from "./brands";
-export { analyzeFace, getFaceAnalysisHistory } from "./face";
+export { analyzeFace, deleteFaceAnalysisHistory, getFaceAnalysisHistory } from "./face";
 export { getRecommendations } from "./recommendations";
 
 export {
