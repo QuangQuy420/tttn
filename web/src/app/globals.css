@@ -693,6 +693,14 @@ main {
   font-size: 0.875rem;
 }
 
+.admin-table__row--users {
+  grid-template-columns: 2fr 1.4fr 1fr 160px;
+}
+
+.admin-table__row--roles {
+  grid-template-columns: 1fr 1.4fr 1.6fr 90px;
+}
+
 .admin-table__row--head {
   background: rgba(43, 36, 32, 0.04);
   font-size: 0.75rem;
@@ -1052,7 +1060,10 @@ main {
 
 /* Face analysis page (.design/Try Face Analysis.dc.html) */
 .face-analysis {
-  max-width: 900px;
+  /* Widened from 900px (T6) — the new two-column result layout (.face-analysis__result-layout)
+     left too little room for the left column at 900px; 1050px matches the other page shells of
+     this shape (.cart-page/.checkout-page/.orders-page/.order-detail below). */
+  max-width: 1050px;
   margin: 0 auto;
 }
 
@@ -1123,6 +1134,25 @@ main {
   cursor: pointer;
 }
 
+/* Same box model as .face-analysis__file-button (padding/font-size/border-radius) so the two
+   "Chọn ảnh" entry points line up as a consistent pair — outline instead of solid fill to read as
+   the secondary option. Not `.btn--small` (its `flex: 1` stretched this button to fill the row). */
+.face-analysis__camera-button {
+  background: transparent;
+  color: var(--color-text);
+  border: 1.5px solid var(--color-text);
+  font-size: 0.84rem;
+  font-weight: 500;
+  padding: 0.625rem 1.125rem;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.face-analysis__camera-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .face-analysis__file-name {
   font-size: 0.84rem;
   color: var(--color-text-muted);
@@ -1159,6 +1189,64 @@ main {
   color: var(--color-text-muted);
   text-align: center;
   padding: 1rem;
+}
+
+/* Live camera capture (FaceCameraCapture.tsx) — same 3:4 shape as .face-analysis__preview-box
+   (not .try-on__video-frame's 4:3), so the live feed, the captured review still, and the final
+   analyzed photo all render with no visual jump between steps (AC11). Reuses the absolute-
+   positioned mirrored video/action-button layout technique from .try-on__video-frame/.try-on__actions. */
+.face-analysis__camera-frame {
+  position: relative;
+  width: 100%;
+  max-width: 380px;
+  aspect-ratio: 3 / 4;
+  margin: 0 auto;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #1c1712;
+}
+
+.face-analysis__camera-video,
+.face-analysis__camera-still {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.face-analysis__camera-video {
+  /* Mirror the live preview like a mirror/selfie camera — matches .try-on__video. The captured
+     still is already drawn mirrored onto the canvas in useCameraCapture.ts, so it needs no CSS
+     mirror here. */
+  transform: scaleX(-1);
+}
+
+.face-analysis__camera-actions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  gap: 0.625rem;
+  padding: 0.875rem;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.55), transparent);
+}
+
+.face-analysis__camera-hint {
+  position: absolute;
+  left: 0.875rem;
+  right: 0.875rem;
+  top: 0.875rem;
+  margin: 0;
+  font-size: 0.8rem;
+  text-align: center;
+  color: #f7f3ec;
+}
+
+.face-analysis__camera-hint--error {
+  color: #e8a583;
 }
 
 .face-analysis__tryon-bar {
@@ -1352,9 +1440,63 @@ main {
   margin-top: 0.75rem;
 }
 
+/* Cards here sit in the narrow result-layout sidebar (.face-analysis__recommend-column,
+   ~280-340px), which is now capped to the photo column's height (see .face-analysis__result-layout
+   below) — so each card is a compact thumbnail+text row (same pattern as
+   .face-analysis__history-thumb/-top) instead of the wide vertical card .product-card was
+   originally sized for, and the list scrolls internally if it runs longer than the photo. */
 .face-analysis__recommend-preview .product-grid {
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 1.25rem;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+  padding-right: 0.25rem;
+}
+
+.face-analysis__recommend-preview .product-card {
+  flex-direction: row;
+  flex-wrap: wrap;
+  padding: 0.625rem;
+  border-radius: 8px;
+}
+
+.face-analysis__recommend-preview .product-card__link {
+  display: flex;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.face-analysis__recommend-preview .product-card__image {
+  width: 64px;
+  height: 64px;
+  aspect-ratio: 1 / 1;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.face-analysis__recommend-preview .product-card__body {
+  padding: 0;
+  min-width: 0;
+}
+
+.face-analysis__recommend-preview .product-card__name {
+  font-size: 0.85rem;
+  margin-bottom: 0.15rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.face-analysis__recommend-preview .product-card__shape {
+  font-size: 0.72rem;
+  margin-bottom: 0.25rem;
+}
+
+.face-analysis__recommend-preview .product-card__price {
+  font-size: 0.82rem;
+}
+
+.face-analysis__recommend-preview .product-card__actions {
+  padding: 0.5rem 0 0;
+  gap: 0.4rem;
 }
 
 .face-analysis__recommend-view-all {
@@ -1364,6 +1506,57 @@ main {
   margin-top: 1rem;
   font-weight: 500;
   color: var(--color-text);
+  flex-shrink: 0;
+}
+
+/* Top row once a result (fresh analysis or a selected history item) is active — photo on the
+   left, recommended frames on the right, so "Thử lên ảnh này" is reachable without scrolling
+   (FR4/AC7/AC8). Shape/confidence + measurements render below this, full-width (see
+   FaceAnalysisPage.tsx). Collapses to a single column under 900px (NFR3), the same breakpoint
+   convention already used elsewhere in this file (e.g. .checkout-page__layout).
+
+   Matching the recommend card's height to the photo column and scrolling it internally when the
+   list runs longer can't be done with CSS grid stretch alone — verified empirically (a plain
+   auto-sized grid row sizes to each column's max-content regardless of overflow/min-height
+   tricks on the taller column, so it never actually shrinks to match a shorter sibling). Instead
+   FaceAnalysisPage.tsx measures the photo column's rendered height with a ResizeObserver and
+   applies it as an inline max-height on the recommend card; this class only sets the scroll
+   behavior that height limit then activates. */
+.face-analysis__result-layout {
+  display: grid;
+  grid-template-columns: 1fr minmax(280px, 340px);
+  align-items: start;
+  gap: 1.25rem;
+}
+
+.face-analysis__result-column,
+.face-analysis__recommend-column {
+  min-width: 0;
+}
+
+/* .face-analysis__card's own margin-bottom doesn't collapse through a grid item (grid
+   establishes a new block formatting context), so left uncleared it would get trapped inside
+   .face-analysis__result-column's box — inflating the height FaceAnalysisPage.tsx measures from
+   it by that margin, which throws off the recommend card's matched max-height. Neutralize it
+   here since the grid's own `gap` (and the full-width cards below) already provide spacing. */
+.face-analysis__result-column > .face-analysis__card {
+  margin-bottom: 0;
+}
+
+.face-analysis__recommend-column .face-analysis__card {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+@media (max-width: 900px) {
+  /* The recommend column already sits after the result column in DOM/JSX order, so collapsing
+     to a single column here needs no reordering to keep FR5/AC9's original stacked order. Below
+     this width the two columns no longer share a row, so FaceAnalysisPage.tsx skips applying the
+     measured max-height and the list grows naturally instead. */
+  .face-analysis__result-layout {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ==========================================================================

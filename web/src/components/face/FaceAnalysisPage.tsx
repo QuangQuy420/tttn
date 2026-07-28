@@ -11,6 +11,7 @@ import { useFaceAnalysis } from "@/hooks/useFaceAnalysis";
 import { useStaticFaceOverlay } from "@/hooks/useStaticFaceOverlay";
 import { getAccessToken } from "@/lib/auth/session";
 import { formatFaceShapeVi } from "@/lib/labels";
+import { FaceCameraCapture } from "./FaceCameraCapture";
 import { RecommendationPreview } from "./RecommendationPreview";
 import type { FaceAnalysisResult, FaceMeasurements } from "@/types/face";
 import type { RecommendedProduct } from "@/types/recommendation";
@@ -61,6 +62,10 @@ const TRY_ON_STATUS_HINTS: Partial<Record<string, string>> = {
   detecting: "Đang nhận diện khuôn mặt trong ảnh...",
 };
 
+// Fixed Vietnamese label shown next to "Chọn tệp" for a camera-sourced photo — never a generated
+// filename, since that would be user-facing English text (AC12).
+const CAMERA_CAPTURE_FILE_LABEL = "Ảnh chụp từ camera";
+
 // Matches .design/Try Face Analysis.dc.html. Uploads a face photo (previewed locally while the
 // request is in flight), then shows the shape/confidence + measurements on success.
 // accept list mirrors ImageUploadSlot.tsx (image/jpeg,image/png,image/webp — NFR1).
@@ -69,6 +74,10 @@ export function FaceAnalysisPage() {
   const { result, isLoading, error, analyze } = useFaceAnalysis();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+
+  // Which of the two "Chọn ảnh" entry points is active — "camera" swaps the preview box for the
+  // live camera capture flow and hides the file input so the two can't be triggered at once (T3).
+  const [photoSource, setPhotoSource] = useState<"idle" | "camera">("idle");
 
   // Gate: only a logged-in user may upload/analyze a photo (AC1). Checked on mount, same as
   // AdminGuard — the underlying gateway route also enforces this (401), this is just the UI gate.
@@ -183,6 +192,22 @@ export function FaceAnalysisPage() {
     await analyze(file);
   }
 
+  // Mirrors handleFileChange's pipeline, but the label is a fixed Vietnamese string rather than
+  // `file.name` — a generated camera-capture filename would be user-facing English text (AC12).
+  // photoSource flips back to "idle" right away (same moment previewUrl swaps in) so the preview
+  // box immediately shows the captured photo the normal way, same as a file upload does (T3).
+  async function handleCameraConfirm(file: File) {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(URL.createObjectURL(file));
+    setFileName(CAMERA_CAPTURE_FILE_LABEL);
+    setPhotoSource("idle");
+    await analyze(file);
+  }
+
+  function handleCameraCancel() {
+    setPhotoSource("idle");
+  }
+
   // Deletes one history item (AC1). Confirms first, then removes it from `history` on success and
   // clears `selectedHistoryItem` if that item was the one being previewed (AC6).
   async function handleDeleteHistoryItem(id: string) {
@@ -210,6 +235,46 @@ export function FaceAnalysisPage() {
   const confidencePct = activeResult ? Math.round(activeResult.confidence * 100) : null;
   const isLowConfidence = confidencePct !== null && confidencePct < 70;
 
+  // Whether the top photo+recommendations row is showing — mirrors the condition that row is
+  // gated on below. When true, the "Chọn ảnh" card moves into that row's left column (instead of
+  // rendering full-width above everything) so the recommendations column sits beside the photo
+  // itself, not below the shape/confidence/measurements info (which renders full-width below).
+  const showResultLayout = !isLoading && !error && Boolean(activeResult);
+
+  // Matches the recommend column's card height to the photo column's rendered height, so their
+  // bottom edges line up — a plain CSS grid row can't do this on its own (an "auto" row sizes to
+  // each column's max-content regardless of overflow/min-height tricks on the taller column, so
+  // it never actually shrinks the recommend column to match a shorter photo column; verified by
+  // measuring the real rendered boxes rather than assuming the CSS trick worked). Only applied at
+  // the >900px breakpoint where the two columns actually share a row (see globals.css) — below
+  // that they stack, so the list should just grow naturally instead of being height-capped.
+  const photoColumnRef = useRef<HTMLDivElement>(null);
+  const recommendCardRef = useRef<HTMLDivElement>(null);
+  const [recommendMaxHeight, setRecommendMaxHeight] = useState<number | null>(null);
+
+  useEffect(() => {
+    const photoColumn = photoColumnRef.current;
+    if (!photoColumn) return;
+
+    const mediaQuery = window.matchMedia("(min-width: 901px)");
+
+    function updateHeight() {
+      // Non-null: this closure is only ever created/called after the `!photoColumn` early
+      // return above, and `photoColumn` is a const, so it can't become null afterward.
+      setRecommendMaxHeight(mediaQuery.matches ? photoColumn!.getBoundingClientRect().height : null);
+    }
+
+    const resizeObserver = new ResizeObserver(updateHeight);
+    resizeObserver.observe(photoColumn);
+    mediaQuery.addEventListener("change", updateHeight);
+    updateHeight();
+
+    return () => {
+      resizeObserver.disconnect();
+      mediaQuery.removeEventListener("change", updateHeight);
+    };
+  }, [showResultLayout]);
+
   // Not logged in — don't render the upload UI at all (AC1). We already redirect above; this
   // covers the render before the redirect takes effect and the (unreachable in practice, but
   // safe) case where redirect is blocked.
@@ -227,33 +292,38 @@ export function FaceAnalysisPage() {
     );
   }
 
-  return (
-    <section aria-labelledby="face-analysis-heading" className="face-analysis">
-      <p className="face-analysis__eyebrow">Công cụ phân tích</p>
-      <h1 id="face-analysis-heading" className="face-analysis__title">
-        Phân tích khuôn mặt
-      </h1>
-      <p className="face-analysis__subtitle">
-        Tải lên 1 ảnh chân dung để tìm dáng khuôn mặt và các số đo liên quan — dùng làm cơ sở để
-        gợi ý gọng kính phù hợp.
-      </p>
-
-      <div className="face-analysis__card">
-        <p className="face-analysis__section-label">Chọn ảnh</p>
-        <div className="face-analysis__upload-row">
-          <label className="face-analysis__file-button">
-            Chọn tệp
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              disabled={isLoading}
-              onChange={handleFileChange}
-              aria-label="Tải lên ảnh khuôn mặt"
-            />
-          </label>
-          <span className="face-analysis__file-name">{fileName ?? "Chưa chọn tệp nào"}</span>
-        </div>
-        <div className="face-analysis__preview-frame">
+  // Extracted so it can render either full-width above the results (no result yet, loading, or
+  // error) or as the first item in the left column once the two-column result layout is showing
+  // (showResultLayout) — the recommendations column must sit beside this card, not beside the
+  // measurements list below it.
+  const uploadCard = (
+    <div className="face-analysis__card">
+      <p className="face-analysis__section-label">Chọn ảnh</p>
+      <div className="face-analysis__upload-row">
+        <label className="face-analysis__file-button">
+          Chọn tệp
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            disabled={isLoading || photoSource === "camera"}
+            onChange={handleFileChange}
+            aria-label="Tải lên ảnh khuôn mặt"
+          />
+        </label>
+        <button
+          type="button"
+          className="face-analysis__camera-button"
+          disabled={isLoading || photoSource === "camera"}
+          onClick={() => setPhotoSource("camera")}
+        >
+          Chụp ảnh
+        </button>
+        <span className="face-analysis__file-name">{fileName ?? "Chưa chọn tệp nào"}</span>
+      </div>
+      <div className="face-analysis__preview-frame">
+        {photoSource === "camera" ? (
+          <FaceCameraCapture onConfirm={handleCameraConfirm} onCancel={handleCameraCancel} />
+        ) : (
           <div className="face-analysis__preview-box">
             {selectedFrame ? (
               <canvas ref={overlayCanvasRef} className="face-analysis__preview-image" />
@@ -270,46 +340,81 @@ export function FaceAnalysisPage() {
               </p>
             )}
           </div>
-        </div>
-        {selectedFrame && (
-          <div className="face-analysis__tryon-bar">
-            {overlayStatus !== "ready" && (
-              <p role="status" className="face-analysis__tryon-hint">
-                {overlayStatus === "no-face" || overlayStatus === "multiple-faces" || overlayStatus === "error"
-                  ? overlayErrorMessage
-                  : TRY_ON_STATUS_HINTS[overlayStatus]}
-              </p>
-            )}
-            <button
-              type="button"
-              className="btn btn--outline btn--small"
-              onClick={() => setSelectedFrame(null)}
-            >
-              Xem ảnh gốc
-            </button>
-          </div>
         )}
-        <p className="face-analysis__privacy-note">
-          <svg
-            width="15"
-            height="15"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            aria-hidden="true"
-          >
-            <path d="M12 2l8 4v6c0 5-3.4 8.5-8 10-4.6-1.5-8-5-8-10V6l8-4z" />
-          </svg>
-          Ảnh của bạn được lưu trữ riêng tư và chỉ dùng để phân tích dáng khuôn mặt.
-        </p>
       </div>
+      {selectedFrame && (
+        <div className="face-analysis__tryon-bar">
+          {overlayStatus !== "ready" && (
+            <p role="status" className="face-analysis__tryon-hint">
+              {overlayStatus === "no-face" || overlayStatus === "multiple-faces" || overlayStatus === "error"
+                ? overlayErrorMessage
+                : TRY_ON_STATUS_HINTS[overlayStatus]}
+            </p>
+          )}
+          <button
+            type="button"
+            className="btn btn--outline btn--small"
+            onClick={() => setSelectedFrame(null)}
+          >
+            Xem ảnh gốc
+          </button>
+        </div>
+      )}
+      <p className="face-analysis__privacy-note">
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          aria-hidden="true"
+        >
+          <path d="M12 2l8 4v6c0 5-3.4 8.5-8 10-4.6-1.5-8-5-8-10V6l8-4z" />
+        </svg>
+        Ảnh của bạn được lưu trữ riêng tư và chỉ dùng để phân tích dáng khuôn mặt.
+      </p>
+    </div>
+  );
+
+  return (
+    <section aria-labelledby="face-analysis-heading" className="face-analysis">
+      <p className="face-analysis__eyebrow">Công cụ phân tích</p>
+      <h1 id="face-analysis-heading" className="face-analysis__title">
+        Phân tích khuôn mặt
+      </h1>
+      <p className="face-analysis__subtitle">
+        Tải lên 1 ảnh chân dung để tìm dáng khuôn mặt và các số đo liên quan — dùng làm cơ sở để
+        gợi ý gọng kính phù hợp.
+      </p>
+
+      {!showResultLayout && uploadCard}
 
       {isLoading && <LoadingState label="Đang phân tích ảnh của bạn..." />}
       {!isLoading && error && <ErrorState message={error} />}
 
       {!isLoading && !error && activeResult && (
         <>
+          {/* Top: photo + recommendations side by side, so trying on a suggestion needs no
+              scrolling. Shape/confidence + measurements move below, full-width, since they're
+              read-once info rather than something to click while looking at the photo. */}
+          <div className="face-analysis__result-layout">
+            <div className="face-analysis__result-column" ref={photoColumnRef}>
+              {uploadCard}
+            </div>
+
+            <div className="face-analysis__recommend-column">
+              <div
+                className="face-analysis__card"
+                ref={recommendCardRef}
+                style={{ maxHeight: recommendMaxHeight ?? undefined }}
+              >
+                <p className="face-analysis__section-label">Gọng kính gợi ý cho bạn</p>
+                <RecommendationPreview faceShape={activeResult.faceShape} onTryOnPhoto={setSelectedFrame} />
+              </div>
+            </div>
+          </div>
+
           <div className="face-analysis__card face-analysis__result-card">
             <div className="face-analysis__result-icon" aria-hidden="true">
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#F7F3EC" strokeWidth="1.6">
@@ -358,11 +463,6 @@ export function FaceAnalysisPage() {
           <div className="face-analysis__card">
             <p className="face-analysis__section-label">Số đo khuôn mặt</p>
             <MeasurementsGrid measurements={activeResult.measurements} />
-          </div>
-
-          <div className="face-analysis__card">
-            <p className="face-analysis__section-label">Gọng kính gợi ý cho bạn</p>
-            <RecommendationPreview faceShape={activeResult.faceShape} onTryOnPhoto={setSelectedFrame} />
           </div>
         </>
       )}

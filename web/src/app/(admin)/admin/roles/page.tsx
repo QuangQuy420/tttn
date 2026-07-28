@@ -191,14 +191,14 @@ export default function AdminRolesPage() {
                 {!isLoading && loadError && <ErrorState message={loadError} />}
                 {!isLoading && !loadError && (
                     <div className="admin-table">
-                        <div className="admin-table__row admin-table__row--head">
+                        <div className="admin-table__row admin-table__row--roles admin-table__row--head">
                             <span>Tên vai trò</span>
                             <span>Mô tả</span>
                             <span>Quyền</span>
                             <span></span>
                         </div>
                         {filteredRoles.map((role) => (
-                            <div key={role.id} className="admin-table__row admin-table__row--body">
+                            <div key={role.id} className="admin-table__row admin-table__row--roles admin-table__row--body">
                                 <div>
                                     <div className="admin-table__name">{role.name}</div>
                                 </div>
