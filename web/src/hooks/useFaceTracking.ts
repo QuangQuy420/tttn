@@ -185,9 +185,8 @@ export function useFaceTracking({
 
             // Reference width factor picked so the drawn image roughly spans the eye-to-eye
             // width plus temple margin on each side, a common heuristic for 2D glasses overlays.
-            // Real glasses' front width (lens + bridge) runs ~1.3-1.4x the outer-eye-corner
-            // distance — 2.2 was tried first and drew the frame comically oversized.
-            const drawWidth = eyeDistance * 1.4;
+            // Bumped from 1.4 to 1.6 — frames looked too small relative to the face at 1.4.
+            const drawWidth = eyeDistance * 1.6;
             const drawHeight = drawWidth * (overlayImage.naturalHeight / overlayImage.naturalWidth);
 
             ctx.save();

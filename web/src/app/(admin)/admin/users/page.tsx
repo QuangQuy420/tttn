@@ -145,14 +145,14 @@ export default function AdminUsersPage() {
                 {!isLoading && loadError && <ErrorState message={loadError} />}
                 {!isLoading && !loadError && (
                     <div className="admin-table">
-                        <div className="admin-table__row admin-table__row--head">
+                        <div className="admin-table__row admin-table__row--users admin-table__row--head">
                             <span>Email</span>
                             <span>Tên đăng nhập</span>
                             <span>Vai trò</span>
                             <span></span>
                         </div>
                         {users.map((user) => (
-                            <div key={user.id} className="admin-table__row admin-table__row--body">
+                            <div key={user.id} className="admin-table__row admin-table__row--users admin-table__row--body">
                                 <span>{user.email}</span>
                                 <span>{user.username}</span>
                                 <span>

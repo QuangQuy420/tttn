@@ -69,8 +69,8 @@ export function useStaticFaceOverlay({
         canvas.height,
       );
 
-      // Same 1.4 width factor as useFaceTracking.ts (faceOverlay.ts's tuned heuristic).
-      const drawWidth = eyeDistance * 1.4;
+      // Same 1.6 width factor as useFaceTracking.ts (faceOverlay.ts's tuned heuristic).
+      const drawWidth = eyeDistance * 1.6;
       const drawHeight = drawWidth * (overlayImage.naturalHeight / overlayImage.naturalWidth);
 
       ctx.save();
