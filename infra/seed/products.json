@@ -32,7 +32,7 @@
       "base_price": 590000.00,
       "status": "PUBLISHED",
       "variants": [
-        { "color": "Bạc", "size": "M", "extra_price": 0, "sku_variant": "EB-RIML-025-SLV-M" }
+        { "color": "Bạc", "size": "M", "extra_price": 0, "sku_variant": "EB-RIML-025-SLV-M", "stock": 20 }
       ],
       "images": [
         { "image_url": "/products/frames/eyebuydirect-halden-semi-rimless-main.png", "is_thumbnail": true, "sort_order": 0 },
@@ -55,7 +55,7 @@
       "base_price": 890000.00,
       "status": "PUBLISHED",
       "variants": [
-        { "color": "Bạc", "size": "M", "extra_price": 0, "sku_variant": "VG-AVI-026-SLV-M" }
+        { "color": "Bạc", "size": "M", "extra_price": 0, "sku_variant": "VG-AVI-026-SLV-M", "stock": 15 }
       ],
       "images": [
         { "image_url": "/products/frames/vogue-eyewear-vo4272-aviator-main.png", "is_thumbnail": true, "sort_order": 0 },
@@ -78,7 +78,7 @@
       "base_price": 850000.00,
       "status": "PUBLISHED",
       "variants": [
-        { "color": "Hồng cánh sen", "size": "S", "extra_price": 0, "sku_variant": "VG-CATEYE-027-PNK-S" }
+        { "color": "Hồng cánh sen", "size": "S", "extra_price": 0, "sku_variant": "VG-CATEYE-027-PNK-S", "stock": 8 }
       ],
       "images": [
         { "image_url": "/products/frames/vogue-eyewear-vo5285-cat-eye-main.png", "is_thumbnail": true, "sort_order": 0 },
@@ -101,7 +101,7 @@
       "base_price": 1650000.00,
       "status": "PUBLISHED",
       "variants": [
-        { "color": "Nâu ánh kim", "size": "M", "extra_price": 0, "sku_variant": "CA-AVI-028-BRZ-M" }
+        { "color": "Nâu ánh kim", "size": "M", "extra_price": 0, "sku_variant": "CA-AVI-028-BRZ-M", "stock": 12 }
       ],
       "images": [
         { "image_url": "/products/frames/mt7480_0-removebg-preview.png", "is_thumbnail": true, "sort_order": 0 },
@@ -124,7 +124,7 @@
       "base_price": 990000.00,
       "status": "PUBLISHED",
       "variants": [
-        { "color": "Trong suốt xám", "size": "M", "extra_price": 0, "sku_variant": "WP-RND-029-GRYCRY-M" }
+        { "color": "Trong suốt xám", "size": "M", "extra_price": 0, "sku_variant": "WP-RND-029-GRYCRY-M", "stock": 30 }
       ],
       "images": [
         { "image_url": "/products/frames/pl6426_0-removebg-preview.png", "is_thumbnail": true, "sort_order": 0 },
@@ -147,7 +147,7 @@
       "base_price": 3200000.00,
       "status": "PUBLISHED",
       "variants": [
-        { "color": "Đỏ", "size": "S", "extra_price": 0, "sku_variant": "PS-CATEYE-030-RED-S" }
+        { "color": "Đỏ", "size": "S", "extra_price": 0, "sku_variant": "PS-CATEYE-030-RED-S", "stock": 5 }
       ],
       "images": [
         { "image_url": "/products/frames/pl8380_0-removebg-preview.png", "is_thumbnail": true, "sort_order": 0 },
@@ -170,7 +170,7 @@
       "base_price": 4800000.00,
       "status": "PUBLISHED",
       "variants": [
-        { "color": "Đồi mồi nâu đậm", "size": "M", "extra_price": 0, "sku_variant": "GC-SQR-031-DTOR-M" }
+        { "color": "Đồi mồi nâu đậm", "size": "M", "extra_price": 0, "sku_variant": "GC-SQR-031-DTOR-M", "stock": 10 }
       ],
       "images": [
         { "image_url": "/products/frames/pl8586_0-removebg-preview.png", "is_thumbnail": true, "sort_order": 0 },
@@ -192,7 +192,7 @@
       "base_price": 4200000.00,
       "status": "PUBLISHED",
       "variants": [
-        { "color": "Đồi mồi cam đất", "size": "M", "extra_price": 0, "sku_variant": "PR-SQR-032-ETOR-M" }
+        { "color": "Đồi mồi cam đất", "size": "M", "extra_price": 0, "sku_variant": "PR-SQR-032-ETOR-M", "stock": 18 }
       ],
       "images": [
         { "image_url": "/products/frames/pl8733_0-removebg-preview.png", "is_thumbnail": true, "sort_order": 0 },
@@ -215,7 +215,7 @@
       "base_price": 4100000.00,
       "status": "PUBLISHED",
       "variants": [
-        { "color": "Đen bóng", "size": "M", "extra_price": 0, "sku_variant": "OP-RECT-033-BLK-M" }
+        { "color": "Đen bóng", "size": "M", "extra_price": 0, "sku_variant": "OP-RECT-033-BLK-M", "stock": 7 }
       ],
       "images": [
         { "image_url": "/products/frames/pl8924_0-removebg-preview.png", "is_thumbnail": true, "sort_order": 0 },
@@ -237,7 +237,7 @@
       "base_price": 3400000.00,
       "status": "PUBLISHED",
       "variants": [
-        { "color": "Đồi mồi vàng cam", "size": "L", "extra_price": 0, "sku_variant": "PS-AVI-034-ATOR-L" }
+        { "color": "Đồi mồi vàng cam", "size": "L", "extra_price": 0, "sku_variant": "PS-AVI-034-ATOR-L", "stock": 25 }
       ],
       "images": [
         { "image_url": "/products/frames/pm1176_0-removebg-preview.png", "is_thumbnail": true, "sort_order": 0 },

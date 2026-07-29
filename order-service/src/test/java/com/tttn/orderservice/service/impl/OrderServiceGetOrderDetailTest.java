@@ -1,6 +1,5 @@
 package com.tttn.orderservice.service.impl;
 
-import com.tttn.orderservice.client.PaymentClient;
 import com.tttn.orderservice.client.ProductClient;
 import com.tttn.orderservice.dto.response.OrderResponse;
 import com.tttn.orderservice.entity.Order;
@@ -8,6 +7,7 @@ import com.tttn.orderservice.enums.OrderStatus;
 import com.tttn.orderservice.enums.PaymentStatus;
 import com.tttn.orderservice.exception.ResourceNotFoundException;
 import com.tttn.orderservice.mapper.OrderMapper;
+import com.tttn.orderservice.messaging.OrderSagaEventPublisher;
 import com.tttn.orderservice.repository.OrderRepository;
 import com.tttn.orderservice.service.CartService;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,7 +39,7 @@ class OrderServiceGetOrderDetailTest {
     private ProductClient productClient;
 
     @Mock
-    private PaymentClient paymentClient;
+    private OrderSagaEventPublisher orderSagaEventPublisher;
 
     @Mock
     private OrderMapper orderMapper;
@@ -56,7 +56,7 @@ class OrderServiceGetOrderDetailTest {
                 orderRepository,
                 cartService,
                 productClient,
-                paymentClient,
+                orderSagaEventPublisher,
                 orderMapper
         );
 
@@ -114,7 +114,7 @@ class OrderServiceGetOrderDetailTest {
         verifyNoInteractions(
                 cartService,
                 productClient,
-                paymentClient
+                orderSagaEventPublisher
         );
     }
 
@@ -199,7 +199,7 @@ class OrderServiceGetOrderDetailTest {
         verifyNoInteractions(
                 cartService,
                 productClient,
-                paymentClient
+                orderSagaEventPublisher
         );
     }
 

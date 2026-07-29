@@ -8,6 +8,7 @@ public record ProductVariantResponse(
         String color,
         String size,
         BigDecimal extraPrice,
-        String skuVariant
+        String skuVariant,
+        Integer stock
 ) {
 }

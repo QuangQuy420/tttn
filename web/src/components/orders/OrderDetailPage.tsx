@@ -14,11 +14,11 @@ interface OrderDetailPageProps {
   id: string;
 }
 
-const CANCELLABLE_STATUSES = new Set(["PENDING", "CONFIRMED"]);
+const CANCELLABLE_STATUSES = new Set(["PENDING", "AWAITING_PAYMENT", "CONFIRMED"]);
 
 // FR3/FR4/T18: full order detail (items + status history), plus a cancel action shown only
-// while the order is still PENDING/CONFIRMED (matches order-service's OrderServiceImpl.cancelOrder
-// eligibility check).
+// while the order is still PENDING/AWAITING_PAYMENT/CONFIRMED (matches order-service's
+// OrderServiceImpl.cancelOrder eligibility check).
 export function OrderDetailPage({ id }: OrderDetailPageProps) {
   const [order, setOrder] = useState<Order | null>(null);
   const [isLoading, setIsLoading] = useState(true);

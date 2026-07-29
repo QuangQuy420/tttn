@@ -81,6 +81,7 @@ public class CartServiceImpl implements CartService {
                     item.getQuantity() + request.quantity();
 
             validateQuantity(newQuantity);
+            validateStock(variant, newQuantity);
 
             item.setQuantity(newQuantity);
 
@@ -90,6 +91,8 @@ public class CartServiceImpl implements CartService {
                     variant
             );
         } else {
+            validateStock(variant, request.quantity());
+
             CartItem newItem = createCartItem(
                     product,
                     variant,
@@ -142,6 +145,8 @@ public class CartServiceImpl implements CartService {
 
         ProductVariantResponse variant =
                 findVariant(product, variantId);
+
+        validateStock(variant, request.quantity());
 
         cartItem.setQuantity(request.quantity());
 
@@ -481,6 +486,24 @@ public class CartServiceImpl implements CartService {
             throw new BadRequestException(
                     "Số lượng sản phẩm phải từ 1 đến "
                             + MAX_ITEM_QUANTITY
+            );
+        }
+    }
+
+    private void validateStock(
+            ProductVariantResponse variant,
+            int desiredQuantity
+    ) {
+        int availableStock =
+                variant.stock() == null
+                        ? 0
+                        : variant.stock();
+
+        if (desiredQuantity > availableStock) {
+            throw new BadRequestException(
+                    "Chỉ còn "
+                            + availableStock
+                            + " sản phẩm trong kho"
             );
         }
     }

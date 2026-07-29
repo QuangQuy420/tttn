@@ -53,6 +53,9 @@ public class Order {
     @Column(name = "payment_id")
     private UUID paymentId;
 
+    @Column(name = "transaction_code", length = 100)
+    private String transactionCode;
+
     @Column(name = "payment_method", length = 30)
     private String paymentMethod;
 

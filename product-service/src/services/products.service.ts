@@ -15,6 +15,7 @@ import { IProductFaceShapeRepository } from '../repositories/product-face-shape.
 import { IBrandRepository } from '../repositories/brand.repository';
 import { ICategoryRepository } from '../repositories/category.repository';
 import { IProductEventPublisher } from '../repositories/product-event-publisher.repository';
+import { IInventoryRepository } from '../repositories/inventory.repository';
 import {
   PRODUCT_REPOSITORY,
   PRODUCT_VARIANT_REPOSITORY,
@@ -23,6 +24,7 @@ import {
   BRAND_REPOSITORY,
   CATEGORY_REPOSITORY,
   PRODUCT_EVENT_PUBLISHER,
+  INVENTORY_REPOSITORY,
 } from '../repositories/tokens';
 import { ListProductsQueryDto } from '../routes/dto/list-products-query.dto';
 import { PaginatedResponseDto } from '../routes/dto/paginated-response.dto';
@@ -52,6 +54,8 @@ export class ProductsService {
     private readonly categoryRepository: ICategoryRepository,
     @Inject(PRODUCT_EVENT_PUBLISHER)
     private readonly eventPublisher: IProductEventPublisher,
+    @Inject(INVENTORY_REPOSITORY)
+    private readonly inventoryRepository: IInventoryRepository,
   ) {}
 
   async findAll(
@@ -115,7 +119,20 @@ export class ProductsService {
       this.faceShapeRepository.findByProductIds([id]),
     ]);
 
-    return this.toResponseDto(product, variants, images, faceShapes);
+    // stock (FR7) is only sourced here — order-service's single call point for pricing
+    // (GET /products/:id) — not in findAll()/the catalog listing endpoint.
+    const stockByVariantId =
+      await this.inventoryRepository.findAvailableByVariantIds(
+        variants.map((variant) => variant.id),
+      );
+
+    return this.toResponseDto(
+      product,
+      variants,
+      images,
+      faceShapes,
+      stockByVariantId,
+    );
   }
 
   async create(dto: CreateProductDto): Promise<ProductResponseDto> {
@@ -255,6 +272,7 @@ export class ProductsService {
     allVariants: ProductVariant[],
     allImages: ProductImage[],
     allFaceShapes: ProductFaceShape[],
+    stockByVariantId?: Map<string, number>,
   ): ProductResponseDto {
     if (!product.brand || !product.category) {
       throw new Error(
@@ -292,6 +310,11 @@ export class ProductsService {
         size: variant.size,
         extraPrice: variant.extraPrice,
         skuVariant: variant.skuVariant,
+        // undefined (omitted from JSON) when the caller (findAll()) didn't pass a stock
+        // map at all; defaults to 0 for a variant with no ps_inventory row when it did.
+        stock: stockByVariantId
+          ? (stockByVariantId.get(variant.id) ?? 0)
+          : undefined,
       }));
     dto.images = allImages
       .filter((image) => image.productId === product.id)

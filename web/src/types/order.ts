@@ -6,6 +6,7 @@
 // Mirrors com.tttn.orderservice.enums.OrderStatus.
 export type OrderStatus =
   | "PENDING"
+  | "AWAITING_PAYMENT"
   | "CONFIRMED"
   | "PROCESSING"
   | "SHIPPING"

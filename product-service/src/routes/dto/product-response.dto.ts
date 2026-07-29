@@ -21,6 +21,13 @@ export class ProductVariantResponseDto {
   size: string;
   extraPrice: number;
   skuVariant: string;
+  /**
+   * `quantity - reservedQuantity` (FR7), 0 if the variant has no `ps_inventory` row.
+   * Only populated on `GET /products/:id` (`ProductsService.findOne()`) — the only path
+   * order-service calls for pricing/stock; `findAll()`/the catalog listing endpoint never
+   * sets this, so it's left `undefined` (omitted from the JSON body) there.
+   */
+  stock?: number;
 }
 
 export class ProductImageResponseDto {

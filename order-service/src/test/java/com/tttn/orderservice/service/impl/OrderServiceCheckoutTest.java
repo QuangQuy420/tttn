@@ -1,18 +1,19 @@
 package com.tttn.orderservice.service.impl;
 
-import com.tttn.orderservice.client.PaymentClient;
 import com.tttn.orderservice.client.ProductClient;
 import com.tttn.orderservice.dto.request.CheckoutRequest;
 import com.tttn.orderservice.dto.response.CheckoutResponse;
-import com.tttn.orderservice.dto.response.PaymentCreationResponse;
 import com.tttn.orderservice.dto.response.ProductResponse;
 import com.tttn.orderservice.dto.response.ProductVariantResponse;
 import com.tttn.orderservice.entity.Order;
+import com.tttn.orderservice.entity.OrderItem;
 import com.tttn.orderservice.enums.OrderStatus;
 import com.tttn.orderservice.enums.PaymentStatus;
 import com.tttn.orderservice.exception.BadRequestException;
+import com.tttn.orderservice.exception.ExternalServiceException;
 import com.tttn.orderservice.exception.ResourceNotFoundException;
 import com.tttn.orderservice.mapper.OrderMapper;
+import com.tttn.orderservice.messaging.OrderSagaEventPublisher;
 import com.tttn.orderservice.model.cart.Cart;
 import com.tttn.orderservice.model.cart.CartItem;
 import com.tttn.orderservice.repository.OrderRepository;
@@ -49,7 +50,7 @@ class OrderServiceCheckoutTest {
     private ProductClient productClient;
 
     @Mock
-    private PaymentClient paymentClient;
+    private OrderSagaEventPublisher orderSagaEventPublisher;
 
     @Mock
     private OrderMapper orderMapper;
@@ -59,7 +60,6 @@ class OrderServiceCheckoutTest {
     private UUID userId;
     private UUID productId;
     private UUID variantId;
-    private UUID paymentId;
 
     private CheckoutRequest checkoutRequest;
 
@@ -69,14 +69,13 @@ class OrderServiceCheckoutTest {
                 orderRepository,
                 cartService,
                 productClient,
-                paymentClient,
+                orderSagaEventPublisher,
                 orderMapper
         );
 
         userId = UUID.randomUUID();
         productId = UUID.randomUUID();
         variantId = UUID.randomUUID();
-        paymentId = UUID.randomUUID();
 
         checkoutRequest = new CheckoutRequest(
                 "Nguyễn Văn A",
@@ -114,13 +113,6 @@ class OrderServiceCheckoutTest {
                     )
             );
 
-            PaymentCreationResponse paymentResponse =
-                    createPaymentResponse(
-                            paymentId,
-                            PaymentStatus.PENDING,
-                            "https://payment.example.com/pay"
-                    );
-
             when(cartService.getCartEntity(userId))
                     .thenReturn(cart);
 
@@ -129,14 +121,6 @@ class OrderServiceCheckoutTest {
 
             when(orderRepository.save(any(Order.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
-
-            when(paymentClient.createPayment(
-                    nullable(UUID.class),
-                    eq(userId),
-                    anyString(),
-                    eq(new BigDecimal("2400000")),
-                    eq("VNPAY")
-            )).thenReturn(paymentResponse);
 
             CheckoutResponse response =
                     orderService.checkout(userId, checkoutRequest);
@@ -150,41 +134,31 @@ class OrderServiceCheckoutTest {
                     response.totalAmount()
             );
 
-//            assertEquals(
-//                    OrderStatus.PENDING,
-//                    response.status()
-//            );
             assertEquals(OrderStatus.PENDING, response.orderStatus());
-            assertEquals(
-                    paymentId,
-                    response.paymentId()
-            );
+            assertNull(response.paymentId());
 
             assertEquals(
-                    PaymentStatus.PENDING,
+                    PaymentStatus.UNPAID,
                     response.paymentStatus()
             );
 
-            assertEquals(
-                    "https://payment.example.com/pay",
-                    response.paymentUrl()
-            );
+            assertNull(response.paymentUrl());
 
             verify(cartService).getCartEntity(userId);
             verify(productClient).getProductById(productId);
 
-            verify(paymentClient).createPayment(
-                    nullable(UUID.class),
-                    eq(userId),
-                    anyString(),
-                    eq(new BigDecimal("2400000")),
-                    eq("VNPAY")
+            ArgumentCaptor<Order> orderCaptor =
+                    ArgumentCaptor.forClass(Order.class);
+
+            verify(orderRepository, times(1))
+                    .save(orderCaptor.capture());
+
+            Order savedOrder = orderCaptor.getValue();
+
+            verify(orderSagaEventPublisher).publishStockReserveRequested(
+                    savedOrder.getId(),
+                    savedOrder.getItems()
             );
-
-            verify(orderRepository, times(2))
-                    .save(any(Order.class));
-
-            verify(cartService).clearCart(userId);
         }
 
         @Test
@@ -210,13 +184,6 @@ class OrderServiceCheckoutTest {
                     )
             );
 
-            PaymentCreationResponse paymentResponse =
-                    createPaymentResponse(
-                            paymentId,
-                            PaymentStatus.UNPAID,
-                            null
-                    );
-
             when(cartService.getCartEntity(userId))
                     .thenReturn(cart);
 
@@ -225,14 +192,6 @@ class OrderServiceCheckoutTest {
 
             when(orderRepository.save(any(Order.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
-
-            when(paymentClient.createPayment(
-                    nullable(UUID.class),
-                    eq(userId),
-                    anyString(),
-                    eq(new BigDecimal("1650000")),
-                    eq("VNPAY")
-            )).thenReturn(paymentResponse);
 
             CheckoutResponse response =
                     orderService.checkout(userId, checkoutRequest);
@@ -245,10 +204,10 @@ class OrderServiceCheckoutTest {
             ArgumentCaptor<Order> orderCaptor =
                     ArgumentCaptor.forClass(Order.class);
 
-            verify(orderRepository, times(2))
+            verify(orderRepository, times(1))
                     .save(orderCaptor.capture());
 
-            Order savedOrder = orderCaptor.getAllValues().get(0);
+            Order savedOrder = orderCaptor.getValue();
 
             assertEquals(
                     new BigDecimal("1650000"),
@@ -288,13 +247,6 @@ class OrderServiceCheckoutTest {
                     )
             );
 
-            PaymentCreationResponse paymentResponse =
-                    createPaymentResponse(
-                            paymentId,
-                            PaymentStatus.UNPAID,
-                            null
-                    );
-
             when(cartService.getCartEntity(userId))
                     .thenReturn(cart);
 
@@ -303,14 +255,6 @@ class OrderServiceCheckoutTest {
 
             when(orderRepository.save(any(Order.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
-
-            when(paymentClient.createPayment(
-                    nullable(UUID.class),
-                    eq(userId),
-                    anyString(),
-                    eq(new BigDecimal("1500000")),
-                    eq("VNPAY")
-            )).thenReturn(paymentResponse);
 
             CheckoutResponse response =
                     orderService.checkout(userId, checkoutRequest);
@@ -323,10 +267,10 @@ class OrderServiceCheckoutTest {
             ArgumentCaptor<Order> orderCaptor =
                     ArgumentCaptor.forClass(Order.class);
 
-            verify(orderRepository, times(2))
+            verify(orderRepository, times(1))
                     .save(orderCaptor.capture());
 
-            Order createdOrder = orderCaptor.getAllValues().get(0);
+            Order createdOrder = orderCaptor.getValue();
 
             assertEquals(
                     new BigDecimal("750000"),
@@ -381,13 +325,6 @@ class OrderServiceCheckoutTest {
             BigDecimal expectedTotal =
                     new BigDecimal("2450000");
 
-            PaymentCreationResponse paymentResponse =
-                    createPaymentResponse(
-                            paymentId,
-                            PaymentStatus.PENDING,
-                            "payment-url"
-                    );
-
             when(cartService.getCartEntity(userId))
                     .thenReturn(cart);
 
@@ -400,14 +337,6 @@ class OrderServiceCheckoutTest {
             when(orderRepository.save(any(Order.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
 
-            when(paymentClient.createPayment(
-                    nullable(UUID.class),
-                    eq(userId),
-                    anyString(),
-                    eq(expectedTotal),
-                    eq("VNPAY")
-            )).thenReturn(paymentResponse);
-
             CheckoutResponse response =
                     orderService.checkout(userId, checkoutRequest);
 
@@ -419,10 +348,10 @@ class OrderServiceCheckoutTest {
             ArgumentCaptor<Order> orderCaptor =
                     ArgumentCaptor.forClass(Order.class);
 
-            verify(orderRepository, times(2))
+            verify(orderRepository, times(1))
                     .save(orderCaptor.capture());
 
-            Order createdOrder = orderCaptor.getAllValues().get(0);
+            Order createdOrder = orderCaptor.getValue();
 
             assertEquals(2, createdOrder.getItems().size());
 
@@ -436,8 +365,6 @@ class OrderServiceCheckoutTest {
 
             verify(productClient)
                     .getProductById(secondProductId);
-
-            verify(cartService).clearCart(userId);
         }
 
         @Test
@@ -463,13 +390,6 @@ class OrderServiceCheckoutTest {
                     )
             );
 
-            PaymentCreationResponse paymentResponse =
-                    createPaymentResponse(
-                            paymentId,
-                            PaymentStatus.UNPAID,
-                            null
-                    );
-
             when(cartService.getCartEntity(userId))
                     .thenReturn(cart);
 
@@ -479,23 +399,15 @@ class OrderServiceCheckoutTest {
             when(orderRepository.save(any(Order.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
 
-            when(paymentClient.createPayment(
-                    nullable(UUID.class),
-                    eq(userId),
-                    anyString(),
-                    eq(new BigDecimal("100000")),
-                    eq("VNPAY")
-            )).thenReturn(paymentResponse);
-
             orderService.checkout(userId, checkoutRequest);
 
             ArgumentCaptor<Order> orderCaptor =
                     ArgumentCaptor.forClass(Order.class);
 
-            verify(orderRepository, times(2))
+            verify(orderRepository, times(1))
                     .save(orderCaptor.capture());
 
-            Order createdOrder = orderCaptor.getAllValues().get(0);
+            Order createdOrder = orderCaptor.getValue();
 
             assertEquals(userId, createdOrder.getUserId());
 
@@ -561,13 +473,6 @@ class OrderServiceCheckoutTest {
                     )
             );
 
-            PaymentCreationResponse paymentResponse =
-                    createPaymentResponse(
-                            paymentId,
-                            PaymentStatus.UNPAID,
-                            null
-                    );
-
             when(cartService.getCartEntity(userId))
                     .thenReturn(cart);
 
@@ -577,23 +482,15 @@ class OrderServiceCheckoutTest {
             when(orderRepository.save(any(Order.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
 
-            when(paymentClient.createPayment(
-                    nullable(UUID.class),
-                    eq(userId),
-                    anyString(),
-                    any(BigDecimal.class),
-                    eq("VNPAY")
-            )).thenReturn(paymentResponse);
-
             orderService.checkout(userId, checkoutRequest);
 
             ArgumentCaptor<Order> orderCaptor =
                     ArgumentCaptor.forClass(Order.class);
 
-            verify(orderRepository, times(2))
+            verify(orderRepository, times(1))
                     .save(orderCaptor.capture());
 
-            Order createdOrder = orderCaptor.getAllValues().get(0);
+            Order createdOrder = orderCaptor.getValue();
 
             assertNotNull(createdOrder.getStatusHistories());
             assertEquals(1, createdOrder.getStatusHistories().size());
@@ -627,13 +524,13 @@ class OrderServiceCheckoutTest {
         }
 
         @Test
-        @DisplayName("Checkout phải cập nhật paymentId và paymentStatus")
-        void checkout_ShouldUpdatePaymentInformation() {
+        @DisplayName("Checkout phải gửi sự kiện giữ hàng với đúng danh sách sản phẩm")
+        void checkout_ShouldPublishStockReserveRequestedWithOrderItems() {
             Cart cart = createCart(
                     createCartItem(
                             productId,
                             variantId,
-                            1,
+                            3,
                             "image-url"
                     )
             );
@@ -649,13 +546,6 @@ class OrderServiceCheckoutTest {
                     )
             );
 
-            PaymentCreationResponse paymentResponse =
-                    createPaymentResponse(
-                            paymentId,
-                            PaymentStatus.PAID,
-                            "payment-url"
-                    );
-
             when(cartService.getCartEntity(userId))
                     .thenReturn(cart);
 
@@ -665,40 +555,22 @@ class OrderServiceCheckoutTest {
             when(orderRepository.save(any(Order.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
 
-            when(paymentClient.createPayment(
-                    nullable(UUID.class),
-                    eq(userId),
-                    anyString(),
-                    any(BigDecimal.class),
-                    eq("VNPAY")
-            )).thenReturn(paymentResponse);
+            orderService.checkout(userId, checkoutRequest);
 
-            CheckoutResponse response =
-                    orderService.checkout(userId, checkoutRequest);
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<List<OrderItem>> itemsCaptor =
+                    ArgumentCaptor.forClass(List.class);
 
-            assertEquals(paymentId, response.paymentId());
-            assertEquals(
-                    PaymentStatus.PAID,
-                    response.paymentStatus()
+            verify(orderSagaEventPublisher).publishStockReserveRequested(
+                    isNull(),
+                    itemsCaptor.capture()
             );
 
-            ArgumentCaptor<Order> orderCaptor =
-                    ArgumentCaptor.forClass(Order.class);
+            List<OrderItem> publishedItems = itemsCaptor.getValue();
 
-            verify(orderRepository, times(2))
-                    .save(orderCaptor.capture());
-
-            Order updatedOrder = orderCaptor.getAllValues().get(1);
-
-            assertEquals(
-                    paymentId,
-                    updatedOrder.getPaymentId()
-            );
-
-            assertEquals(
-                    PaymentStatus.PAID,
-                    updatedOrder.getPaymentStatus()
-            );
+            assertEquals(1, publishedItems.size());
+            assertEquals(variantId, publishedItems.get(0).getVariantId());
+            assertEquals(3, publishedItems.get(0).getQuantity());
         }
     }
 
@@ -730,7 +602,7 @@ class OrderServiceCheckoutTest {
 
             verifyNoInteractions(
                     productClient,
-                    paymentClient,
+                    orderSagaEventPublisher,
                     orderRepository
             );
 
@@ -765,7 +637,7 @@ class OrderServiceCheckoutTest {
 
             verifyNoInteractions(
                     productClient,
-                    paymentClient,
+                    orderSagaEventPublisher,
                     orderRepository
             );
 
@@ -821,7 +693,7 @@ class OrderServiceCheckoutTest {
             verify(orderRepository, never())
                     .save(any(Order.class));
 
-            verifyNoInteractions(paymentClient);
+            verifyNoInteractions(orderSagaEventPublisher);
 
             verify(cartService, never())
                     .clearCart(any(UUID.class));
@@ -866,15 +738,15 @@ class OrderServiceCheckoutTest {
             verify(orderRepository, never())
                     .save(any(Order.class));
 
-            verifyNoInteractions(paymentClient);
+            verifyNoInteractions(orderSagaEventPublisher);
 
             verify(cartService, never())
                     .clearCart(any(UUID.class));
         }
 
         @Test
-        @DisplayName("Không xóa giỏ hàng khi tạo payment thất bại")
-        void checkout_WhenPaymentCreationFails_ShouldNotClearCart() {
+        @DisplayName("Ném ngoại lệ khi gửi sự kiện giữ hàng thất bại")
+        void checkout_WhenStockReserveRequestPublishFails_ShouldPropagateException() {
             Cart cart = createCart(
                     createCartItem(
                             productId,
@@ -904,21 +776,16 @@ class OrderServiceCheckoutTest {
             when(orderRepository.save(any(Order.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
 
-            when(paymentClient.createPayment(
-                    nullable(UUID.class),
-                    eq(userId),
-                    anyString(),
-                    any(BigDecimal.class),
-                    eq("VNPAY")
-            )).thenThrow(
-                    new RuntimeException(
-                            "Payment service unavailable"
+            doThrow(
+                    new ExternalServiceException(
+                            "Không thể gửi yêu cầu giữ hàng"
                     )
-            );
+            ).when(orderSagaEventPublisher)
+                    .publishStockReserveRequested(any(), anyList());
 
-            RuntimeException exception =
+            ExternalServiceException exception =
                     assertThrows(
-                            RuntimeException.class,
+                            ExternalServiceException.class,
                             () -> orderService.checkout(
                                     userId,
                                     checkoutRequest
@@ -926,7 +793,7 @@ class OrderServiceCheckoutTest {
                     );
 
             assertEquals(
-                    "Payment service unavailable",
+                    "Không thể gửi yêu cầu giữ hàng",
                     exception.getMessage()
             );
 
@@ -975,7 +842,8 @@ class OrderServiceCheckoutTest {
                 "Black",
                 "M",
                 extraPrice,
-                "GLASSES-BLACK-M"
+                "GLASSES-BLACK-M",
+                100
         );
     }
 
@@ -1003,20 +871,6 @@ class OrderServiceCheckoutTest {
                 List.of("OVAL"),
                 null,
                 null
-        );
-    }
-
-    private PaymentCreationResponse createPaymentResponse(
-            UUID id,
-            PaymentStatus status,
-            String paymentUrl
-    ) {
-        return new PaymentCreationResponse(
-                id,
-                null,
-                status,
-                paymentUrl,
-                "TXN-001"
         );
     }
 }

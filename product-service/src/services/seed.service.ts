@@ -5,12 +5,14 @@ import { ICategoryRepository } from '../repositories/category.repository';
 import { IProductRepository } from '../repositories/product.repository';
 import { IProductVariantRepository } from '../repositories/product-variant.repository';
 import { IProductFaceShapeRepository } from '../repositories/product-face-shape.repository';
+import { IInventoryRepository } from '../repositories/inventory.repository';
 import {
   BRAND_REPOSITORY,
   CATEGORY_REPOSITORY,
   PRODUCT_REPOSITORY,
   PRODUCT_VARIANT_REPOSITORY,
   PRODUCT_FACE_SHAPE_REPOSITORY,
+  INVENTORY_REPOSITORY,
 } from '../repositories/tokens';
 import { ProductImagesService } from './product-images.service';
 import { FrameShape } from '../db/enums/frame-shape.enum';
@@ -35,6 +37,7 @@ interface SeedVariantInput {
   size: string;
   extra_price?: number;
   sku_variant: string;
+  stock?: number;
 }
 
 interface SeedImageInput {
@@ -81,9 +84,9 @@ const MIN_PRODUCTS = 10;
 
 /**
  * Loads `infra/seed/products.json` (brands/categories/products, each product nesting
- * its own variants[]/images[]) into `product_db`. Only brands/categories/products/
- * variants/images are seeded (Q10) — inventory/tags/product_tags/ratings/
- * face_shape_styles stay empty this sprint.
+ * its own variants[]/images[]) into `product_db`. Brands/categories/products/variants/
+ * images are seeded (Q10), plus one `ps_inventory` row per variant (checkout saga plan,
+ * T-PS-7) — tags/product_tags/ratings/face_shape_styles stay empty this sprint.
  *
  * Idempotent by natural key so re-running (e.g. on every `docker compose up`) doesn't
  * duplicate rows: brand by `name`, category by `slug`, product by `sku`, variant by
@@ -105,6 +108,8 @@ export class SeedService {
     private readonly variantRepository: IProductVariantRepository,
     @Inject(PRODUCT_FACE_SHAPE_REPOSITORY)
     private readonly faceShapeRepository: IProductFaceShapeRepository,
+    @Inject(INVENTORY_REPOSITORY)
+    private readonly inventoryRepository: IInventoryRepository,
     private readonly productImagesService: ProductImagesService,
   ) {}
 
@@ -302,12 +307,17 @@ export class SeedService {
     let imagesCreated = 0;
     try {
       for (const variantInput of productInput.variants ?? []) {
-        await this.variantRepository.create({
+        const variant = await this.variantRepository.create({
           productId: product.id,
           color: variantInput.color,
           size: variantInput.size,
           extraPrice: variantInput.extra_price ?? 0,
           skuVariant: variantInput.sku_variant,
+        });
+        await this.inventoryRepository.create({
+          variantId: variant.id,
+          quantity: variantInput.stock ?? 0,
+          reservedQuantity: 0,
         });
         variantsCreated += 1;
       }

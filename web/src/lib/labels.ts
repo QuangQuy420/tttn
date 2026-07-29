@@ -74,6 +74,7 @@ export const GENDER_TARGETS: GenderTarget[] = ["UNISEX", "MALE", "FEMALE"];
 // Order status labels — mirrors order-service's OrderStatus enum (see @/types/order).
 export const ORDER_STATUS_LABELS_VI: Record<OrderStatus, string> = {
   PENDING: "Chờ xác nhận",
+  AWAITING_PAYMENT: "Đang chờ thanh toán",
   CONFIRMED: "Đã xác nhận",
   PROCESSING: "Đang xử lý",
   SHIPPING: "Đang giao",
@@ -89,6 +90,7 @@ export function formatOrderStatusVi(status: OrderStatus): string {
 // Fixed display order for the order-status filter select.
 export const ORDER_STATUSES: OrderStatus[] = [
   "PENDING",
+  "AWAITING_PAYMENT",
   "CONFIRMED",
   "PROCESSING",
   "SHIPPING",

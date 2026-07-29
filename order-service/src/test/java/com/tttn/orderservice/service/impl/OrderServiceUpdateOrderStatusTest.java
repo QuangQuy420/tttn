@@ -1,6 +1,5 @@
 package com.tttn.orderservice.service.impl;
 
-import com.tttn.orderservice.client.PaymentClient;
 import com.tttn.orderservice.client.ProductClient;
 import com.tttn.orderservice.dto.request.UpdateOrderStatusRequest;
 import com.tttn.orderservice.dto.response.OrderResponse;
@@ -11,6 +10,7 @@ import com.tttn.orderservice.enums.PaymentStatus;
 import com.tttn.orderservice.exception.BadRequestException;
 import com.tttn.orderservice.exception.ResourceNotFoundException;
 import com.tttn.orderservice.mapper.OrderMapper;
+import com.tttn.orderservice.messaging.OrderSagaEventPublisher;
 import com.tttn.orderservice.repository.OrderRepository;
 import com.tttn.orderservice.service.CartService;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,7 +44,7 @@ class OrderServiceUpdateOrderStatusTest {
     private ProductClient productClient;
 
     @Mock
-    private PaymentClient paymentClient;
+    private OrderSagaEventPublisher orderSagaEventPublisher;
 
     @Mock
     private OrderMapper orderMapper;
@@ -63,7 +63,7 @@ class OrderServiceUpdateOrderStatusTest {
                 orderRepository,
                 cartService,
                 productClient,
-                paymentClient,
+                orderSagaEventPublisher,
                 orderMapper
         );
 
@@ -72,9 +72,9 @@ class OrderServiceUpdateOrderStatusTest {
     }
 
     @Test
-    @DisplayName("Chuyển trạng thái từ PENDING sang CONFIRMED thành công")
-    void updateOrderStatus_FromPendingToConfirmed_ShouldSucceed() {
-        assertValidTransition(
+    @DisplayName("Không cho phép chuyển trực tiếp từ PENDING sang CONFIRMED")
+    void updateOrderStatus_FromPendingToConfirmed_ShouldThrowException() {
+        assertInvalidTransition(
                 OrderStatus.PENDING,
                 OrderStatus.CONFIRMED
         );
@@ -137,7 +137,7 @@ class OrderServiceUpdateOrderStatusTest {
     @Test
     @DisplayName("Cập nhật trạng thái và trả đúng kết quả từ mapper")
     void updateOrderStatus_ShouldReturnMapperResult() {
-        Order order = createOrder(OrderStatus.PENDING);
+        Order order = createOrder(OrderStatus.AWAITING_PAYMENT);
         OrderResponse expectedResponse = mock(OrderResponse.class);
 
         when(request.status())
@@ -267,7 +267,7 @@ class OrderServiceUpdateOrderStatusTest {
     @Test
     @DisplayName("Mapper nhận entity do repository save trả về")
     void updateOrderStatus_ShouldMapSavedEntity() {
-        Order foundOrder = createOrder(OrderStatus.PENDING);
+        Order foundOrder = createOrder(OrderStatus.AWAITING_PAYMENT);
         Order savedOrder = createOrder(OrderStatus.CONFIRMED);
         OrderResponse expectedResponse = mock(OrderResponse.class);
 
@@ -302,7 +302,7 @@ class OrderServiceUpdateOrderStatusTest {
     @Test
     @DisplayName("Thực hiện tìm đơn, lưu đơn rồi mapping theo đúng thứ tự")
     void updateOrderStatus_ShouldExecuteInCorrectOrder() {
-        Order order = createOrder(OrderStatus.PENDING);
+        Order order = createOrder(OrderStatus.AWAITING_PAYMENT);
 
         when(request.status())
                 .thenReturn(OrderStatus.CONFIRMED);
@@ -494,7 +494,7 @@ class OrderServiceUpdateOrderStatusTest {
     @Test
     @DisplayName("Không sử dụng các dependency không liên quan")
     void updateOrderStatus_ShouldNotUseUnrelatedDependencies() {
-        Order order = createOrder(OrderStatus.PENDING);
+        Order order = createOrder(OrderStatus.AWAITING_PAYMENT);
 
         when(request.status())
                 .thenReturn(OrderStatus.CONFIRMED);
@@ -520,7 +520,7 @@ class OrderServiceUpdateOrderStatusTest {
         verifyNoInteractions(
                 cartService,
                 productClient,
-                paymentClient
+                orderSagaEventPublisher
         );
     }
 

@@ -7,6 +7,7 @@ import { IProductFaceShapeRepository } from '../repositories/product-face-shape.
 import { IBrandRepository } from '../repositories/brand.repository';
 import { ICategoryRepository } from '../repositories/category.repository';
 import { IProductEventPublisher } from '../repositories/product-event-publisher.repository';
+import { IInventoryRepository } from '../repositories/inventory.repository';
 import { Product } from '../db/entities/product.entity';
 import { ProductVariant } from '../db/entities/product-variant.entity';
 import { ProductImage } from '../db/entities/product-image.entity';
@@ -84,6 +85,7 @@ describe('ProductsService', () => {
   let brandRepository: jest.Mocked<IBrandRepository>;
   let categoryRepository: jest.Mocked<ICategoryRepository>;
   let eventPublisher: jest.Mocked<IProductEventPublisher>;
+  let inventoryRepository: jest.Mocked<IInventoryRepository>;
   let service: ProductsService;
 
   beforeEach(() => {
@@ -130,6 +132,12 @@ describe('ProductsService', () => {
     eventPublisher = {
       publish: jest.fn(),
     };
+    inventoryRepository = {
+      reserve: jest.fn(),
+      release: jest.fn(),
+      findAvailableByVariantIds: jest.fn().mockResolvedValue(new Map()),
+      create: jest.fn(),
+    };
 
     service = new ProductsService(
       productRepository,
@@ -139,6 +147,7 @@ describe('ProductsService', () => {
       brandRepository,
       categoryRepository,
       eventPublisher,
+      inventoryRepository,
     );
   });
 
