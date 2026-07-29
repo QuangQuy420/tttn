@@ -1,0 +1,211 @@
+package com.tttn.orderservice.messaging;
+
+import com.tttn.orderservice.config.RabbitMqConfig;
+import com.tttn.orderservice.entity.Order;
+import com.tttn.orderservice.entity.OrderStatusHistory;
+import com.tttn.orderservice.enums.OrderStatus;
+import com.tttn.orderservice.enums.PaymentStatus;
+import com.tttn.orderservice.messaging.event.OrderSagaReplyEvent;
+import com.tttn.orderservice.repository.OrderRepository;
+import com.tttn.orderservice.service.CartService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.amqp.support.AmqpHeaders;
+import org.springframework.messaging.handler.annotation.Header;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+
+/**
+ * Consumes checkout-saga replies off the durable queue bound to {@code stock.reserved} /
+ * {@code stock.reserve.rejected} / {@code payment.completed} / {@code payment.failed}
+ * (see {@link RabbitMqConfig}). Every branch re-loads the order and checks its CURRENT status
+ * before acting (NFR2/AC8) — RabbitMQ delivers at-least-once, and a user action (cancel) can
+ * race a saga reply, so a stale or duplicate message must never blindly advance the order.
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class OrderSagaEventListener {
+
+    private final OrderRepository orderRepository;
+    private final OrderSagaEventPublisher orderSagaEventPublisher;
+    private final CartService cartService;
+
+    @RabbitListener(queues = RabbitMqConfig.ORDER_SERVICE_QUEUE)
+    @Transactional
+    public void handle(
+            OrderSagaReplyEvent event,
+            @Header(AmqpHeaders.RECEIVED_ROUTING_KEY) String routingKey
+    ) {
+        Order order = orderRepository.findById(event.orderId()).orElse(null);
+
+        if (order == null) {
+            log.warn(
+                    "Bỏ qua sự kiện saga '{}' cho đơn hàng không tồn tại: {}",
+                    routingKey,
+                    event.orderId()
+            );
+            return;
+        }
+
+        switch (routingKey) {
+            case OrderSagaRoutingKeys.STOCK_RESERVED ->
+                    handleStockReserved(order);
+
+            case OrderSagaRoutingKeys.STOCK_RESERVE_REJECTED ->
+                    handleStockReserveRejected(order, event);
+
+            case OrderSagaRoutingKeys.PAYMENT_COMPLETED ->
+                    handlePaymentCompleted(order, event);
+
+            case OrderSagaRoutingKeys.PAYMENT_FAILED ->
+                    handlePaymentFailed(order, event);
+
+            default -> log.warn(
+                    "Bỏ qua routing key saga không xác định: {}",
+                    routingKey
+            );
+        }
+    }
+
+    private void handleStockReserved(Order order) {
+        if (order.getStatus() == OrderStatus.PENDING) {
+            order.setStatus(OrderStatus.AWAITING_PAYMENT);
+
+            order.addStatusHistory(
+                    OrderStatusHistory.builder()
+                            .status(OrderStatus.AWAITING_PAYMENT)
+                            .note("Đã giữ hàng thành công, chờ thanh toán")
+                            .changedAt(LocalDateTime.now())
+                            .build()
+            );
+
+            orderRepository.save(order);
+
+            orderSagaEventPublisher.publishPaymentCreateRequested(
+                    order.getId(),
+                    order.getUserId(),
+                    order.getOrderCode(),
+                    order.getTotalAmount(),
+                    order.getPaymentMethod()
+            );
+
+            return;
+        }
+
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+            orderSagaEventPublisher.publishStockReleaseRequested(
+                    order.getId(),
+                    order.getItems()
+            );
+
+            return;
+        }
+
+        log.warn(
+                "Bỏ qua sự kiện 'stock.reserved' cho đơn hàng {} đang ở trạng thái {}",
+                order.getId(),
+                order.getStatus()
+        );
+    }
+
+    private void handleStockReserveRejected(
+            Order order,
+            OrderSagaReplyEvent event
+    ) {
+        if (order.getStatus() != OrderStatus.PENDING) {
+            log.warn(
+                    "Bỏ qua sự kiện 'stock.reserve.rejected' cho đơn hàng {} đang ở trạng thái {}",
+                    order.getId(),
+                    order.getStatus()
+            );
+            return;
+        }
+
+        order.setStatus(OrderStatus.CANCELLED);
+
+        order.addStatusHistory(
+                OrderStatusHistory.builder()
+                        .status(OrderStatus.CANCELLED)
+                        .note(
+                                event.reason() != null
+                                        ? event.reason()
+                                        : "Không đủ hàng trong kho"
+                        )
+                        .changedAt(LocalDateTime.now())
+                        .build()
+        );
+
+        orderRepository.save(order);
+    }
+
+    private void handlePaymentCompleted(
+            Order order,
+            OrderSagaReplyEvent event
+    ) {
+        if (order.getStatus() != OrderStatus.AWAITING_PAYMENT) {
+            log.warn(
+                    "Bỏ qua sự kiện 'payment.completed' cho đơn hàng {} đang ở trạng thái {}",
+                    order.getId(),
+                    order.getStatus()
+            );
+            return;
+        }
+
+        order.setStatus(OrderStatus.CONFIRMED);
+        order.setPaymentStatus(PaymentStatus.PAID);
+        order.setPaymentId(event.paymentId());
+        order.setTransactionCode(event.transactionCode());
+
+        order.addStatusHistory(
+                OrderStatusHistory.builder()
+                        .status(OrderStatus.CONFIRMED)
+                        .note("Thanh toán thành công")
+                        .changedAt(LocalDateTime.now())
+                        .build()
+        );
+
+        orderRepository.save(order);
+
+        cartService.clearCart(order.getUserId());
+    }
+
+    private void handlePaymentFailed(
+            Order order,
+            OrderSagaReplyEvent event
+    ) {
+        if (order.getStatus() != OrderStatus.AWAITING_PAYMENT) {
+            log.warn(
+                    "Bỏ qua sự kiện 'payment.failed' cho đơn hàng {} đang ở trạng thái {}",
+                    order.getId(),
+                    order.getStatus()
+            );
+            return;
+        }
+
+        order.setStatus(OrderStatus.CANCELLED);
+        order.setPaymentStatus(PaymentStatus.FAILED);
+
+        order.addStatusHistory(
+                OrderStatusHistory.builder()
+                        .status(OrderStatus.CANCELLED)
+                        .note(
+                                event.reason() != null
+                                        ? event.reason()
+                                        : "Thanh toán thất bại"
+                        )
+                        .changedAt(LocalDateTime.now())
+                        .build()
+        );
+
+        orderRepository.save(order);
+
+        orderSagaEventPublisher.publishStockReleaseRequested(
+                order.getId(),
+                order.getItems()
+        );
+    }
+}

@@ -9,17 +9,6 @@ import org.springframework.web.client.RestClient;
 public class RestClientConfig {
 
     @Bean
-    public RestClient paymentRestClient(
-            @Value("${services.payment-service.base-url}")
-            String baseUrl
-    ) {
-
-        return RestClient.builder()
-                .baseUrl(baseUrl)
-                .build();
-    }
-
-    @Bean
     public RestClient productRestClient(
             @Value("${services.product-service.base-url}")
             String baseUrl

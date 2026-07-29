@@ -1,6 +1,5 @@
 package com.tttn.orderservice.service.impl;
 
-import com.tttn.orderservice.client.PaymentClient;
 import com.tttn.orderservice.client.ProductClient;
 import com.tttn.orderservice.dto.request.CancelOrderRequest;
 import com.tttn.orderservice.dto.request.CheckoutRequest;
@@ -14,6 +13,7 @@ import com.tttn.orderservice.enums.PaymentStatus;
 import com.tttn.orderservice.exception.BadRequestException;
 import com.tttn.orderservice.exception.ResourceNotFoundException;
 import com.tttn.orderservice.mapper.OrderMapper;
+import com.tttn.orderservice.messaging.OrderSagaEventPublisher;
 import com.tttn.orderservice.model.cart.Cart;
 import com.tttn.orderservice.model.cart.CartItem;
 import com.tttn.orderservice.repository.OrderRepository;
@@ -39,7 +39,7 @@ public class OrderServiceImpl implements OrderService {
     private final OrderRepository orderRepository;
     private final CartService cartService;
     private final ProductClient productClient;
-    private final PaymentClient paymentClient;
+    private final OrderSagaEventPublisher orderSagaEventPublisher;
     private final OrderMapper orderMapper;
 
     @Override
@@ -131,20 +131,10 @@ public class OrderServiceImpl implements OrderService {
 
         Order savedOrder = orderRepository.save(order);
 
-        PaymentCreationResponse payment =
-                paymentClient.createPayment(
-                        savedOrder.getId(),
-                        userId,
-                        savedOrder.getOrderCode(),
-                        savedOrder.getTotalAmount(),
-                        savedOrder.getPaymentMethod()
-                );
-
-        savedOrder.setPaymentId(payment.paymentId());
-        savedOrder.setPaymentStatus(payment.status());
-
-        orderRepository.save(savedOrder);
-        cartService.clearCart(userId);
+        orderSagaEventPublisher.publishStockReserveRequested(
+                savedOrder.getId(),
+                savedOrder.getItems()
+        );
 
         return new CheckoutResponse(
                 savedOrder.getId(),
@@ -153,7 +143,7 @@ public class OrderServiceImpl implements OrderService {
                 savedOrder.getStatus(),
                 savedOrder.getPaymentId(),
                 savedOrder.getPaymentStatus(),
-                payment.paymentUrl()
+                null
         );
     }
 
@@ -237,6 +227,7 @@ public class OrderServiceImpl implements OrderService {
         Set<OrderStatus> cancellableStatuses =
                 EnumSet.of(
                         OrderStatus.PENDING,
+                        OrderStatus.AWAITING_PAYMENT,
                         OrderStatus.CONFIRMED
                 );
 
@@ -247,6 +238,9 @@ public class OrderServiceImpl implements OrderService {
             );
         }
 
+        boolean wasAwaitingPayment =
+                order.getStatus() == OrderStatus.AWAITING_PAYMENT;
+
         order.setStatus(OrderStatus.CANCELLED);
 
         order.addStatusHistory(
@@ -256,6 +250,13 @@ public class OrderServiceImpl implements OrderService {
                         .note(request.reason())
                         .build()
         );
+
+        if (wasAwaitingPayment) {
+            orderSagaEventPublisher.publishStockReleaseRequested(
+                    order.getId(),
+                    order.getItems()
+            );
+        }
 
         return orderMapper.toResponse(
                 orderRepository.save(order)
@@ -302,6 +303,10 @@ public class OrderServiceImpl implements OrderService {
     ) {
         boolean valid = switch (current) {
             case PENDING ->
+                    target == OrderStatus.AWAITING_PAYMENT
+                            || target == OrderStatus.CANCELLED;
+
+            case AWAITING_PAYMENT ->
                     target == OrderStatus.CONFIRMED
                             || target == OrderStatus.CANCELLED;
 

@@ -33,6 +33,12 @@ spring:
       password: ${REDIS_PASSWORD:}
       timeout: 3s
 
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+
 
 management:
   endpoints:
@@ -56,12 +62,6 @@ services:
   product-service:
     base-url: ${PRODUCT_SERVICE_URL:http://localhost:3002}
 
-  payment-service:
-    base-url: ${PAYMENT_SERVICE_URL:http://localhost:8084}
-
 cart:
   key-prefix: "cart:"
   expiration-days: ${CART_EXPIRATION_DAYS:7}
-
-payment:
-  fake-enabled: ${PAYMENT_FAKE_ENABLED:true}

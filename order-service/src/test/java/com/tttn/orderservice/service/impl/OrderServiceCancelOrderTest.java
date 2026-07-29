@@ -1,6 +1,5 @@
 package com.tttn.orderservice.service.impl;
 
-import com.tttn.orderservice.client.PaymentClient;
 import com.tttn.orderservice.client.ProductClient;
 import com.tttn.orderservice.dto.request.CancelOrderRequest;
 import com.tttn.orderservice.dto.response.OrderResponse;
@@ -11,6 +10,7 @@ import com.tttn.orderservice.enums.PaymentStatus;
 import com.tttn.orderservice.exception.BadRequestException;
 import com.tttn.orderservice.exception.ResourceNotFoundException;
 import com.tttn.orderservice.mapper.OrderMapper;
+import com.tttn.orderservice.messaging.OrderSagaEventPublisher;
 import com.tttn.orderservice.repository.OrderRepository;
 import com.tttn.orderservice.service.CartService;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,7 +44,7 @@ class OrderServiceCancelOrderTest {
     private ProductClient productClient;
 
     @Mock
-    private PaymentClient paymentClient;
+    private OrderSagaEventPublisher orderSagaEventPublisher;
 
     @Mock
     private OrderMapper orderMapper;
@@ -63,7 +63,7 @@ class OrderServiceCancelOrderTest {
                 orderRepository,
                 cartService,
                 productClient,
-                paymentClient,
+                orderSagaEventPublisher,
                 orderMapper
         );
 
@@ -409,7 +409,7 @@ class OrderServiceCancelOrderTest {
     }
 
     @Test
-    @DisplayName("Không sử dụng CartService, ProductClient hoặc PaymentClient")
+    @DisplayName("Không sử dụng CartService, ProductClient hoặc OrderSagaEventPublisher")
     void cancelOrder_ShouldNotUseUnrelatedDependencies() {
         Order order = createOrder(OrderStatus.PENDING);
 
@@ -434,7 +434,7 @@ class OrderServiceCancelOrderTest {
         verifyNoInteractions(
                 cartService,
                 productClient,
-                paymentClient
+                orderSagaEventPublisher
         );
     }
 

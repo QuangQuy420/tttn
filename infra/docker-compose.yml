@@ -152,13 +152,16 @@ services:
   order-service:
     build: ../order-service    # Spring Boot (Maven), real Dockerfile now
     env_file: ../order-service/.env
-    # payment-service intentionally NOT listed here: it's still a placeholder (Q2) and would
-    # drag its broken build into order-service's startup. PaymentClient calls it lazily on
-    # checkout, so there's no hard startup dependency — re-add once payment-service is real.
+    # payment-service intentionally NOT listed here: it's still a placeholder and would drag
+    # its broken build into order-service's startup. order-service only talks to it via
+    # RabbitMQ (payment.create.requested), so there's no hard startup dependency — re-add
+    # once payment-service is real and its Dockerfile actually builds.
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     healthcheck:
       # Same rationale as user-service: no wget/curl in this eclipse-temurin JRE base image,

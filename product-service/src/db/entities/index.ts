@@ -4,6 +4,7 @@ import { Product } from './product.entity';
 import { ProductVariant } from './product-variant.entity';
 import { ProductImage } from './product-image.entity';
 import { Inventory } from './inventory.entity';
+import { StockReservation } from './stock-reservation.entity';
 import { FaceShapeStyle } from './face-shape-style.entity';
 import { Tag } from './tag.entity';
 import { ProductTag } from './product-tag.entity';
@@ -17,6 +18,7 @@ export const entities = [
   ProductVariant,
   ProductImage,
   Inventory,
+  StockReservation,
   FaceShapeStyle,
   Tag,
   ProductTag,
@@ -31,6 +33,7 @@ export {
   ProductVariant,
   ProductImage,
   Inventory,
+  StockReservation,
   FaceShapeStyle,
   Tag,
   ProductTag,

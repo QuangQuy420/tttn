@@ -6,6 +6,8 @@ import { Product } from './db/entities/product.entity';
 import { ProductVariant } from './db/entities/product-variant.entity';
 import { ProductImage } from './db/entities/product-image.entity';
 import { ProductFaceShape } from './db/entities/product-face-shape.entity';
+import { Inventory } from './db/entities/inventory.entity';
+import { StockReservation } from './db/entities/stock-reservation.entity';
 import { ProductsController } from './routes/products.controller';
 import { CategoriesController } from './routes/categories.controller';
 import { BrandsController } from './routes/brands.controller';
@@ -14,6 +16,7 @@ import { CategoriesService } from './services/categories.service';
 import { BrandsService } from './services/brands.service';
 import { ProductImagesService } from './services/product-images.service';
 import { SeedService } from './services/seed.service';
+import { InventoryService } from './services/inventory.service';
 import { TypeOrmBrandRepository } from './repositories/brand.repository';
 import { TypeOrmCategoryRepository } from './repositories/category.repository';
 import { TypeOrmProductRepository } from './repositories/product.repository';
@@ -22,6 +25,10 @@ import { TypeOrmProductImageRepository } from './repositories/product-image.repo
 import { TypeOrmProductFaceShapeRepository } from './repositories/product-face-shape.repository';
 import { S3ImageStorageRepository } from './repositories/image-storage.repository';
 import { RabbitMqProductEventPublisher } from './repositories/product-event-publisher.repository';
+import { TypeOrmInventoryRepository } from './repositories/inventory.repository';
+import { TypeOrmStockReservationRepository } from './repositories/stock-reservation.repository';
+import { RabbitMqOrderSagaEventPublisher } from './repositories/order-saga-event-publisher.repository';
+import { OrderSagaEventConsumer } from './repositories/order-saga-event-consumer.repository';
 import {
   BRAND_REPOSITORY,
   CATEGORY_REPOSITORY,
@@ -31,12 +38,16 @@ import {
   PRODUCT_FACE_SHAPE_REPOSITORY,
   IMAGE_STORAGE_REPOSITORY,
   PRODUCT_EVENT_PUBLISHER,
+  INVENTORY_REPOSITORY,
+  STOCK_RESERVATION_REPOSITORY,
+  ORDER_SAGA_EVENT_PUBLISHER,
 } from './repositories/tokens';
 
 /**
- * Catalog feature module: brands/categories/products/variants/images only (Q10) —
- * inventory/tags/product_tags/ratings/face_shape_styles have entities/migrations but no
- * repository/service/controller wiring this sprint.
+ * Catalog feature module: brands/categories/products/variants/images (Q10), plus
+ * inventory/stock-reservation wiring for the checkout saga (2026-07-28 saga plan) —
+ * tags/product_tags/ratings/face_shape_styles still have entities/migrations only, no
+ * repository/service/controller wiring.
  */
 @Module({
   imports: [
@@ -47,6 +58,8 @@ import {
       ProductVariant,
       ProductImage,
       ProductFaceShape,
+      Inventory,
+      StockReservation,
     ]),
   ],
   controllers: [ProductsController, CategoriesController, BrandsController],
@@ -56,6 +69,8 @@ import {
     BrandsService,
     ProductImagesService,
     SeedService,
+    InventoryService,
+    OrderSagaEventConsumer,
     { provide: BRAND_REPOSITORY, useClass: TypeOrmBrandRepository },
     { provide: CATEGORY_REPOSITORY, useClass: TypeOrmCategoryRepository },
     { provide: PRODUCT_REPOSITORY, useClass: TypeOrmProductRepository },
@@ -78,6 +93,18 @@ import {
     {
       provide: PRODUCT_EVENT_PUBLISHER,
       useClass: RabbitMqProductEventPublisher,
+    },
+    {
+      provide: INVENTORY_REPOSITORY,
+      useClass: TypeOrmInventoryRepository,
+    },
+    {
+      provide: STOCK_RESERVATION_REPOSITORY,
+      useClass: TypeOrmStockReservationRepository,
+    },
+    {
+      provide: ORDER_SAGA_EVENT_PUBLISHER,
+      useClass: RabbitMqOrderSagaEventPublisher,
     },
   ],
   exports: [SeedService],

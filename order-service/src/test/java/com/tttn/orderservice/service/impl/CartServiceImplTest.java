@@ -1444,7 +1444,8 @@ class CartServiceImplTest {
                             "Đen",
                             "M",
                             null,
-                            "SKU-VARIANT-001"
+                            "SKU-VARIANT-001",
+                            100
                     );
 
             ProductResponse product =
@@ -1629,7 +1630,8 @@ class CartServiceImplTest {
                 "Đen",
                 "M",
                 new BigDecimal("200000"),
-                "SKU-VARIANT-001"
+                "SKU-VARIANT-001",
+                100
         );
     }
 
