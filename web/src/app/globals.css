@@ -691,6 +691,10 @@ main {
   align-items: center;
   padding: 0.75rem 1.1rem;
   font-size: 0.875rem;
+  /* Some rows (e.g. --orders) render as a whole-row <Link>, not a <div> — reset anchor
+     defaults so it still reads as a plain table row. */
+  color: inherit;
+  text-decoration: none;
 }
 
 .admin-table__row--users {
@@ -699,6 +703,10 @@ main {
 
 .admin-table__row--roles {
   grid-template-columns: 1fr 1.4fr 1.6fr 90px;
+}
+
+.admin-table__row--orders {
+  grid-template-columns: 1.2fr 1.8fr 1fr 1fr 1.3fr;
 }
 
 .admin-table__row--head {
@@ -3064,6 +3072,19 @@ main {
   margin: -0.75rem 0 1.5rem;
   color: var(--color-text-secondary);
   font-size: 0.95rem;
+}
+
+/* AC7 — distinct callout for why a CANCELLED order was cancelled (e.g. a payment failure
+   reason), so it isn't buried as a generic "Đã hủy" line in the status history. */
+.order-detail__failure-note {
+  margin: 0 0 1.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(169, 40, 40, 0.35);
+  border-radius: 10px;
+  background: rgba(169, 40, 40, 0.06);
+  color: #a92828;
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 
 .order-detail__section {

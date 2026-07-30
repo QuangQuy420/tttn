@@ -118,3 +118,11 @@ export interface GetOrdersParams {
   page?: number;
   size?: number;
 }
+
+// Mirrors AdminOrderSummaryResponse (order-service dto/response/AdminOrderSummaryResponse.java) —
+// the admin dashboard's order totals. `ordersByStatus` is Partial since the backend's Map only
+// contains statuses that have at least one order.
+export interface AdminOrdersSummary {
+  totalOrders: number;
+  ordersByStatus: Partial<Record<OrderStatus, number>>;
+}

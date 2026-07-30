@@ -6,9 +6,9 @@ import { AdminGuard } from "@/components/admin/AdminGuard";
 import { removeAccessToken } from "@/lib/auth/session";
 
 const NAV_ITEMS = [
-  { label: "Tổng quan", href: "#" },
+  { label: "Tổng quan", href: "/admin" },
   { label: "Sản phẩm", href: "/admin/products" },
-  { label: "Đơn hàng", href: "#" },
+  { label: "Đơn hàng", href: "/admin/orders" },
   { label: "Khách hàng", href: "/admin/users" },
   { label: "Vai trò", href: "/admin/roles" },
   { label: "Cài đặt", href: "#" },
@@ -41,9 +41,13 @@ export default function AdminLayout({
 
             <nav className="admin-sidebar__nav">
               {NAV_ITEMS.map((item) => {
+                // "/admin" (Tổng quan) is a prefix of every other admin route, so it needs an
+                // exact match — otherwise it would also light up on /admin/products etc.
                 const active =
                     item.href !== "#" &&
-                    pathname.startsWith(item.href);
+                    (item.href === "/admin"
+                        ? pathname === "/admin"
+                        : pathname.startsWith(item.href));
 
                 return (
                     <Link

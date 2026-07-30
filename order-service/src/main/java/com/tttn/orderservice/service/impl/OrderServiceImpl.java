@@ -28,7 +28,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -294,6 +296,78 @@ public class OrderServiceImpl implements OrderService {
 
         return orderMapper.toResponse(
                 orderRepository.save(order)
+        );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<OrderSummaryResponse> getAllOrders(
+            OrderStatus status,
+            int page,
+            int size
+    ) {
+        if (page < 0) {
+            throw new BadRequestException(
+                    "Trang không được nhỏ hơn 0"
+            );
+        }
+
+        if (size < 1 || size > 100) {
+            throw new BadRequestException(
+                    "Kích thước trang phải từ 1 đến 100"
+            );
+        }
+
+        PageRequest pageable = PageRequest.of(
+                page,
+                size,
+                Sort.by(Sort.Direction.DESC, "createdAt")
+        );
+
+        Page<OrderSummaryResponse> result;
+
+        if (status == null) {
+            result = orderRepository
+                    .findAll(pageable)
+                    .map(orderMapper::toSummaryResponse);
+        } else {
+            result = orderRepository
+                    .findAllByStatus(status, pageable)
+                    .map(orderMapper::toSummaryResponse);
+        }
+
+        return PageResponse.from(result);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public OrderResponse getOrderDetailForAdmin(UUID orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Không tìm thấy đơn hàng"
+                        )
+                );
+
+        return orderMapper.toResponse(order);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AdminOrderSummaryResponse getOrdersSummary() {
+        Map<OrderStatus, Long> ordersByStatus =
+                new EnumMap<>(OrderStatus.class);
+
+        for (Object[] row : orderRepository.countOrdersGroupedByStatus()) {
+            ordersByStatus.put(
+                    (OrderStatus) row[0],
+                    (Long) row[1]
+            );
+        }
+
+        return new AdminOrderSummaryResponse(
+                orderRepository.count(),
+                ordersByStatus
         );
     }
 

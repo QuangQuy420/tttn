@@ -54,3 +54,10 @@ export {
 
 export { assignRoleToUser, listUsers, removeRoleFromUser } from "./admin-users";
 export type { AdminUser } from "./admin-users";
+
+export {
+  getAdminOrderDetail,
+  getAdminOrdersSummary,
+  listAdminOrders,
+  updateOrderStatusAdmin,
+} from "./admin-orders";
