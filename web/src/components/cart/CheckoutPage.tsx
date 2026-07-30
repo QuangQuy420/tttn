@@ -10,12 +10,8 @@ import { getAccessToken } from "@/lib/auth/session";
 import { formatPriceVnd } from "@/lib/format/price";
 
 // CheckoutRequest.paymentMethod (order-service) is a free-form @NotBlank String, not an enum —
-// so any non-empty string works. These are just reasonable Vietnamese-labeled options for the
-// picker, not values order-service itself validates against.
-const PAYMENT_METHODS = [
-  { value: "COD", label: "Thanh toán khi nhận hàng" },
-  { value: "BANK_TRANSFER", label: "Chuyển khoản ngân hàng" },
-];
+// so any non-empty string works. This is the only payment method payment-service supports.
+const PAYMENT_METHODS = [{ value: "CARD", label: "Thanh toán qua thẻ" }];
 
 const PHONE_PATTERN = /^(0|\+84)[0-9]{9,10}$/;
 
