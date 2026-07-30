@@ -101,13 +101,17 @@ messages).
   "userId": "a9b8c7d6-0000-0000-0000-000000000099",
   "orderCode": "ORD-20260728-0001",
   "amount": 1250000.00,
-  "paymentMethod": "COD"
+  "paymentMethod": "CARD"
 }
 ```
 - Same fields `CreatePaymentRequest` (the synchronous DTO this replaces,
   `order-service/src/main/java/com/tttn/orderservice/dto/request/CreatePaymentRequest.java`)
   already carries: `orderId`, `userId`, `orderCode`, `amount` (decimal, total order amount),
-  `paymentMethod` (string, e.g. `"COD"`/`"CARD"`/whatever `payment-service` ends up supporting).
+  `paymentMethod` (string — still a generic, free-form field on the wire, not a closed enum).
+- `payment-service` currently only accepts `"CARD"` as `paymentMethod` — this is the storefront's
+  only offered payment method (`web`'s checkout picker offers no other option). Any other value
+  (including the retired `"COD"`/`"BANK_TRANSFER"`) is treated as an unsupported method and fails
+  immediately with a Vietnamese reason naming it.
 
 ### `payment.completed` (payment-service → order-service)
 ```json

@@ -87,15 +87,21 @@ explicitly with `-f`, so plain `docker compose up --build` still gives you the p
   `DB_USERNAME`/`DB_PASSWORD`/`REDIS_HOST`/`REDIS_PORT` — `OrderServiceApplication.main()` maps
   the monorepo-wide `PORT`/`DATABASE_URL`/`REDIS_URL` convention (`order-service/.env.example`)
   onto those properties only when the env vars are present, so local dev outside Docker is
-  unaffected. It does **not** `depends_on` `payment-service` in Compose: `PaymentClient` calls it
-  lazily on checkout, not at startup, so there's no hard dependency — and `payment-service` is
-  still gated behind `not-ready`, so a hard dependency would've pulled its broken build into
-  `order-service`'s startup.
-- **`payment-service`** — folder scaffold only; its `Dockerfile` is a fully commented-out
-  placeholder (backend language still TBD, Q2). Running `docker compose build`/`up` with **no
-  service arguments** (the whole stack) will fail on it. `api-gateway` doesn't `depends_on`
-  `user-service` yet either way — it doesn't call it yet (edge JWT / `/api/auth/*` proxying is
-  deferred, see Q3); that dependency will be added once that proxy exists.
+  unaffected. It does **not** `depends_on` `payment-service` in Compose: the two only talk over
+  RabbitMQ (`payment.create.requested`/`payment.completed`/`payment.failed`), not a direct call at
+  startup, so there's no hard startup-order dependency between them.
+- **`payment-service`** — real NestJS app, no longer gated behind `not-ready`. Message-driven: it
+  consumes `payment.create.requested` off the `order-saga-events` RabbitMQ exchange, mock-decides
+  a card-only outcome (`"CARD"` succeeds at or above a configurable minimum amount, fails below
+  it or for any other `paymentMethod` value — there's no real bank/card gateway in this project),
+  and publishes `payment.completed`/`payment.failed` back onto the same exchange for
+  `order-service` to consume. It exposes `GET /health` (Compose healthcheck) and
+  `GET /payments/:orderId` for debug/admin lookups only, not routed through `api-gateway`. It
+  does **not** `depends_on` `order-service` (or vice versa) in Compose — the two only talk over
+  RabbitMQ messages, not a direct call, so there's no hard startup-order dependency. `api-gateway`
+  doesn't `depends_on` `user-service` yet either way — it doesn't call it yet (edge JWT /
+  `/api/auth/*` proxying is deferred, see Q3); that dependency will be added once that proxy
+  exists.
 - **`recommendation-service`** — real, has `POST /recommend` (face-shape -> ranked frame list,
   calling `product-service`'s `GET /products?faceShape=...` and scoring candidates via a local
   face-shape -> frame-shape config) and `GET /health`, no longer gated behind `not-ready`. Covered

@@ -1,9 +1,9 @@
 name: CI
 
 # Lint + build + test (+ Docker image build, no push) for the services with real code:
-# api-gateway, product-service, web, face-processing-service, recommendation-service, and now
-# order-service. user-service/payment-service are the other dev's and still excluded (user-service
-# has no CI job yet either; payment-service has no language decided, Q2).
+# api-gateway, product-service, web, face-processing-service, recommendation-service,
+# order-service, and now payment-service. user-service is the other dev's and still excluded
+# (no CI job yet).
 #
 # Each service's job is path-filtered (via dorny/paths-filter) so it only runs when its
 # own folder changes.
@@ -28,6 +28,7 @@ jobs:
       face-processing-service: ${{ steps.filter.outputs.face-processing-service }}
       recommendation-service: ${{ steps.filter.outputs.recommendation-service }}
       order-service: ${{ steps.filter.outputs.order-service }}
+      payment-service: ${{ steps.filter.outputs.payment-service }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -46,6 +47,8 @@ jobs:
               - 'recommendation-service/**'
             order-service:
               - 'order-service/**'
+            payment-service:
+              - 'payment-service/**'
 
   api-gateway:
     name: api-gateway
@@ -309,3 +312,65 @@ jobs:
           context: order-service
           push: false
           tags: smart-eyewear/order-service:ci
+
+  payment-service:
+    name: payment-service
+    needs: changes
+    if: needs.changes.outputs.payment-service == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: payment-service
+    # Real Postgres + RabbitMQ service containers, same shape as product-service's job — this
+    # service needs a live DB (TypeORM migrations via entrypoint.sh) and broker (RabbitMqOrder
+    # SagaEventConsumer/Publisher require RABBITMQ_URL to even boot the app) to build/test.
+    # No MinIO: payment-service touches no object storage.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: payment_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      rabbitmq:
+        image: rabbitmq:3-management-alpine
+        env:
+          RABBITMQ_DEFAULT_USER: guest
+          RABBITMQ_DEFAULT_PASS: guest
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://app:app@localhost:5432/payment_db
+      RABBITMQ_URL: amqp://guest:guest@localhost:5672
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: payment-service/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+
+      - name: Build Docker image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: payment-service
+          push: false
+          tags: smart-eyewear/payment-service:ci

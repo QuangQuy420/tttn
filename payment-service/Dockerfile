@@ -1,26 +1,33 @@
 # Dockerfile — payment-service
 # ============================================================================
-# ⚠️  BACKEND LANGUAGE PENDING (Open Question Q2: NestJS / Spring Boot / Go).
-#     Fill this in once the team locks the stack. The image only needs to run
-#     the layered app described in ./README.md (route -> service -> repository -> db).
+# NestJS (Node 24) — layered app described in ./README.md
+# (route -> service -> repository -> db), built with TypeORM against Postgres.
 # ============================================================================
-#
-# --- Example A: NestJS (Node 20) -------------------------------------------
-# FROM node:20-alpine AS build
-# WORKDIR /app
-# COPY package*.json ./
-# RUN npm ci
-# COPY . .
-# RUN npm run build
-# FROM node:20-alpine
-# WORKDIR /app
-# COPY --from=build /app/node_modules ./node_modules
-# COPY --from=build /app/dist ./dist
-# EXPOSE ${PORT}
-# CMD ["node", "dist/main.js"]
-#
-# --- Example B: Spring Boot (JDK 21) ---------------------------------------
-# FROM eclipse-temurin:21-jdk AS build ... (mvn package) ... then run the jar
-#
-# --- Example C: Go ----------------------------------------------------------
-# FROM golang:1.22 AS build ... (go build) ... distroless final stage
+FROM node:24-alpine AS deps
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN chmod +x entrypoint.sh
+
+# `dev` target: used by infra/docker-compose.watch.yml (docker compose watch) for hot-reload
+# during local development — keeps devDependencies and runs Nest's own --watch compiler.
+FROM deps AS dev
+ENV NODE_ENV=development
+ENTRYPOINT ["./entrypoint.sh"]
+CMD ["npm", "run", "start:dev"]
+
+FROM deps AS build
+RUN npm run build
+
+FROM node:24-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/entrypoint.sh ./entrypoint.sh
+EXPOSE ${PORT}
+# Runs pending TypeORM migrations before the app starts (see entrypoint.sh) — every
+# `docker compose up`, not just the first one.
+ENTRYPOINT ["./entrypoint.sh"]
+CMD ["node", "dist/main.js"]

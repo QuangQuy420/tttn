@@ -7,13 +7,11 @@
 # <service>/.env.example -> <service>/.env.
 #
 # ⚠️ api-gateway, product-service, web, face-processing-service, user-service,
-#    recommendation-service, and order-service are real, building services
-#    (recommendation-service has no healthcheck yet, unlike the others). payment-service still
-#    has no language decided (Q2) — its Dockerfile is a placeholder (`file with no
-#    instructions`), which would abort a bare `docker compose up --build` before ANY container
-#    starts. It's gated behind the `not-ready` Compose profile so a bare `docker compose up
-#    --build` (no profile) builds/starts everything except it. Once its app lands, drop its
-#    `profiles:` key here. To bring it up anyway: `docker compose --profile not-ready up --build`.
+#    recommendation-service, order-service, and payment-service are real, building services
+#    (recommendation-service has no healthcheck yet, unlike the others). payment-service is a
+#    NestJS app (message-driven: consumes `payment.create.requested` off RabbitMQ, no longer
+#    gated behind the `not-ready` Compose profile) — a bare `docker compose up --build` (no
+#    profile) now builds/starts everything, payment-service included.
 #    See infra/README.md for the up-to-date per-service status.
 # ============================================================================
 
@@ -152,10 +150,9 @@ services:
   order-service:
     build: ../order-service    # Spring Boot (Maven), real Dockerfile now
     env_file: ../order-service/.env
-    # payment-service intentionally NOT listed here: it's still a placeholder and would drag
-    # its broken build into order-service's startup. order-service only talks to it via
-    # RabbitMQ (payment.create.requested), so there's no hard startup dependency — re-add
-    # once payment-service is real and its Dockerfile actually builds.
+    # payment-service intentionally NOT listed here: order-service only talks to it via
+    # RabbitMQ (payment.create.requested), not a direct call at startup, so there's no hard
+    # startup-order dependency between the two services.
     depends_on:
       postgres:
         condition: service_healthy
@@ -173,12 +170,22 @@ services:
       start_period: 30s
 
   payment-service:
-    build: ../payment-service  # ⚠️ language TBD (Q2)
+    build: ../payment-service
     env_file: ../payment-service/.env
-    profiles: [not-ready]
     depends_on:
       postgres:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      # start_period is generous: `nest start --watch` recompiles TS from scratch on every
+      # container start (~15-20s cold), on top of the DB connect + pending-migrations check —
+      # too slow for the old 10s to reliably clear before compose gives up waiting.
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3004/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   face-processing-service:
     build: ../face-processing-service
