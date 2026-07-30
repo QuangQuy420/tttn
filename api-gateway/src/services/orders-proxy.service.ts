@@ -134,6 +134,36 @@ export class OrdersProxyService {
     }
   }
 
+  async getAdminOrders(query: Record<string, unknown>): Promise<unknown> {
+    return this.forwardGet('/api/v1/admin/orders', query);
+  }
+
+  async getAdminOrderDetail(orderId: string): Promise<unknown> {
+    return this.forwardGet(`/api/v1/admin/orders/${orderId}`);
+  }
+
+  async getAdminOrdersSummary(): Promise<unknown> {
+    return this.forwardGet('/api/v1/admin/orders/summary');
+  }
+
+  async updateOrderStatusAdmin(
+    orderId: string,
+    changedByUserId: string,
+    body: Record<string, unknown>,
+  ): Promise<unknown> {
+    const path = `/api/v1/admin/orders/${orderId}/status`;
+    try {
+      const response = await firstValueFrom(
+        this.httpService.patch(`${this.baseUrl}${path}`, body, {
+          headers: { 'X-User-Id': changedByUserId },
+        }),
+      );
+      return response.data;
+    } catch (error) {
+      throw this.toGatewayError(error as AxiosError, path);
+    }
+  }
+
   private async forwardGet(
     path: string,
     params?: Record<string, unknown>,

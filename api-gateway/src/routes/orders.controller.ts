@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -12,6 +13,8 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthenticatedUser, JwtGuard } from '../auth/jwt.guard';
+import { RequirePermission } from '../auth/permissions.decorator';
+import { PermissionsGuard } from '../auth/permissions.guard';
 import { OrdersProxyService } from '../services/orders-proxy.service';
 
 /**
@@ -112,5 +115,60 @@ export class OrdersController {
     @Req() request: Request & { user: AuthenticatedUser },
   ): Promise<unknown> {
     return this.ordersProxyService.cancelOrder(request.user.userId, id, body);
+  }
+}
+
+/**
+ * Thin controller: parses the incoming request and delegates to
+ * `OrdersProxyService` — no forwarding/HTTP logic here. Proxies
+ * order-service's `/api/v1/admin/orders` routes, which return/act on ANY
+ * order regardless of owner (unlike `OrdersController` above, which is
+ * self-service). Every route requires the caller to currently hold
+ * `order:manage` (checked live against user-service, see
+ * `PermissionsGuard`).
+ *
+ * Route order matters: `summary` must be declared before `:id` — NestJS
+ * matches routes in registration order, and a literal `/summary` request
+ * would otherwise be swallowed by the `:id` pattern (`id="summary"`, which
+ * order-service can't parse as a UUID).
+ */
+@Controller('api/admin/orders')
+export class AdminOrdersController {
+  constructor(private readonly ordersProxyService: OrdersProxyService) {}
+
+  @Get()
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @RequirePermission('order:manage')
+  findAll(@Query() query: Record<string, unknown>): Promise<unknown> {
+    return this.ordersProxyService.getAdminOrders(query);
+  }
+
+  @Get('summary')
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @RequirePermission('order:manage')
+  summary(): Promise<unknown> {
+    return this.ordersProxyService.getAdminOrdersSummary();
+  }
+
+  @Get(':id')
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @RequirePermission('order:manage')
+  findOne(@Param('id') id: string): Promise<unknown> {
+    return this.ordersProxyService.getAdminOrderDetail(id);
+  }
+
+  @Patch(':id/status')
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @RequirePermission('order:manage')
+  updateStatus(
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+    @Req() request: Request & { user: AuthenticatedUser },
+  ): Promise<unknown> {
+    return this.ordersProxyService.updateOrderStatusAdmin(
+      id,
+      request.user.userId,
+      body,
+    );
   }
 }

@@ -96,4 +96,39 @@ public class OrderController {
                 )
         );
     }
+
+    @GetMapping("/admin/orders")
+    public ResponseEntity<PageResponse<OrderSummaryResponse>>
+    getAllOrders(
+            @RequestParam(required = false)
+            OrderStatus status,
+            @RequestParam(defaultValue = "0")
+            int page,
+            @RequestParam(defaultValue = "20")
+            int size
+    ) {
+        return ResponseEntity.ok(
+                orderService.getAllOrders(
+                        status,
+                        page,
+                        size
+                )
+        );
+    }
+
+    @GetMapping("/admin/orders/summary")
+    public ResponseEntity<AdminOrderSummaryResponse> getOrdersSummary() {
+        return ResponseEntity.ok(
+                orderService.getOrdersSummary()
+        );
+    }
+
+    @GetMapping("/admin/orders/{orderId}")
+    public ResponseEntity<OrderResponse> getOrderDetailForAdmin(
+            @PathVariable UUID orderId
+    ) {
+        return ResponseEntity.ok(
+                orderService.getOrderDetailForAdmin(orderId)
+        );
+    }
 }
