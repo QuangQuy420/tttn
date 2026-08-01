@@ -52,21 +52,31 @@ export function OrderListPage() {
 
       {!isLoading && !error && orders.length > 0 && (
         <>
-          <ul className="orders-page__list">
+          <div className="admin-table">
+            <div className="admin-table__row admin-table__row--orders admin-table__row--head">
+              <span>Mã đơn hàng</span>
+              <span>Người nhận</span>
+              <span>Tổng tiền</span>
+              <span>Trạng thái</span>
+              <span>Ngày đặt</span>
+            </div>
             {orders.map((order) => (
-              <li key={order.id} className="order-summary-item">
-                <Link href={`/orders/${order.id}`} className="order-summary-item__link">
-                  <span className="order-summary-item__code">{order.orderCode}</span>
-                  <span className="order-summary-item__status">
-                    {formatOrderStatusVi(order.status)}
-                  </span>
-                  <span className="order-summary-item__total">
-                    {formatPriceVnd(order.totalAmount)}
-                  </span>
-                </Link>
-              </li>
+              <Link
+                key={order.id}
+                href={`/orders/${order.id}`}
+                className="admin-table__row admin-table__row--orders admin-table__row--body"
+              >
+                <span className="admin-table__name">{order.orderCode}</span>
+                <span>
+                  {order.receiverName}
+                  <span className="admin-table__tag"> · {order.receiverPhone}</span>
+                </span>
+                <span className="admin-table__price">{formatPriceVnd(order.totalAmount)}</span>
+                <span className="admin-status-badge">{formatOrderStatusVi(order.status)}</span>
+                <span>{new Date(order.createdAt).toLocaleString("vi-VN")}</span>
+              </Link>
             ))}
-          </ul>
+          </div>
 
           {totalPages > 1 && (
             <div className="orders-page__pagination">

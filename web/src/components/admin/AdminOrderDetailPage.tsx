@@ -170,19 +170,6 @@ export function AdminOrderDetailPage({ id }: AdminOrderDetailPageProps) {
         </p>
       </section>
 
-      <section aria-label="Lịch sử trạng thái" className="order-detail__section">
-        <h2>Lịch sử trạng thái</h2>
-        <ul className="order-detail__history">
-          {order.statusHistories.map((entry) => (
-            <li key={entry.id}>
-              <span>{formatOrderStatusVi(entry.status)}</span>
-              {entry.note && <span> — {entry.note}</span>}
-              <span> ({new Date(entry.changedAt).toLocaleString("vi-VN")})</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-
       <section aria-label="Cập nhật trạng thái đơn hàng" className="order-detail__section">
         <h2>Cập nhật trạng thái</h2>
         <div className="order-detail__actions">
@@ -227,6 +214,19 @@ export function AdminOrderDetailPage({ id }: AdminOrderDetailPageProps) {
             </p>
           )}
         </div>
+      </section>
+
+      <section aria-label="Lịch sử trạng thái" className="order-detail__section">
+        <h2>Lịch sử trạng thái</h2>
+        <ul className="order-detail__history">
+          {order.statusHistories.map((entry) => (
+            <li key={entry.id}>
+              <span>{formatOrderStatusVi(entry.status)}</span>
+              {entry.note && <span> — {entry.note}</span>}
+              <span> ({new Date(entry.changedAt).toLocaleString("vi-VN")})</span>
+            </li>
+          ))}
+        </ul>
       </section>
     </article>
   );

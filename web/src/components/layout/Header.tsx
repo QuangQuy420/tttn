@@ -37,6 +37,9 @@ export function Header() {
     // in" and "not fetched yet", so the Admin tab (FR7) stays hidden until we're sure.
     const [roles, setRoles] = useState<string[] | null>(null);
 
+    // Same fallback convention as profile/page.tsx: fullName if set, else username.
+    const [displayName, setDisplayName] = useState<string | null>(null);
+
     const [menuOpen, setMenuOpen] = useState(false);
 
     // useCart() reads the access token itself and no-ops (empty cart, no fetch) when there
@@ -51,6 +54,7 @@ export function Header() {
 
             if (!token) {
                 setRoles(null);
+                setDisplayName(null);
                 return;
             }
 
@@ -59,10 +63,12 @@ export function Header() {
                     setRoles(
                         response.data.roles?.map((r) => r.toUpperCase()) ?? null,
                     );
+                    setDisplayName(response.data.fullName || response.data.username);
                 })
                 .catch((error) => {
                     if (!(error instanceof ApiError)) throw error;
                     setRoles(null);
+                    setDisplayName(null);
                 });
         }
 
@@ -93,6 +99,7 @@ export function Header() {
         removeAccessToken();
         setAuthenticated(false);
         setRoles(null);
+        setDisplayName(null);
         setMenuOpen(false);
         router.push("/login");
         router.refresh();
@@ -156,11 +163,11 @@ export function Header() {
                             aria-haspopup="menu"
                         >
               <span className="account-menu__avatar">
-                U
+                {(displayName ?? "U").charAt(0).toUpperCase()}
               </span>
 
                             <span className="account-menu__label">
-                Tài khoản
+                {displayName ?? "Tài khoản"}
               </span>
 
                             <svg
@@ -196,6 +203,18 @@ export function Header() {
                     👤
                   </span>
                                     Thông tin cá nhân
+                                </Link>
+
+                                <Link
+                                    href="/orders"
+                                    className="account-menu__item"
+                                    role="menuitem"
+                                    onClick={() => setMenuOpen(false)}
+                                >
+                  <span className="account-menu__icon">
+                    📦
+                  </span>
+                                    Đơn hàng của tôi
                                 </Link>
 
                                 <Link
