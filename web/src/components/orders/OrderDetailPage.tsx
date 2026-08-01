@@ -121,6 +121,19 @@ export function OrderDetailPage({ id }: OrderDetailPageProps) {
       <h1 id="order-detail-heading">Đơn hàng {order.orderCode}</h1>
       <p className="order-detail__status">Trạng thái: {formatOrderStatusVi(order.status)}</p>
 
+      <section aria-label="Lịch sử trạng thái" className="order-detail__section">
+        <h2>Lịch sử trạng thái</h2>
+        <ul className="order-detail__history">
+          {order.statusHistories.map((entry) => (
+            <li key={entry.id}>
+              <span>{formatOrderStatusVi(entry.status)}</span>
+              {entry.note && <span> — {entry.note}</span>}
+              <span> ({new Date(entry.changedAt).toLocaleString("vi-VN")})</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
       <section aria-label="Thông tin giao hàng" className="order-detail__section">
         <h2>Thông tin giao hàng</h2>
         <p>Người nhận: {order.receiverName}</p>
@@ -145,19 +158,6 @@ export function OrderDetailPage({ id }: OrderDetailPageProps) {
         <p className="order-detail__total">
           Tổng cộng: <strong>{formatPriceVnd(order.totalAmount)}</strong>
         </p>
-      </section>
-
-      <section aria-label="Lịch sử trạng thái" className="order-detail__section">
-        <h2>Lịch sử trạng thái</h2>
-        <ul className="order-detail__history">
-          {order.statusHistories.map((entry) => (
-            <li key={entry.id}>
-              <span>{formatOrderStatusVi(entry.status)}</span>
-              {entry.note && <span> — {entry.note}</span>}
-              <span> ({new Date(entry.changedAt).toLocaleString("vi-VN")})</span>
-            </li>
-          ))}
-        </ul>
       </section>
 
       {canCancel && (
