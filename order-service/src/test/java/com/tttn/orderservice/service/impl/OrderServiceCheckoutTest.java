@@ -82,7 +82,8 @@ class OrderServiceCheckoutTest {
                 "0901234567",
                 "123 Nguyễn Trãi, Quận 1, TP.HCM",
                 "Giao hàng trong giờ hành chính",
-                "VNPAY"
+                "VNPAY",
+                List.of(variantId)
         );
     }
 
@@ -337,8 +338,17 @@ class OrderServiceCheckoutTest {
             when(orderRepository.save(any(Order.class)))
                     .thenAnswer(invocation -> invocation.getArgument(0));
 
+            CheckoutRequest multiItemRequest = new CheckoutRequest(
+                    checkoutRequest.receiverName(),
+                    checkoutRequest.receiverPhone(),
+                    checkoutRequest.shippingAddress(),
+                    checkoutRequest.note(),
+                    checkoutRequest.paymentMethod(),
+                    List.of(variantId, secondVariantId)
+            );
+
             CheckoutResponse response =
-                    orderService.checkout(userId, checkoutRequest);
+                    orderService.checkout(userId, multiItemRequest);
 
             assertEquals(
                     expectedTotal,

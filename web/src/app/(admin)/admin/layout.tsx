@@ -11,7 +11,6 @@ const NAV_ITEMS = [
   { label: "Đơn hàng", href: "/admin/orders" },
   { label: "Khách hàng", href: "/admin/users" },
   { label: "Vai trò", href: "/admin/roles" },
-  { label: "Cài đặt", href: "#" },
 ];
 
 export default function AdminLayout({
@@ -44,10 +43,9 @@ export default function AdminLayout({
                 // "/admin" (Tổng quan) is a prefix of every other admin route, so it needs an
                 // exact match — otherwise it would also light up on /admin/products etc.
                 const active =
-                    item.href !== "#" &&
-                    (item.href === "/admin"
+                    item.href === "/admin"
                         ? pathname === "/admin"
-                        : pathname.startsWith(item.href));
+                        : pathname.startsWith(item.href);
 
                 return (
                     <Link

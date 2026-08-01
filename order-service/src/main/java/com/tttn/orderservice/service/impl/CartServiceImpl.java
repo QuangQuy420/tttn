@@ -23,6 +23,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -210,6 +211,35 @@ public class CartServiceImpl implements CartService {
         cartRedisTemplate.delete(
                 buildCartKey(userId)
         );
+    }
+
+    @Override
+    public void removeItems(UUID userId, List<UUID> variantIds) {
+        validateUserId(userId);
+
+        if (variantIds == null || variantIds.isEmpty()) {
+            return;
+        }
+
+        Cart cart = cartRedisTemplate.opsForValue().get(buildCartKey(userId));
+
+        if (cart == null) {
+            return;
+        }
+
+        initializeCartItems(cart);
+
+        cart.getItems()
+                .removeIf(item ->
+                        variantIds.contains(item.getVariantId())
+                );
+
+        if (cart.getItems().isEmpty()) {
+            clearCart(userId);
+            return;
+        }
+
+        saveCart(cart);
     }
 
     @Override

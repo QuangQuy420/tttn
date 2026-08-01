@@ -8,6 +8,9 @@ export interface IProductVariantRepository {
   findBySkuVariant(skuVariant: string): Promise<ProductVariant | null>;
   findByProductIds(productIds: string[]): Promise<ProductVariant[]>;
   create(data: Partial<ProductVariant>): Promise<ProductVariant>;
+  update(id: string, data: Partial<ProductVariant>): Promise<ProductVariant>;
+  /** Soft delete — order-service FKs to a variant id, see the entity's soft-delete note. */
+  softDelete(id: string): Promise<void>;
 }
 
 @Injectable()
@@ -37,5 +40,21 @@ export class TypeOrmProductVariantRepository implements IProductVariantRepositor
 
   create(data: Partial<ProductVariant>): Promise<ProductVariant> {
     return this.repo.save(this.repo.create(data));
+  }
+
+  async update(
+    id: string,
+    data: Partial<ProductVariant>,
+  ): Promise<ProductVariant> {
+    await this.repo.update({ id }, data);
+    const updated = await this.findById(id);
+    if (!updated) {
+      throw new Error(`ProductVariant ${id} not found after update`);
+    }
+    return updated;
+  }
+
+  async softDelete(id: string): Promise<void> {
+    await this.repo.softDelete({ id });
   }
 }

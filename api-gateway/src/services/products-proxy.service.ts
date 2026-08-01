@@ -88,6 +88,49 @@ export class ProductsProxyService {
     }
   }
 
+  async createVariant(
+    productId: string,
+    body: Record<string, unknown>,
+  ): Promise<unknown> {
+    const path = `/products/${productId}/variants`;
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(`${this.baseUrl}${path}`, body),
+      );
+      return response.data;
+    } catch (error) {
+      throw this.toGatewayError(error as AxiosError, path);
+    }
+  }
+
+  async updateVariant(
+    productId: string,
+    variantId: string,
+    body: Record<string, unknown>,
+  ): Promise<unknown> {
+    const path = `/products/${productId}/variants/${variantId}`;
+    try {
+      const response = await firstValueFrom(
+        this.httpService.patch(`${this.baseUrl}${path}`, body),
+      );
+      return response.data;
+    } catch (error) {
+      throw this.toGatewayError(error as AxiosError, path);
+    }
+  }
+
+  async deleteVariant(productId: string, variantId: string): Promise<unknown> {
+    const path = `/products/${productId}/variants/${variantId}`;
+    try {
+      const response = await firstValueFrom(
+        this.httpService.delete(`${this.baseUrl}${path}`),
+      );
+      return response.data;
+    } catch (error) {
+      throw this.toGatewayError(error as AxiosError, path);
+    }
+  }
+
   async uploadProductImage(
     id: string,
     slot: string,

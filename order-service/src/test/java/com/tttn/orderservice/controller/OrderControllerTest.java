@@ -426,7 +426,8 @@ class OrderControllerTest {
                 "0901234567",
                 "123 Nguyễn Trãi, Quận 1, TP.HCM",
                 "Giao hàng trong giờ hành chính",
-                "VNPAY"
+                "VNPAY",
+                List.of(UUID.randomUUID())
         );
     }
 

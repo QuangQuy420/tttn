@@ -1,9 +1,13 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { AddressBook } from "@/components/account/AddressBook";
 import { ErrorState } from "@/components/common/ErrorState";
+import { ImageWithFallback } from "@/components/common/ImageWithFallback";
 import { LoadingState } from "@/components/common/LoadingState";
+import { useAddresses } from "@/hooks/useAddresses";
 import { dispatchCartChange, useCart } from "@/hooks/useCart";
 import { ApiError, checkout } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth/session";
@@ -13,57 +17,49 @@ import { formatPriceVnd } from "@/lib/format/price";
 // so any non-empty string works. This is the only payment method payment-service supports.
 const PAYMENT_METHODS = [{ value: "CARD", label: "Thanh toán qua thẻ" }];
 
-const PHONE_PATTERN = /^(0|\+84)[0-9]{9,10}$/;
-
-interface FieldErrors {
-  receiverName?: string;
-  receiverPhone?: string;
-  shippingAddress?: string;
-}
-
-function validate(receiverName: string, receiverPhone: string, shippingAddress: string): FieldErrors {
-  const errors: FieldErrors = {};
-
-  if (!receiverName.trim()) {
-    errors.receiverName = "Tên người nhận không được để trống.";
-  }
-
-  if (!receiverPhone.trim()) {
-    errors.receiverPhone = "Số điện thoại không được để trống.";
-  } else if (!PHONE_PATTERN.test(receiverPhone.trim())) {
-    errors.receiverPhone = "Số điện thoại không hợp lệ.";
-  }
-
-  if (!shippingAddress.trim()) {
-    errors.shippingAddress = "Địa chỉ giao hàng không được để trống.";
-  }
-
-  return errors;
-}
-
 // FR2/T17: checkout form + order summary from the current cart. Redirects to the new order's
 // detail page on success and clears the cart badge via dispatchCartChange (order-service itself
-// clears the cart server-side on checkout — see CartServiceImpl.clearCart).
+// removes just the checked-out items from the cart server-side — see
+// CartServiceImpl.removeItems, called from OrderSagaEventListener post-payment).
+//
+// T-checkout-select: only checks out the variants the user selected on /cart, carried here via
+// the `variantIds` query param (CartPage builds that URL) — never the whole cart.
+//
+// T-address-book: receiver/address fields are no longer typed by hand every time. The user
+// picks one of their saved addresses via AddressBook (also used, in "manage" mode, on the
+// profile page) — the chosen address's fields are copied into the CheckoutPayload at submit time
+// (order-service still stores a denormalized snapshot per order, unrelated to the address book).
 export function CheckoutPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { cart, isLoading, error: cartError } = useCart();
+  const {
+    addresses,
+    isLoading: isLoadingAddresses,
+    error: addressesError,
+    refetch: refetchAddresses,
+  } = useAddresses();
 
-  const [receiverName, setReceiverName] = useState("");
-  const [receiverPhone, setReceiverPhone] = useState("");
-  const [shippingAddress, setShippingAddress] = useState("");
+  const selectedVariantIds = (searchParams.get("variantIds") ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0);
+
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+
   const [note, setNote] = useState("");
   const [paymentMethod, setPaymentMethod] = useState(PAYMENT_METHODS[0].value);
-
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const errors = validate(receiverName, receiverPhone, shippingAddress);
-    setFieldErrors(errors);
-    if (Object.keys(errors).length > 0) return;
+    const selectedAddress = addresses.find((address) => address.id === effectiveSelectedAddressId);
+    if (!selectedAddress) {
+      setSubmitError("Vui lòng chọn địa chỉ giao hàng.");
+      return;
+    }
 
     const token = getAccessToken();
     if (!token) {
@@ -75,11 +71,12 @@ export function CheckoutPage() {
     setSubmitError(null);
     try {
       const result = await checkout(token, {
-        receiverName: receiverName.trim(),
-        receiverPhone: receiverPhone.trim(),
-        shippingAddress: shippingAddress.trim(),
+        receiverName: selectedAddress.receiverName,
+        receiverPhone: selectedAddress.receiverPhone,
+        shippingAddress: selectedAddress.address,
         note: note.trim() || undefined,
         paymentMethod,
+        variantIds: selectedVariantIds,
       });
       dispatchCartChange();
       router.push(`/orders/${result.orderId}`);
@@ -93,11 +90,27 @@ export function CheckoutPage() {
   if (isLoading) return <LoadingState label="Đang tải giỏ hàng..." />;
   if (cartError) return <ErrorState message={cartError} />;
 
-  const items = cart?.items ?? [];
+  const allItems = cart?.items ?? [];
 
-  if (items.length === 0) {
+  if (allItems.length === 0) {
     return <p className="cart-page__empty">Giỏ hàng của bạn đang trống. Không có gì để thanh toán.</p>;
   }
+
+  const items = allItems.filter((item) => selectedVariantIds.includes(item.variantId));
+
+  if (items.length === 0) {
+    return (
+      <p className="cart-page__empty">
+        Chưa chọn sản phẩm nào để thanh toán.{" "}
+        <Link href="/cart">Quay lại giỏ hàng để chọn sản phẩm</Link>.
+      </p>
+    );
+  }
+
+  const totalAmount = items.reduce((sum, item) => sum + item.subtotal, 0);
+
+  const effectiveSelectedAddressId =
+    selectedAddressId ?? (addresses.find((address) => address.isDefault) ?? addresses[0])?.id ?? null;
 
   return (
     <section aria-labelledby="checkout-heading" className="checkout-page">
@@ -105,47 +118,17 @@ export function CheckoutPage() {
 
       <div className="checkout-page__layout">
         <form className="checkout-form" onSubmit={handleSubmit} noValidate>
-          <label htmlFor="checkout-receiver-name">
-            Tên người nhận
-            <input
-              id="checkout-receiver-name"
-              type="text"
-              value={receiverName}
-              onChange={(event) => setReceiverName(event.target.value)}
-              autoComplete="name"
-            />
-            {fieldErrors.receiverName && (
-              <span className="field-error">{fieldErrors.receiverName}</span>
-            )}
-          </label>
+          <p className="address-picker__label">Địa chỉ giao hàng</p>
 
-          <label htmlFor="checkout-receiver-phone">
-            Số điện thoại
-            <input
-              id="checkout-receiver-phone"
-              type="tel"
-              value={receiverPhone}
-              onChange={(event) => setReceiverPhone(event.target.value)}
-              autoComplete="tel"
-            />
-            {fieldErrors.receiverPhone && (
-              <span className="field-error">{fieldErrors.receiverPhone}</span>
-            )}
-          </label>
-
-          <label htmlFor="checkout-shipping-address">
-            Địa chỉ giao hàng
-            <input
-              id="checkout-shipping-address"
-              type="text"
-              value={shippingAddress}
-              onChange={(event) => setShippingAddress(event.target.value)}
-              autoComplete="street-address"
-            />
-            {fieldErrors.shippingAddress && (
-              <span className="field-error">{fieldErrors.shippingAddress}</span>
-            )}
-          </label>
+          <AddressBook
+            mode="picker"
+            addresses={addresses}
+            isLoading={isLoadingAddresses}
+            error={addressesError}
+            onAddressesChange={refetchAddresses}
+            selectedAddressId={effectiveSelectedAddressId}
+            onSelectAddress={(address) => setSelectedAddressId(address.id)}
+          />
 
           <label htmlFor="checkout-note">
             Ghi chú (không bắt buộc)
@@ -187,7 +170,17 @@ export function CheckoutPage() {
           <ul className="checkout-summary__items">
             {items.map((item) => (
               <li key={item.variantId}>
-                <span>
+                {item.productImageUrl ? (
+                  <ImageWithFallback
+                    src={item.productImageUrl}
+                    alt={item.productName}
+                    className="checkout-summary__item-image"
+                    placeholderClassName="checkout-summary__item-image checkout-summary__item-image--placeholder"
+                  />
+                ) : (
+                  <div className="checkout-summary__item-image checkout-summary__item-image--placeholder" />
+                )}
+                <span className="checkout-summary__item-info">
                   {item.productName} ({item.color}, {item.size}) x{item.quantity}
                 </span>
                 <span>{formatPriceVnd(item.subtotal)}</span>
@@ -195,7 +188,7 @@ export function CheckoutPage() {
             ))}
           </ul>
           <p className="checkout-summary__total">
-            Tổng cộng: <strong>{formatPriceVnd(cart?.totalAmount ?? 0)}</strong>
+            Tổng cộng: <strong>{formatPriceVnd(totalAmount)}</strong>
           </p>
         </aside>
       </div>

@@ -74,13 +74,16 @@ export interface Order {
   updatedAt: string;
 }
 
-// Mirrors CheckoutRequest.
+// Mirrors CheckoutRequest. `variantIds` (T-checkout-select) is the subset of the cart the user
+// picked to check out — order-service creates the order from just these and leaves the rest of
+// the cart untouched (see CartService.removeItems, used instead of clearCart post-payment).
 export interface CheckoutPayload {
   receiverName: string;
   receiverPhone: string;
   shippingAddress: string;
   note?: string;
   paymentMethod: string;
+  variantIds: string[];
 }
 
 // Mirrors CheckoutResponse.

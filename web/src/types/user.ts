@@ -55,3 +55,22 @@ export interface ChangePasswordRequest {
     currentPassword: string;
     newPassword: string;
 }
+
+// Mirrors user-service's AddressResponse — a saved shipping address the user can pick at
+// checkout instead of retyping receiver/address fields every time.
+export interface Address {
+    id: string;
+    receiverName: string;
+    receiverPhone: string;
+    address: string;
+    isDefault: boolean;
+    createdAt: string;
+}
+
+// Mirrors user-service's AddressRequest.
+export interface CreateAddressRequest {
+    receiverName: string;
+    receiverPhone: string;
+    address: string;
+    isDefault: boolean;
+}

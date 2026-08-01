@@ -27,6 +27,8 @@ import type {
 } from "@/types/product";
 import { FaceShapeTagPicker } from "./FaceShapeTagPicker";
 import { ImageUploadSlot } from "./ImageUploadSlot";
+import { ProductVariantsEditor } from "./ProductVariantsEditor";
+import type { ProductVariant } from "@/types/product";
 
 interface ProductEditFormProps {
   product: Product | null;
@@ -38,6 +40,7 @@ interface FormState {
   brandId: string;
   frameShape: FrameShape;
   genderTarget: GenderTarget;
+  material: string;
   basePrice: string;
   description: string;
   faceFitNote: string;
@@ -52,6 +55,7 @@ function blankForm(): FormState {
     brandId: "",
     frameShape: "ROUND",
     genderTarget: "UNISEX",
+    material: "",
     basePrice: "",
     description: "",
     faceFitNote: "",
@@ -68,6 +72,7 @@ function formFromProduct(product: Product): FormState {
     brandId: product.brand.id,
     frameShape: product.frameShape,
     genderTarget: product.genderTarget,
+    material: product.material ?? "",
     basePrice: String(product.basePrice),
     description: product.description ?? "",
     faceFitNote: product.faceFitNote ?? "",
@@ -104,6 +109,8 @@ export function ProductEditForm({ product }: ProductEditFormProps) {
     2: imageBySortOrder(product, 2),
     3: imageBySortOrder(product, 3),
   });
+  // Same "needs an existing product" constraint as image uploads — see ProductVariantsEditor.
+  const [variants, setVariants] = useState<ProductVariant[]>(product?.variants ?? []);
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -171,6 +178,7 @@ export function ProductEditForm({ product }: ProductEditFormProps) {
       brandId: form.brandId,
       frameShape: form.frameShape,
       genderTarget: form.genderTarget,
+      material: form.material.trim() || null,
       basePrice,
       description: form.description.trim() || null,
       faceFitNote: form.faceFitNote.trim() || null,
@@ -351,21 +359,38 @@ export function ProductEditForm({ product }: ProductEditFormProps) {
                 </div>
               </div>
 
-              <label className="admin-form-field" htmlFor="product-gender">
-                Đối tượng
-              </label>
-              <select
-                id="product-gender"
-                className="admin-form-select"
-                value={form.genderTarget}
-                onChange={(event) => updateField("genderTarget", event.target.value as GenderTarget)}
-              >
-                {GENDER_TARGETS.map((gender) => (
-                  <option key={gender} value={gender}>
-                    {GENDER_TARGET_LABELS_VI[gender]}
-                  </option>
-                ))}
-              </select>
+              <div className="admin-form-row">
+                <div>
+                  <label className="admin-form-field" htmlFor="product-gender">
+                    Đối tượng
+                  </label>
+                  <select
+                    id="product-gender"
+                    className="admin-form-select"
+                    value={form.genderTarget}
+                    onChange={(event) =>
+                      updateField("genderTarget", event.target.value as GenderTarget)
+                    }
+                  >
+                    {GENDER_TARGETS.map((gender) => (
+                      <option key={gender} value={gender}>
+                        {GENDER_TARGET_LABELS_VI[gender]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="admin-form-field" htmlFor="product-material">
+                    Chất liệu
+                  </label>
+                  <input
+                    id="product-material"
+                    className="admin-form-input"
+                    value={form.material}
+                    onChange={(event) => updateField("material", event.target.value)}
+                  />
+                </div>
+              </div>
 
               <label className="admin-form-field" htmlFor="product-description">
                 Mô tả sản phẩm
@@ -394,6 +419,15 @@ export function ProductEditForm({ product }: ProductEditFormProps) {
               <FaceShapeTagPicker
                 selected={form.faceShapes}
                 onChange={(next) => updateField("faceShapes", next)}
+              />
+            </div>
+
+            <div className="admin-form-card">
+              <div className="admin-form-card__title">Biến thể (màu sắc / kích thước / tồn kho)</div>
+              <ProductVariantsEditor
+                productId={savedProductId}
+                variants={variants}
+                onChange={setVariants}
               />
             </div>
 

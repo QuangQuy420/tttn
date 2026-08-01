@@ -60,6 +60,38 @@ export class UsersController {
         );
     }
 
+    @Get('me/addresses')
+    listAddresses(
+        @Headers('authorization') authorization?: string,
+    ): Promise<unknown> {
+        return this.usersProxyService.listAddresses(authorization);
+    }
+
+    @Post('me/addresses')
+    createAddress(
+        @Body() body: Record<string, unknown>,
+        @Headers('authorization') authorization?: string,
+    ): Promise<unknown> {
+        return this.usersProxyService.createAddress(body, authorization);
+    }
+
+    @Put('me/addresses/:id')
+    updateAddress(
+        @Param('id') id: string,
+        @Body() body: Record<string, unknown>,
+        @Headers('authorization') authorization?: string,
+    ): Promise<unknown> {
+        return this.usersProxyService.updateAddress(id, body, authorization);
+    }
+
+    @Delete('me/addresses/:id')
+    deleteAddress(
+        @Param('id') id: string,
+        @Headers('authorization') authorization?: string,
+    ): Promise<unknown> {
+        return this.usersProxyService.deleteAddress(id, authorization);
+    }
+
     @Post(':id/roles')
     @UseGuards(JwtGuard, PermissionsGuard)
     @RequirePermission('user:manage-roles')

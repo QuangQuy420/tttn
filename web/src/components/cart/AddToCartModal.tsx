@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ApiError, addCartItem } from "@/lib/api";
 import { dispatchCartChange } from "@/hooks/useCart";
+import { useProduct } from "@/hooks/useProduct";
 import { getAccessToken } from "@/lib/auth/session";
 import { getColorSwatch } from "@/lib/format/color";
 import type { Product } from "@/types/product";
@@ -50,6 +51,35 @@ export function AddToCartModal({ product, onClose }: AddToCartModalProps) {
 
   const sizesForColor = selectedColor ? sizesFor(product, selectedColor) : [];
 
+  const selectedVariant =
+    selectedColor && selectedSize
+      ? product.variants.find(
+          (candidate) => candidate.color === selectedColor && candidate.size === selectedSize,
+        )
+      : null;
+
+  // Stock changes with every checkout elsewhere, so the `product` prop (which may have been
+  // fetched well before this modal opened, e.g. from the catalog list) can't be trusted for it —
+  // re-fetch GET /products/:id fresh on open to get a live `variant.stock` (product-service
+  // computes `quantity - reservedQuantity` from ps_inventory on every call, see
+  // ProductVariantResponseDto).
+  const {
+    product: liveProduct,
+    isLoading: isCheckingStock,
+    error: stockCheckError,
+  } = useProduct(product.id);
+  const liveVariant = selectedVariant
+    ? liveProduct?.variants.find((candidate) => candidate.id === selectedVariant.id)
+    : undefined;
+  const stock = liveVariant?.stock ?? null;
+  const isOutOfStock = stock !== null && stock <= 0;
+  const maxQuantity = stock !== null ? Math.min(MAX_ITEM_QUANTITY, Math.max(stock, 0)) : MAX_ITEM_QUANTITY;
+
+  // Derived, not stored — clamps down if the selected variant's stock is lower than what's
+  // already dialed in (e.g. switching from a size with plenty of stock to one with only a couple
+  // left), while remembering the user's original intent if they switch back to a roomier variant.
+  const clampedQuantity = Math.max(MIN_ITEM_QUANTITY, Math.min(quantity, maxQuantity));
+
   function handleSelectColor(color: string) {
     setSelectedColor(color);
     const sizes = sizesFor(product, color);
@@ -64,7 +94,7 @@ export function AddToCartModal({ product, onClose }: AddToCartModalProps) {
 
   function handleStepQuantity(delta: number) {
     setQuantity((current) =>
-      Math.min(MAX_ITEM_QUANTITY, Math.max(MIN_ITEM_QUANTITY, current + delta)),
+      Math.min(maxQuantity, Math.max(MIN_ITEM_QUANTITY, current + delta)),
     );
   }
 
@@ -74,11 +104,18 @@ export function AddToCartModal({ product, onClose }: AddToCartModalProps) {
       return;
     }
 
-    const variant = product.variants.find(
-      (candidate) => candidate.color === selectedColor && candidate.size === selectedSize,
-    );
-    if (!variant) {
+    if (!selectedVariant) {
       setValidationError("Không tìm thấy phiên bản sản phẩm phù hợp. Vui lòng chọn lại.");
+      return;
+    }
+
+    if (isCheckingStock) {
+      setValidationError("Đang kiểm tra tồn kho, vui lòng đợi trong giây lát.");
+      return;
+    }
+
+    if (isOutOfStock) {
+      setValidationError("Phiên bản này đã hết hàng, vui lòng chọn phiên bản khác.");
       return;
     }
 
@@ -93,8 +130,8 @@ export function AddToCartModal({ product, onClose }: AddToCartModalProps) {
     try {
       await addCartItem(token, {
         productId: product.id,
-        variantId: variant.id,
-        quantity,
+        variantId: selectedVariant.id,
+        quantity: clampedQuantity,
       });
       dispatchCartChange();
       onClose();
@@ -182,21 +219,38 @@ export function AddToCartModal({ product, onClose }: AddToCartModalProps) {
             <button
               type="button"
               onClick={() => handleStepQuantity(-1)}
-              disabled={quantity <= MIN_ITEM_QUANTITY}
+              disabled={clampedQuantity <= MIN_ITEM_QUANTITY}
               aria-label="Giảm số lượng"
             >
               −
             </button>
-            <span aria-live="polite">{quantity}</span>
+            <span aria-live="polite">{clampedQuantity}</span>
             <button
               type="button"
               onClick={() => handleStepQuantity(1)}
-              disabled={quantity >= MAX_ITEM_QUANTITY}
+              disabled={clampedQuantity >= maxQuantity}
               aria-label="Tăng số lượng"
             >
               +
             </button>
           </div>
+
+          {selectedVariant && isCheckingStock && (
+            <p className="modal__stock-note">Đang kiểm tra tồn kho...</p>
+          )}
+          {selectedVariant && !isCheckingStock && stockCheckError && (
+            <p role="alert" className="error-state">
+              {stockCheckError}
+            </p>
+          )}
+          {selectedVariant && !isCheckingStock && !stockCheckError && stock !== null && (
+            <p
+              role={isOutOfStock ? "alert" : undefined}
+              className={isOutOfStock ? "error-state" : "modal__stock-note"}
+            >
+              {isOutOfStock ? "Chỉ còn 0 sản phẩm trong kho" : `Còn ${stock} sản phẩm trong kho`}
+            </p>
+          )}
         </section>
 
         {validationError && (
@@ -223,7 +277,7 @@ export function AddToCartModal({ product, onClose }: AddToCartModalProps) {
             type="button"
             className="btn btn--primary"
             onClick={handleConfirm}
-            disabled={isSubmitting}
+            disabled={isSubmitting || Boolean(selectedVariant && (isCheckingStock || isOutOfStock))}
           >
             {isSubmitting ? "Đang thêm..." : "Thêm vào giỏ hàng"}
           </button>

@@ -52,6 +52,29 @@ export class UsersProxyService {
         );
     }
 
+    listAddresses(authorization?: string): Promise<unknown> {
+        return this.forwardGet('/api/v1/addresses', authorization);
+    }
+
+    createAddress(
+        body: Record<string, unknown>,
+        authorization?: string,
+    ): Promise<unknown> {
+        return this.forwardPost('/api/v1/addresses', body, authorization);
+    }
+
+    updateAddress(
+        id: string,
+        body: Record<string, unknown>,
+        authorization?: string,
+    ): Promise<unknown> {
+        return this.forwardPut(`/api/v1/addresses/${id}`, body, authorization);
+    }
+
+    deleteAddress(id: string, authorization?: string): Promise<unknown> {
+        return this.forwardDelete(`/api/v1/addresses/${id}`, authorization);
+    }
+
     listRoles(authorization?: string): Promise<unknown> {
         return this.forwardGet('/api/v1/roles', authorization);
     }
