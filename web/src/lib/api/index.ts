@@ -11,6 +11,10 @@ export {
   getMyProfile,
   updateMyProfile,
   changePassword,
+  getMyAddresses,
+  createMyAddress,
+  updateMyAddress,
+  deleteMyAddress,
 } from "./users";
 
 export { getBrands } from "./brands";
@@ -19,11 +23,14 @@ export { getRecommendations } from "./recommendations";
 
 export {
   createProduct,
+  createVariant,
   deleteProduct,
+  deleteVariant,
   getCategories,
   getProductById,
   getProducts,
   updateProduct,
+  updateVariant,
   uploadProductImage,
 } from "./products";
 

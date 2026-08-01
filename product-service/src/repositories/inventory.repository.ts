@@ -71,6 +71,13 @@ export interface IInventoryRepository {
   findAvailableByVariantIds(variantIds: string[]): Promise<Map<string, number>>;
   /** Creates a `ps_inventory` row for a variant in the fixed `"MAIN"` warehouse (seeding, T-PS-7). */
   create(data: CreateInventoryInput): Promise<void>;
+  /**
+   * Admin restock (T-PS-variants) — sets the raw `quantity` for a variant in the `"MAIN"`
+   * warehouse, creating the row if it doesn't exist yet. Leaves `reservedQuantity` untouched:
+   * this is a total-on-hand correction, not a reservation event, so it must never be routed
+   * through `reserve()`/`release()`.
+   */
+  setQuantity(variantId: string, quantity: number): Promise<void>;
 }
 
 @Injectable()
@@ -216,6 +223,18 @@ export class TypeOrmInventoryRepository implements IInventoryRepository {
       reservedQuantity: data.reservedQuantity ?? 0,
     });
     await this.repo.save(inventory);
+  }
+
+  async setQuantity(variantId: string, quantity: number): Promise<void> {
+    const existing = await this.repo.findOne({
+      where: { variantId, warehouseCode: WAREHOUSE_CODE },
+    });
+    if (existing) {
+      existing.quantity = quantity;
+      await this.repo.save(existing);
+      return;
+    }
+    await this.create({ variantId, quantity });
   }
 
   /** Stable lock order across concurrent multi-item checkouts, to avoid deadlocks. */

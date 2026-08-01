@@ -17,6 +17,8 @@ describe('ProductImagesService', () => {
       findBySkuVariant: jest.fn(),
       findByProductIds: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
+      softDelete: jest.fn(),
     };
     imageRepository = {
       findByProductIds: jest.fn(),

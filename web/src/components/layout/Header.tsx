@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCart } from "@/hooks/useCart";
 import { ApiError, getMyProfile } from "@/lib/api";
 import {
@@ -15,8 +15,16 @@ import {
 // actually let into /admin.
 const ADMIN_ROLE_NAMES = ["ADMIN"];
 
+// "/" only matches the exact catalog root; every other tab also covers its sub-routes
+// (e.g. "/admin/orders" should still highlight "Quản trị").
+function isNavLinkActive(pathname: string, href: string): boolean {
+    if (href === "/") return pathname === "/";
+    return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export function Header() {
     const router = useRouter();
+    const pathname = usePathname();
     const menuRef = useRef<HTMLDivElement>(null);
 
     // Starts false to match the server-rendered markup (no `window` there), then syncs the
@@ -97,23 +105,36 @@ export function Header() {
             </Link>
 
             <nav className="site-nav" aria-label="Điều hướng chính">
-                <Link href="/" className="site-nav__link">
+                <Link
+                    href="/"
+                    className={`site-nav__link${isNavLinkActive(pathname, "/") ? " site-nav__link--active" : ""}`}
+                    aria-current={isNavLinkActive(pathname, "/") ? "page" : undefined}
+                >
                     Sản phẩm
                 </Link>
 
                 <Link
                     href="/face-analysis"
-                    className="site-nav__link"
+                    className={`site-nav__link${isNavLinkActive(pathname, "/face-analysis") ? " site-nav__link--active" : ""}`}
+                    aria-current={isNavLinkActive(pathname, "/face-analysis") ? "page" : undefined}
                 >
                     Phân tích khuôn mặt
                 </Link>
 
-                <Link href="/try-on" className="site-nav__link">
+                <Link
+                    href="/try-on"
+                    className={`site-nav__link${isNavLinkActive(pathname, "/try-on") ? " site-nav__link--active" : ""}`}
+                    aria-current={isNavLinkActive(pathname, "/try-on") ? "page" : undefined}
+                >
                     Thử Kính
                 </Link>
 
                 {authenticated && roles?.some((r) => ADMIN_ROLE_NAMES.includes(r)) && (
-                    <Link href="/admin/products" className="site-nav__link">
+                    <Link
+                        href="/admin/products"
+                        className={`site-nav__link${isNavLinkActive(pathname, "/admin") ? " site-nav__link--active" : ""}`}
+                        aria-current={isNavLinkActive(pathname, "/admin") ? "page" : undefined}
+                    >
                         Quản trị
                     </Link>
                 )}

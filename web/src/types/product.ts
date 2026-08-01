@@ -34,6 +34,9 @@ export interface ProductVariant {
   size: string;
   extraPrice: number;
   skuVariant: string;
+  // `quantity - reservedQuantity` in ps_inventory; only populated by GET /products/:id
+  // (product-service's ProductsService.findOne()) — undefined on list/search results.
+  stock?: number;
 }
 
 export interface ProductImage {
@@ -91,3 +94,14 @@ export interface CreateProductPayload {
 
 // Mirrors product-service's UpdateProductDto (PartialType(CreateProductDto)) — every field optional.
 export type UpdateProductPayload = Partial<CreateProductPayload>;
+
+// Mirrors product-service's CreateVariantDto (src/routes/dto/create-variant.dto.ts).
+export interface CreateVariantPayload {
+  color: string;
+  size: string;
+  extraPrice?: number;
+  stock?: number;
+}
+
+// Mirrors product-service's UpdateVariantDto (PartialType(CreateVariantDto)) — every field optional.
+export type UpdateVariantPayload = Partial<CreateVariantPayload>;

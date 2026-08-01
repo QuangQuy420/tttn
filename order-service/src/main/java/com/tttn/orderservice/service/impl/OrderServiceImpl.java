@@ -30,9 +30,12 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -56,6 +59,24 @@ public class OrderServiceImpl implements OrderService {
             throw new BadRequestException("Giỏ hàng đang trống");
         }
 
+        // Partial checkout (T-checkout-select): only the variants the client selected become
+        // this order — everything else stays in the cart. `@NotEmpty` on the DTO already
+        // rejects an empty selection; this also catches a selected id that isn't actually in
+        // the cart anymore (e.g. removed in another tab).
+        Set<UUID> selectedVariantIds = new HashSet<>(request.variantIds());
+        List<CartItem> selectedItems = cart.getItems().stream()
+                .filter(item -> selectedVariantIds.contains(item.getVariantId()))
+                .collect(Collectors.toList());
+
+        Set<UUID> foundVariantIds = selectedItems.stream()
+                .map(CartItem::getVariantId)
+                .collect(Collectors.toSet());
+        if (!foundVariantIds.equals(selectedVariantIds)) {
+            throw new BadRequestException(
+                    "Một số sản phẩm đã chọn không có trong giỏ hàng"
+            );
+        }
+
         Order order = Order.builder()
                 .orderCode(generateOrderCode())
                 .userId(userId)
@@ -71,7 +92,7 @@ public class OrderServiceImpl implements OrderService {
 
         BigDecimal totalAmount = BigDecimal.ZERO;
 
-        for (CartItem cartItem : cart.getItems()) {
+        for (CartItem cartItem : selectedItems) {
             ProductResponse product =
                     productClient.getProductById(cartItem.getProductId());
 

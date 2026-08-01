@@ -2,6 +2,7 @@ package com.tttn.orderservice.messaging;
 
 import com.tttn.orderservice.config.RabbitMqConfig;
 import com.tttn.orderservice.entity.Order;
+import com.tttn.orderservice.entity.OrderItem;
 import com.tttn.orderservice.entity.OrderStatusHistory;
 import com.tttn.orderservice.enums.OrderStatus;
 import com.tttn.orderservice.enums.PaymentStatus;
@@ -17,6 +18,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Consumes checkout-saga replies off the durable queue bound to {@code stock.reserved} /
@@ -170,7 +174,13 @@ public class OrderSagaEventListener {
 
         orderRepository.save(order);
 
-        cartService.clearCart(order.getUserId());
+        // Partial checkout (T-checkout-select): checkout() only ever put the selected variants
+        // onto this order, so only those should leave the cart — clearCart() would also wipe
+        // items the user deliberately left unselected.
+        List<UUID> orderedVariantIds = order.getItems().stream()
+                .map(OrderItem::getVariantId)
+                .collect(Collectors.toList());
+        cartService.removeItems(order.getUserId(), orderedVariantIds);
     }
 
     private void handlePaymentFailed(

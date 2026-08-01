@@ -9,9 +9,11 @@ import { ProductFaceShape } from './db/entities/product-face-shape.entity';
 import { Inventory } from './db/entities/inventory.entity';
 import { StockReservation } from './db/entities/stock-reservation.entity';
 import { ProductsController } from './routes/products.controller';
+import { ProductVariantsController } from './routes/product-variants.controller';
 import { CategoriesController } from './routes/categories.controller';
 import { BrandsController } from './routes/brands.controller';
 import { ProductsService } from './services/products.service';
+import { ProductVariantsService } from './services/product-variants.service';
 import { CategoriesService } from './services/categories.service';
 import { BrandsService } from './services/brands.service';
 import { ProductImagesService } from './services/product-images.service';
@@ -62,9 +64,15 @@ import {
       StockReservation,
     ]),
   ],
-  controllers: [ProductsController, CategoriesController, BrandsController],
+  controllers: [
+    ProductsController,
+    ProductVariantsController,
+    CategoriesController,
+    BrandsController,
+  ],
   providers: [
     ProductsService,
+    ProductVariantsService,
     CategoriesService,
     BrandsService,
     ProductImagesService,

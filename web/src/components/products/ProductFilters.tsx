@@ -2,17 +2,6 @@ import { formatFrameShapeVi } from "@/lib/labels";
 import type { Category } from "@/types/category";
 import type { FrameShape } from "@/types/product";
 
-const FRAME_SHAPES: FrameShape[] = [
-  "ROUND",
-  "SQUARE",
-  "OVAL",
-  "CAT_EYE",
-  "AVIATOR",
-  "RECTANGLE",
-  "WAYFARER",
-  "RIMLESS",
-];
-
 interface PriceRange {
   label: string;
   minPrice?: number;
@@ -36,6 +25,7 @@ function isActivePriceRange(
 
 interface ProductFiltersProps {
   categories: Category[];
+  frameShapes: FrameShape[];
   categoryId: string | undefined;
   frameShape: FrameShape | undefined;
   minPrice: number | undefined;
@@ -47,6 +37,7 @@ interface ProductFiltersProps {
 
 export function ProductFilters({
   categories,
+  frameShapes,
   categoryId,
   frameShape,
   minPrice,
@@ -87,7 +78,7 @@ export function ProductFilters({
         >
           Tất cả kiểu gọng
         </button>
-        {FRAME_SHAPES.map((shape) => (
+        {frameShapes.map((shape) => (
           <button
             key={shape}
             type="button"

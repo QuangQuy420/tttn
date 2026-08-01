@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ErrorState } from "@/components/common/ErrorState";
 import { LoadingState } from "@/components/common/LoadingState";
+import { useAvailableFrameShapes } from "@/hooks/useAvailableFrameShapes";
 import { useCategories } from "@/hooks/useCategories";
 import { useProducts } from "@/hooks/useProducts";
 import type { FrameShape } from "@/types/product";
+import { HeroCarousel } from "./HeroCarousel";
 import { ProductFilters } from "./ProductFilters";
 import { ProductGrid } from "./ProductGrid";
 
@@ -41,6 +44,7 @@ export function ProductListPage() {
     search,
   });
   const { categories } = useCategories();
+  const { frameShapes } = useAvailableFrameShapes();
 
   const [searchInput, setSearchInput] = useState(search ?? "");
   // Tracks the last `search` URL param value we've synced `searchInput` from, so we can react to
@@ -115,17 +119,13 @@ export function ProductListPage() {
             Tải lên 1 ảnh chân dung, chúng tôi sẽ phân tích dáng khuôn mặt của bạn và gợi ý những
             gọng kính phù hợp nhất — sau đó thử ngay trên trình duyệt trước khi mua.
           </p>
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled
-            title="Sắp ra mắt"
-            aria-label="Bắt đầu phân tích khuôn mặt (sắp ra mắt)"
-          >
+          <Link href="/face-analysis" className="btn btn--primary">
             Bắt đầu phân tích khuôn mặt
-          </button>
+          </Link>
         </div>
-        <div className="hero__visual" aria-hidden="true" />
+        <div className="hero__visual">
+          <HeroCarousel />
+        </div>
       </section>
 
       <section aria-labelledby="catalog-heading">
@@ -155,6 +155,7 @@ export function ProductListPage() {
 
         <ProductFilters
           categories={categories}
+          frameShapes={frameShapes}
           categoryId={categoryId}
           frameShape={frameShape}
           minPrice={minPrice}

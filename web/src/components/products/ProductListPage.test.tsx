@@ -1,6 +1,7 @@
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useAvailableFrameShapes } from "@/hooks/useAvailableFrameShapes";
 import { useCategories } from "@/hooks/useCategories";
 import { useProducts } from "@/hooks/useProducts";
 import type { Product } from "@/types/product";
@@ -12,11 +13,13 @@ jest.mock("next/navigation", () => ({
 }));
 jest.mock("@/hooks/useProducts", () => ({ useProducts: jest.fn() }));
 jest.mock("@/hooks/useCategories", () => ({ useCategories: jest.fn() }));
+jest.mock("@/hooks/useAvailableFrameShapes", () => ({ useAvailableFrameShapes: jest.fn() }));
 
 const mockedUseRouter = useRouter as jest.Mock;
 const mockedUseSearchParams = useSearchParams as jest.Mock;
 const mockedUseProducts = useProducts as jest.Mock;
 const mockedUseCategories = useCategories as jest.Mock;
+const mockedUseAvailableFrameShapes = useAvailableFrameShapes as jest.Mock;
 
 const sampleProduct: Product = {
   id: "p1",
@@ -50,6 +53,7 @@ describe("ProductListPage", () => {
       isLoading: false,
       error: null,
     });
+    mockedUseAvailableFrameShapes.mockReturnValue({ frameShapes: ["AVIATOR"] });
     setSearchParams();
   });
 

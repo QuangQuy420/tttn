@@ -99,6 +99,11 @@ public enum ErrorCode {
     INVALID_INTERNAL_KEY(
             HttpStatus.FORBIDDEN,
             "Yêu cầu nội bộ không hợp lệ"
+    ),
+
+    ADDRESS_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "Không tìm thấy địa chỉ"
     );
 
 

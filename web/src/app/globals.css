@@ -117,7 +117,7 @@ a:hover {
   border: 1px solid var(--color-border);
   background: transparent;
   color: var(--color-text);
-  cursor: not-allowed;
+  cursor: pointer;
   padding: 0;
 }
 
@@ -186,7 +186,29 @@ main {
   min-width: 220px;
   aspect-ratio: 4 / 3;
   border-radius: 6px;
-  background: repeating-linear-gradient(135deg, #ede6d8, #ede6d8 12px, #e4dbc9 12px, #e4dbc9 24px);
+  overflow: hidden;
+  background: #ede6d8;
+}
+
+.hero-carousel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.hero-carousel__slide {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+
+.hero-carousel__slide--active {
+  opacity: 1;
 }
 
 .btn {
@@ -321,7 +343,7 @@ main {
 .product-card__image {
   width: 100%;
   aspect-ratio: 1 / 1;
-  object-fit: cover;
+  object-fit: contain;
   background: #f0f0f0;
 }
 
@@ -357,6 +379,7 @@ main {
   display: flex;
   gap: 0.5rem;
   padding: 0.9rem 1rem 1rem;
+  margin-top: auto;
 }
 
 .product-detail__back-link {
@@ -384,7 +407,7 @@ main {
 .product-detail__main-image {
   width: 100%;
   aspect-ratio: 1 / 1;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: 8px;
   margin-bottom: 0.75rem;
   background: #f0f0f0;
@@ -406,7 +429,7 @@ main {
 .product-detail__thumbnail {
   width: 100%;
   aspect-ratio: 1 / 1;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: 6px;
   background: #f0f0f0;
 }
@@ -709,6 +732,37 @@ main {
   grid-template-columns: 1.2fr 1.8fr 1fr 1fr 1.3fr;
 }
 
+.admin-table__row--variants {
+  grid-template-columns: 1.2fr 0.8fr 1fr 0.8fr 150px;
+  align-items: start;
+}
+
+.admin-table__row--variants .admin-form-input {
+  margin-bottom: 0;
+}
+
+.admin-variant-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.admin-variant-row {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr 1fr 0.8fr 150px;
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.admin-variant-row .admin-form-input {
+  margin-bottom: 0;
+}
+
+.admin-variant-row__actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .admin-table__row--head {
   background: rgba(43, 36, 32, 0.04);
   font-size: 0.75rem;
@@ -726,7 +780,7 @@ main {
   width: 40px;
   height: 40px;
   border-radius: 6px;
-  object-fit: cover;
+  object-fit: contain;
   background: repeating-linear-gradient(135deg, #ede6d8, #ede6d8 6px, #e4dbc9 6px, #e4dbc9 12px);
 }
 
@@ -822,6 +876,7 @@ main {
 .admin-form {
   padding: 1.75rem;
   max-width: 980px;
+  margin: 0 auto;
 }
 
 .admin-form__title {
@@ -958,7 +1013,7 @@ main {
 .admin-image-slot__image {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
 }
 
@@ -1240,6 +1295,15 @@ main {
   gap: 0.625rem;
   padding: 0.875rem;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.55), transparent);
+}
+
+/* .btn--outline's dark text/border (readable on the page's light background) disappears
+   against this overlay, which always sits on top of a photo — flip it to a light outline
+   with a translucent dark fill so it stays legible regardless of what's behind it. */
+.face-analysis__camera-actions .btn--outline {
+  background: rgba(28, 23, 18, 0.45);
+  border-color: rgba(255, 255, 255, 0.85);
+  color: #fff;
 }
 
 .face-analysis__camera-hint {
@@ -1654,6 +1718,14 @@ main {
   transform: scaleX(1);
 }
 
+.site-nav__link--active {
+  color: var(--color-text);
+}
+
+.site-nav__link--active::after {
+  transform: scaleX(1);
+}
+
 .site-nav__link--disabled {
   color: var(--color-text-muted);
   cursor: default;
@@ -1716,7 +1788,7 @@ main {
   border-radius: 50%;
   background: var(--color-surface);
   color: var(--color-text);
-  cursor: not-allowed;
+  cursor: pointer;
   opacity: 0.72;
 }
 
@@ -2640,7 +2712,7 @@ main {
   height: 80px;
   border-radius: 8px;
   overflow: hidden;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
   border: 1px solid rgba(43, 36, 32, 0.12);
   background: repeating-linear-gradient(135deg, #ede6d8, #ede6d8 12px, #e4dbc9 12px, #e4dbc9 24px);
@@ -2679,6 +2751,7 @@ main {
 .orders-page,
 .order-detail {
   max-width: 1050px;
+  margin-inline: auto;
   padding-block: clamp(1.5rem, 4vw, 3rem);
 }
 
@@ -2716,7 +2789,7 @@ main {
 
 .cart-item {
   display: grid;
-  grid-template-columns: 84px 1fr auto auto auto;
+  grid-template-columns: auto 84px 1fr auto auto auto;
   align-items: center;
   gap: 1rem;
   padding: 1rem;
@@ -2726,11 +2799,33 @@ main {
   box-shadow: 0 10px 26px rgba(43, 36, 32, 0.05);
 }
 
+.cart-item__checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.cart-page__select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.cart-page__select-all input {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
 .cart-item__image {
   width: 84px;
   height: 84px;
   border-radius: 8px;
-  object-fit: cover;
+  object-fit: contain;
   background: #f0f0f0;
 }
 
@@ -2788,6 +2883,11 @@ main {
   margin: 0;
   font-size: 1.05rem;
   color: var(--color-text-secondary);
+}
+
+.cart-page__total--empty {
+  color: var(--color-text-muted);
+  font-style: italic;
 }
 
 .cart-page__total strong {
@@ -2909,6 +3009,220 @@ main {
   min-width: 180px;
 }
 
+/* Saved-address picker (checkout) */
+
+.address-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.address-picker__label {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.address-picker__loading {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+}
+
+.address-picker__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+/* Scoped under .address-picker__list (not just .address-picker__option) so this beats the
+   generic ".checkout-form label { flex-direction: column }" rule — same class-count specificity
+   would otherwise lose to that element+class selector and stack the radio above the text. */
+.address-picker__list .address-picker__option {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: #fffdf9;
+  cursor: pointer;
+  transition:
+          border-color 0.18s ease,
+          box-shadow 0.18s ease;
+}
+
+.address-picker__list .address-picker__option:hover {
+  border-color: var(--color-accent);
+}
+
+.address-picker__list .address-picker__option--selected {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(201, 123, 74, 0.13);
+  background: #ffffff;
+}
+
+.address-picker__option input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.address-picker__option-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.address-picker__option-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 650;
+  color: var(--color-text);
+}
+
+.address-picker__edit-btn {
+  flex-shrink: 0;
+  align-self: center;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+          border-color 0.18s ease,
+          color 0.18s ease;
+}
+
+.address-picker__edit-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent-dark);
+}
+
+.address-picker__edit-btn--danger:hover {
+  border-color: #c0392b;
+  color: #c0392b;
+}
+
+.address-picker__edit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.address-picker__option-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-self: center;
+  gap: 0.5rem;
+}
+
+/* Manage mode (profile page): a plain card, not a clickable <label> — no pointer cursor, no
+   selection hover state. */
+.address-picker__list .address-picker__option--static {
+  cursor: default;
+}
+
+.address-picker__list .address-picker__option--static:hover {
+  border-color: var(--color-border);
+}
+
+.address-picker__add-trigger {
+  align-self: flex-start;
+}
+
+.address-picker__badge {
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(201, 123, 74, 0.13);
+  color: var(--color-accent-dark);
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+
+.address-picker__option-address {
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+}
+
+.address-picker__add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 0.9rem;
+  border: 1px dashed var(--color-border);
+  border-radius: 10px;
+  background: #fffdf9;
+}
+
+/* Self-contained field styling — AddressBook is mounted inside .checkout-form on the checkout
+   page (which already styles bare <label>/<input>) but also inside .profile-edit on the
+   profile page (which doesn't), so these rules can't rely on an ambient parent selector. */
+.address-picker__add-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.address-picker__add-form input[type="text"],
+.address-picker__add-form input[type="tel"] {
+  width: 100%;
+  min-height: 46px;
+  padding: 0.72rem 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  outline: none;
+  background: #fffdf9;
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  transition:
+          border-color 0.18s ease,
+          box-shadow 0.18s ease,
+          background-color 0.18s ease;
+}
+
+.address-picker__add-form input[type="text"]:focus,
+.address-picker__add-form input[type="tel"]:focus {
+  border-color: var(--color-accent);
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(201, 123, 74, 0.13);
+}
+
+.address-picker__default-check {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem !important;
+  font-weight: 500 !important;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.address-picker__default-check input {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.address-picker__add-form-actions {
+  display: flex;
+  gap: 0.6rem;
+}
+
 .checkout-summary {
   padding: clamp(1.2rem, 3vw, 1.75rem);
   border: 1px solid var(--color-border);
@@ -2936,6 +3250,7 @@ main {
 
 .checkout-summary__items li {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
   padding-bottom: 0.65rem;
@@ -2948,6 +3263,24 @@ main {
   flex-shrink: 0;
   font-weight: 600;
   color: var(--color-text);
+}
+
+.checkout-summary__item-image {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  object-fit: contain;
+  background: #f0f0f0;
+}
+
+.checkout-summary__item-image--placeholder {
+  background: repeating-linear-gradient(135deg, #ede6d8, #ede6d8 10px, #e4dbc9 10px, #e4dbc9 20px);
+}
+
+.checkout-summary__item-info {
+  flex: 1;
+  min-width: 0;
 }
 
 .checkout-summary__total {
@@ -3260,6 +3593,12 @@ main {
   color: var(--color-text-muted);
 }
 
+.modal__stock-note {
+  margin: 0.6rem 0 0;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
 .modal__size-list {
   display: flex;
   flex-wrap: wrap;
@@ -3311,12 +3650,16 @@ main {
   }
 
   .cart-item {
-    grid-template-columns: 64px 1fr;
+    grid-template-columns: auto 64px 1fr;
     grid-template-areas:
-      "image info"
-      "stepper stepper"
-      "subtotal remove";
+      "checkbox image info"
+      "checkbox stepper stepper"
+      "checkbox subtotal remove";
     row-gap: 0.75rem;
+  }
+
+  .cart-item__checkbox {
+    grid-area: checkbox;
   }
 
   .cart-item__image {

@@ -34,7 +34,7 @@ export function useProduct(id: string | null): UseProductResult {
         if (!cancelled) setProduct(result);
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof ApiError ? err.message : "Failed to load product.");
+          setError(err instanceof ApiError ? err.message : "Không thể tải thông tin sản phẩm.");
         }
       } finally {
         if (!cancelled) setIsLoading(false);

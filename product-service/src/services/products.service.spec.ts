@@ -104,6 +104,8 @@ describe('ProductsService', () => {
       findBySkuVariant: jest.fn(),
       findByProductIds: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
+      softDelete: jest.fn(),
     };
     imageRepository = {
       findByProductIds: jest.fn(),
@@ -137,6 +139,7 @@ describe('ProductsService', () => {
       release: jest.fn(),
       findAvailableByVariantIds: jest.fn().mockResolvedValue(new Map()),
       create: jest.fn(),
+      setQuantity: jest.fn(),
     };
 
     service = new ProductsService(

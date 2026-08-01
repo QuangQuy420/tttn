@@ -2,6 +2,8 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { AddressBook } from "@/components/account/AddressBook";
+import { useAddresses } from "@/hooks/useAddresses";
 import {
     getMyProfile,
     updateMyProfile,
@@ -15,13 +17,18 @@ import { ApiError } from "@/lib/api";
 
 export default function ProfilePage() {
     const router = useRouter();
+    const {
+        addresses,
+        isLoading: isLoadingAddresses,
+        error: addressesError,
+        refetch: refetchAddresses,
+    } = useAddresses();
 
     const [profile, setProfile] = useState<UserProfile | null>(null);
 
     const [fullName, setFullName] = useState("");
     const [phone, setPhone] = useState("");
     const [avatarUrl, setAvatarUrl] = useState("");
-    const [address, setAddress] = useState("");
     const [dateOfBirth, setDateOfBirth] = useState("");
 
     const [loading, setLoading] = useState(true);
@@ -47,7 +54,6 @@ export default function ProfilePage() {
                 setFullName(user.fullName ?? "");
                 setPhone(user.phone ?? "");
                 setAvatarUrl(user.avatarUrl ?? "");
-                setAddress(user.address ?? "");
                 setDateOfBirth(user.dateOfBirth ?? "");
             } catch (err) {
                 if (err instanceof ApiError && err.status === 401) {
@@ -90,7 +96,6 @@ export default function ProfilePage() {
                 fullName,
                 phone,
                 avatarUrl,
-                address,
                 dateOfBirth: dateOfBirth || undefined,
             });
 
@@ -216,17 +221,6 @@ export default function ProfilePage() {
                         />
                     </label>
 
-                    <label>
-                        Địa chỉ
-                        <input
-                            type="text"
-                            value={address}
-                            onChange={(event) =>
-                                setAddress(event.target.value)
-                            }
-                        />
-                    </label>
-
                     <label className="profile-form__full">
                         URL ảnh đại diện
                         <input
@@ -256,6 +250,23 @@ export default function ProfilePage() {
                         </p>
                     )}
                 </form>
+            </section>
+
+            <section className="profile-edit">
+                <div className="profile-section-heading">
+                    <div>
+                        <h2>Sổ địa chỉ</h2>
+                        <p>Quản lý các địa chỉ giao hàng đã lưu, dùng để chọn nhanh khi thanh toán.</p>
+                    </div>
+                </div>
+
+                <AddressBook
+                    mode="manage"
+                    addresses={addresses}
+                    isLoading={isLoadingAddresses}
+                    error={addressesError}
+                    onAddressesChange={refetchAddresses}
+                />
             </section>
         </main>
     );

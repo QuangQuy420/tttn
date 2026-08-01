@@ -1,16 +1,19 @@
 import { render, screen } from "@testing-library/react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Header } from "./Header";
 
 jest.mock("next/navigation", () => ({
   useRouter: jest.fn(),
+  usePathname: jest.fn(),
 }));
 
 const mockedUseRouter = useRouter as jest.Mock;
+const mockedUsePathname = usePathname as jest.Mock;
 
 describe("Header", () => {
   beforeEach(() => {
     mockedUseRouter.mockReturnValue({ push: jest.fn(), refresh: jest.fn() });
+    mockedUsePathname.mockReturnValue("/");
   });
 
   afterEach(() => {

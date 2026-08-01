@@ -2,11 +2,14 @@ import type { PaginatedResponse } from "@/types/api";
 import type { Category } from "@/types/category";
 import type {
   CreateProductPayload,
+  CreateVariantPayload,
   FaceShapeTag,
   Product,
   ProductImage,
   ProductListParams,
+  ProductVariant,
   UpdateProductPayload,
+  UpdateVariantPayload,
 } from "@/types/product";
 import { apiFetch } from "./client";
 
@@ -75,6 +78,50 @@ export function deleteProduct(id: string, token: string): Promise<void> {
     method: "DELETE",
     headers: authHeaders(token),
   });
+}
+
+// Returns the single created/updated variant (not the whole product) — mirrors
+// product-service's ProductVariantResponseDto returned by POST/PATCH .../variants[/:variantId].
+export function createVariant(
+  productId: string,
+  payload: CreateVariantPayload,
+  token: string,
+): Promise<ProductVariant> {
+  return apiFetch<ProductVariant>(`/products/${encodeURIComponent(productId)}/variants`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateVariant(
+  productId: string,
+  variantId: string,
+  payload: UpdateVariantPayload,
+  token: string,
+): Promise<ProductVariant> {
+  return apiFetch<ProductVariant>(
+    `/products/${encodeURIComponent(productId)}/variants/${encodeURIComponent(variantId)}`,
+    {
+      method: "PATCH",
+      headers: authHeaders(token),
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export function deleteVariant(
+  productId: string,
+  variantId: string,
+  token: string,
+): Promise<void> {
+  return apiFetch<void>(
+    `/products/${encodeURIComponent(productId)}/variants/${encodeURIComponent(variantId)}`,
+    {
+      method: "DELETE",
+      headers: authHeaders(token),
+    },
+  );
 }
 
 // Returns the single uploaded/replaced image (not the whole product) — mirrors

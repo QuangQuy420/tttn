@@ -1,6 +1,8 @@
 import type { ApiResponse } from "@/types/auth";
 import type {
+    Address,
     ChangePasswordRequest,
+    CreateAddressRequest,
     UpdateProfileRequest,
     UserProfile,
 } from "@/types/user";
@@ -40,5 +42,47 @@ export function changePassword(
         method: "PUT",
         headers: authHeaders(token),
         body: JSON.stringify(payload),
+    });
+}
+
+export function getMyAddresses(
+    token: string,
+): Promise<ApiResponse<Address[]>> {
+    return apiFetch<ApiResponse<Address[]>>("/users/me/addresses", {
+        method: "GET",
+        headers: authHeaders(token),
+    });
+}
+
+export function createMyAddress(
+    token: string,
+    payload: CreateAddressRequest,
+): Promise<ApiResponse<Address>> {
+    return apiFetch<ApiResponse<Address>>("/users/me/addresses", {
+        method: "POST",
+        headers: authHeaders(token),
+        body: JSON.stringify(payload),
+    });
+}
+
+export function updateMyAddress(
+    token: string,
+    addressId: string,
+    payload: CreateAddressRequest,
+): Promise<ApiResponse<Address>> {
+    return apiFetch<ApiResponse<Address>>(`/users/me/addresses/${addressId}`, {
+        method: "PUT",
+        headers: authHeaders(token),
+        body: JSON.stringify(payload),
+    });
+}
+
+export function deleteMyAddress(
+    token: string,
+    addressId: string,
+): Promise<ApiResponse<unknown>> {
+    return apiFetch<ApiResponse<unknown>>(`/users/me/addresses/${addressId}`, {
+        method: "DELETE",
+        headers: authHeaders(token),
     });
 }

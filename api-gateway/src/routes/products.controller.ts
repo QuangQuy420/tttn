@@ -65,6 +65,38 @@ export class ProductsController {
     return this.productsProxyService.deleteProduct(id);
   }
 
+  @Post(':id/variants')
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @RequirePermission('product:manage')
+  createVariant(
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+  ): Promise<unknown> {
+    return this.productsProxyService.createVariant(id, body);
+  }
+
+  @Patch(':id/variants/:variantId')
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @RequirePermission('product:manage')
+  updateVariant(
+    @Param('id') id: string,
+    @Param('variantId') variantId: string,
+    @Body() body: Record<string, unknown>,
+  ): Promise<unknown> {
+    return this.productsProxyService.updateVariant(id, variantId, body);
+  }
+
+  @Delete(':id/variants/:variantId')
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @RequirePermission('product:manage')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  removeVariant(
+    @Param('id') id: string,
+    @Param('variantId') variantId: string,
+  ): Promise<unknown> {
+    return this.productsProxyService.deleteVariant(id, variantId);
+  }
+
   @Post(':id/images')
   @UseGuards(JwtGuard, PermissionsGuard)
   @RequirePermission('product:manage')

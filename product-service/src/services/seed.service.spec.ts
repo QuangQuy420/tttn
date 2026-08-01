@@ -96,6 +96,8 @@ describe('SeedService', () => {
       findBySkuVariant: jest.fn(),
       findByProductIds: jest.fn(),
       create: jest.fn().mockResolvedValue({ id: 'variant-x' }),
+      update: jest.fn(),
+      softDelete: jest.fn(),
     };
     faceShapeRepository = {
       findByProductIds: jest.fn().mockResolvedValue([]),
@@ -106,6 +108,7 @@ describe('SeedService', () => {
       release: jest.fn(),
       findAvailableByVariantIds: jest.fn(),
       create: jest.fn().mockResolvedValue(undefined),
+      setQuantity: jest.fn(),
     };
     productImagesService = {
       create: jest.fn().mockResolvedValue({ id: 'image-x' }),
