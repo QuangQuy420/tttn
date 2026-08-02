@@ -1,5 +1,6 @@
 import type { FaceShapeTag, FrameShape, GenderTarget } from "@/types/product";
 import type { OrderStatus } from "@/types/order";
+import type { SagaLogLevel, SagaLogService, SagaLogStage } from "@/types/saga-log";
 
 // Vietnamese labels for the admin area (Admin Products.dc.html / Product Edit.dc.html mockups
 // use Vietnamese copy throughout) — also reused by the storefront (ProductFilters/ProductCard/
@@ -98,3 +99,60 @@ export const ORDER_STATUSES: OrderStatus[] = [
   "COMPLETED",
   "CANCELLED",
 ];
+
+// Saga-log stage labels — mirrors OrderSagaLog.SagaLogStage (see @/types/saga-log). Used on the
+// "Nhật ký xử lý đơn hàng" admin screens (plan FR14/FR18) since the raw enum values aren't
+// Vietnamese.
+export const SAGA_LOG_STAGE_LABELS_VI: Record<SagaLogStage, string> = {
+  CREATED: "Tạo đơn hàng",
+  STOCK_RESERVE_REQUESTED: "Gửi yêu cầu giữ hàng",
+  STOCK_RESERVED: "Đã giữ hàng thành công",
+  STOCK_RESERVE_REJECTED: "Giữ hàng thất bại",
+  PAYMENT_CREATE_REQUESTED: "Gửi yêu cầu thanh toán",
+  PAYMENT_COMPLETED: "Thanh toán thành công",
+  PAYMENT_FAILED: "Thanh toán thất bại",
+  STOCK_RELEASE_REQUESTED: "Gửi yêu cầu nhả hàng",
+  RECONCILIATION_RESENT: "Tự động gửi lại lệnh",
+  RECONCILIATION_EXHAUSTED: "Hết lượt tự động thử lại",
+  DEAD_LETTERED: "Bản tin bị loại bỏ (dead-letter)",
+};
+
+export function formatSagaLogStageVi(stage: SagaLogStage): string {
+  return SAGA_LOG_STAGE_LABELS_VI[stage];
+}
+
+// Saga-log level labels — mirrors OrderSagaLog.SagaLogLevel.
+export const SAGA_LOG_LEVEL_LABELS_VI: Record<SagaLogLevel, string> = {
+  INFO: "Bình thường",
+  WARN: "Cảnh báo",
+};
+
+export function formatSagaLogLevelVi(level: SagaLogLevel): string {
+  return SAGA_LOG_LEVEL_LABELS_VI[level];
+}
+
+// Saga-log service labels — mirrors OrderSagaLog.SagaLogService. Used for the "nơi bắn sự kiện"/
+// "nơi nhận sự kiện" columns on the saga-log detail table.
+export const SAGA_LOG_SERVICE_LABELS_VI: Record<SagaLogService, string> = {
+  ORDER_SERVICE: "Order Service",
+  PRODUCT_SERVICE: "Product Service",
+  PAYMENT_SERVICE: "Payment Service",
+  MESSAGE_BROKER: "Message Broker",
+};
+
+export function formatSagaLogServiceVi(service: SagaLogService | null): string {
+  return service ? SAGA_LOG_SERVICE_LABELS_VI[service] : "—";
+}
+
+// "Trạng thái" column on the saga-log detail table — one saga-log row is a single event outcome
+// (an event fired, a reply received, a retry attempt), so INFO/WARN reads better as "Thành
+// công"/"Thất bại" here than the "Bình thường"/"Cảnh báo" wording used for the day/order summary
+// screens (SAGA_LOG_LEVEL_LABELS_VI above), which describe a whole day/order's worst level.
+export const SAGA_LOG_ROW_STATUS_LABELS_VI: Record<SagaLogLevel, string> = {
+  INFO: "Thành công",
+  WARN: "Thất bại",
+};
+
+export function formatSagaLogRowStatusVi(level: SagaLogLevel): string {
+  return SAGA_LOG_ROW_STATUS_LABELS_VI[level];
+}

@@ -6,17 +6,19 @@ import { OrdersProxyService } from '../services/orders-proxy.service';
 import { UsersProxyService } from '../services/users-proxy.service';
 import {
   AdminOrdersController,
+  AdminSagaLogsController,
   CartController,
   OrdersController,
 } from './orders.controller';
 
 /**
- * Wires the `/api/cart/*`, `/api/orders/*`, and `/api/admin/orders/*` proxy
- * routes to `order-service`, per the route table in README.md.
- * `UsersProxyService` is also provided here (alongside `OrdersProxyService`)
- * because `AdminOrdersController`'s routes use `PermissionsGuard`, which
- * calls `UsersProxyService.getPermissions` to check the caller's live
- * permissions against user-service.
+ * Wires the `/api/cart/*`, `/api/orders/*`, `/api/admin/orders/*`, and
+ * `/api/admin/saga-logs/*` proxy routes to `order-service`, per the route
+ * table in README.md. `UsersProxyService` is also provided here (alongside
+ * `OrdersProxyService`) because `AdminOrdersController`'s and
+ * `AdminSagaLogsController`'s routes use `PermissionsGuard`, which calls
+ * `UsersProxyService.getPermissions` to check the caller's live permissions
+ * against user-service.
  */
 @Module({
   imports: [
@@ -27,7 +29,12 @@ import {
       }),
     }),
   ],
-  controllers: [CartController, OrdersController, AdminOrdersController],
+  controllers: [
+    CartController,
+    OrdersController,
+    AdminOrdersController,
+    AdminSagaLogsController,
+  ],
   providers: [OrdersProxyService, UsersProxyService],
 })
 export class OrdersModule {}

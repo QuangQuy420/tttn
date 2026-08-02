@@ -13,6 +13,12 @@ export interface IOrderSagaEventPublisher {
 }
 
 export const ORDER_SAGA_EVENTS_EXCHANGE = 'order-saga-events';
+// Shared dead-letter exchange for the checkout saga queues — a message nacked with
+// requeue=false (malformed payload) or that exceeds its queue's `x-delivery-limit` lands
+// here instead of being dropped. Only order-service asserts/binds the actual DLQ; this
+// service and payment-service just need the exchange to exist so their queue's
+// `x-dead-letter-exchange` argument resolves to something.
+export const ORDER_SAGA_EVENTS_DLX = 'order-saga-events.dlx';
 // RabbitMQ's healthcheck can report "healthy" slightly before the AMQP listener is ready
 // to accept connections, so the first connect attempt on a fresh `docker compose up` can
 // lose that race — retry a few times before giving up (same as RabbitMqProductEventPublisher).

@@ -737,6 +737,21 @@ main {
   align-items: start;
 }
 
+/* Nhật ký xử lý đơn hàng (saga logs) admin screens — day list / order list within a day / one
+   order's detail table (source service, target service, error). */
+.admin-table__row--saga-days {
+  grid-template-columns: 1.4fr 1fr 1fr;
+}
+
+.admin-table__row--saga-orders {
+  grid-template-columns: 1.4fr 1fr 1fr 1.4fr;
+}
+
+.admin-table__row--saga-detail {
+  grid-template-columns: 1fr 1.15fr 0.85fr 0.85fr 0.8fr 1.5fr 0.7fr;
+  align-items: start;
+}
+
 .admin-table__row--variants .admin-form-input {
   margin-bottom: 0;
 }
@@ -814,6 +829,17 @@ main {
 .admin-status-badge--active {
   background: rgba(74, 90, 82, 0.14);
   color: #4a5a52;
+}
+
+/* Nhật ký đơn hàng (saga logs) — WARN level / hasWarning highlight, same warning color as
+   .order-detail__failure-note so "something needs attention" reads consistently across admin. */
+.admin-status-badge--warning {
+  background: rgba(169, 40, 40, 0.14);
+  color: #a92828;
+}
+
+.admin-table__row--body.admin-table__row--warning {
+  background: rgba(169, 40, 40, 0.05);
 }
 
 .admin-table__actions {

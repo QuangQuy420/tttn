@@ -11,9 +11,10 @@ import { firstValueFrom } from 'rxjs';
 import { AppConfig } from '../config/configuration';
 
 /**
- * Forwards `/api/cart/*` and `/api/orders/*` requests to `order-service`.
- * Holds no business logic of its own — it's a thin, typed HTTP client (per
- * README: gateway owns no data, only proxies).
+ * Forwards `/api/cart/*`, `/api/orders/*`, `/api/admin/orders/*` and
+ * `/api/admin/saga-logs/*` requests to `order-service`. Holds no business
+ * logic of its own — it's a thin, typed HTTP client (per README: gateway
+ * owns no data, only proxies).
  *
  * order-service's cart/order endpoints take `userId` as a path segment
  * (`/api/v1/carts/{userId}/...`, `/api/v1/users/{userId}/orders/...`), so
@@ -162,6 +163,18 @@ export class OrdersProxyService {
     } catch (error) {
       throw this.toGatewayError(error as AxiosError, path);
     }
+  }
+
+  async getSagaLogDays(): Promise<unknown> {
+    return this.forwardGet('/api/v1/admin/saga-logs/days');
+  }
+
+  async getSagaLogsForDay(date: string): Promise<unknown> {
+    return this.forwardGet(`/api/v1/admin/saga-logs/days/${date}`);
+  }
+
+  async getOrderSagaLogs(orderId: string): Promise<unknown> {
+    return this.forwardGet(`/api/v1/admin/saga-logs/orders/${orderId}`);
   }
 
   private async forwardGet(
