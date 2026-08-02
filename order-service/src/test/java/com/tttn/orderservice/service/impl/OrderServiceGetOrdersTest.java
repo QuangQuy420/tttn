@@ -11,6 +11,7 @@ import com.tttn.orderservice.mapper.OrderMapper;
 import com.tttn.orderservice.messaging.OrderSagaEventPublisher;
 import com.tttn.orderservice.repository.OrderRepository;
 import com.tttn.orderservice.service.CartService;
+import com.tttn.orderservice.service.OrderSagaLogService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -52,6 +53,9 @@ class OrderServiceGetOrdersTest {
     @Mock
     private OrderMapper orderMapper;
 
+    @Mock
+    private OrderSagaLogService orderSagaLogService;
+
     private OrderServiceImpl orderService;
 
     private UUID userId;
@@ -63,7 +67,8 @@ class OrderServiceGetOrdersTest {
                 cartService,
                 productClient,
                 orderSagaEventPublisher,
-                orderMapper
+                orderMapper,
+                orderSagaLogService
         );
 
         userId = UUID.randomUUID();

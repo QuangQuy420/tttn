@@ -172,3 +172,36 @@ export class AdminOrdersController {
     );
   }
 }
+
+/**
+ * Thin controller: parses the incoming request and delegates to
+ * `OrdersProxyService` — no forwarding/HTTP logic here. Proxies
+ * order-service's `/api/v1/admin/saga-logs` routes (checkout saga audit
+ * trail), same "any order regardless of owner" + `order:manage` convention
+ * as `AdminOrdersController` above.
+ */
+@Controller('api/admin/saga-logs')
+export class AdminSagaLogsController {
+  constructor(private readonly ordersProxyService: OrdersProxyService) {}
+
+  @Get('days')
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @RequirePermission('order:manage')
+  getDays(): Promise<unknown> {
+    return this.ordersProxyService.getSagaLogDays();
+  }
+
+  @Get('days/:date')
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @RequirePermission('order:manage')
+  getOrdersForDay(@Param('date') date: string): Promise<unknown> {
+    return this.ordersProxyService.getSagaLogsForDay(date);
+  }
+
+  @Get('orders/:orderId')
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @RequirePermission('order:manage')
+  getOrderLogs(@Param('orderId') orderId: string): Promise<unknown> {
+    return this.ordersProxyService.getOrderSagaLogs(orderId);
+  }
+}

@@ -8,7 +8,10 @@ import { ConfigService } from '@nestjs/config';
 import * as amqplib from 'amqplib';
 import { InventoryService } from '../services/inventory.service';
 import { ReserveItem } from './inventory.repository';
-import { ORDER_SAGA_EVENTS_EXCHANGE } from './order-saga-event-publisher.repository';
+import {
+  ORDER_SAGA_EVENTS_DLX,
+  ORDER_SAGA_EVENTS_EXCHANGE,
+} from './order-saga-event-publisher.repository';
 
 interface StockRequestedPayload {
   orderId: string;
@@ -21,6 +24,11 @@ const STOCK_RELEASE_REQUESTED = 'stock.release.requested';
 // Same retry/backoff constants as RabbitMqProductEventPublisher — see that file for why.
 const INITIAL_CONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY_MS = 3000;
+// How many times RabbitMQ redelivers a nacked-and-requeued saga message before routing it
+// to the dead-letter exchange instead (broker-enforced via the quorum queue's
+// `x-delivery-limit` — no code-side counting needed). Configurable via
+// `SAGA_QUEUE_DELIVERY_LIMIT` so it can be tuned without a code change.
+const DEFAULT_SAGA_QUEUE_DELIVERY_LIMIT = 10;
 
 /**
  * Consumes the checkout saga's stock steps (`stock.reserve.requested` /
@@ -33,16 +41,18 @@ const RECONNECT_DELAY_MS = 3000;
  *
  * A message that fails to parse as JSON or is missing required fields is a permanent,
  * non-retryable failure — requeuing it would loop forever and, combined with `prefetch(1)`,
- * block every other message behind it. There's no dead-letter exchange configured in this
- * project, so such a message is nacked with `requeue=false` (dropped) and logged loudly.
- * Everything from `InventoryService.reserve()`/`release()` downward keeps the existing
- * nack-with-requeue behavior — those failures are expected to be transient or are already
- * handled internally.
+ * block every other message behind it. It's nacked with `requeue=false`, which (via the
+ * queue's `x-dead-letter-exchange`) routes it to the shared `order-saga-events.dlx` instead
+ * of dropping it. The queue's `x-delivery-limit` gives the same landing spot to a message
+ * that keeps getting nacked-and-requeued (see `connect()`). Everything from
+ * `InventoryService.reserve()`/`release()` downward keeps the existing nack-with-requeue
+ * behavior — those failures are expected to be transient or are already handled internally.
  */
 @Injectable()
 export class OrderSagaEventConsumer implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(OrderSagaEventConsumer.name);
   private readonly url: string;
+  private readonly deliveryLimit: number;
   private connection: amqplib.ChannelModel | undefined;
   private channel: amqplib.Channel | undefined;
   private reconnectTimer: NodeJS.Timeout | undefined;
@@ -57,6 +67,15 @@ export class OrderSagaEventConsumer implements OnModuleInit, OnModuleDestroy {
       throw new Error('RABBITMQ_URL is not set — check your .env file.');
     }
     this.url = url;
+    const rawDeliveryLimit = this.configService.get<string>(
+      'SAGA_QUEUE_DELIVERY_LIMIT',
+    );
+    const parsedDeliveryLimit = rawDeliveryLimit
+      ? parseInt(rawDeliveryLimit, 10)
+      : NaN;
+    this.deliveryLimit = Number.isFinite(parsedDeliveryLimit)
+      ? parsedDeliveryLimit
+      : DEFAULT_SAGA_QUEUE_DELIVERY_LIMIT;
   }
 
   async onModuleInit(): Promise<void> {
@@ -110,7 +129,20 @@ export class OrderSagaEventConsumer implements OnModuleInit, OnModuleDestroy {
     await channel.assertExchange(ORDER_SAGA_EVENTS_EXCHANGE, 'topic', {
       durable: true,
     });
-    const queue = await channel.assertQueue(QUEUE_NAME, { durable: true });
+    // Idempotent — order-service owns asserting/binding the actual DLQ onto this exchange.
+    // This service only needs the exchange itself to exist so the queue's
+    // `x-dead-letter-exchange` argument below resolves to something.
+    await channel.assertExchange(ORDER_SAGA_EVENTS_DLX, 'fanout', {
+      durable: true,
+    });
+    const queue = await channel.assertQueue(QUEUE_NAME, {
+      durable: true,
+      arguments: {
+        'x-queue-type': 'quorum',
+        'x-dead-letter-exchange': ORDER_SAGA_EVENTS_DLX,
+        'x-delivery-limit': this.deliveryLimit,
+      },
+    });
     await channel.bindQueue(
       queue.queue,
       ORDER_SAGA_EVENTS_EXCHANGE,

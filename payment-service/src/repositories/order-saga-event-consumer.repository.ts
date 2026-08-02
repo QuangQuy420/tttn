@@ -7,7 +7,10 @@ import {
 import { ConfigService } from '@nestjs/config';
 import * as amqplib from 'amqplib';
 import { PaymentsService } from '../services/payments.service';
-import { ORDER_SAGA_EVENTS_EXCHANGE } from './order-saga-event-publisher.repository';
+import {
+  ORDER_SAGA_EVENTS_DLX,
+  ORDER_SAGA_EVENTS_EXCHANGE,
+} from './order-saga-event-publisher.repository';
 
 interface PaymentCreateRequestedPayload {
   orderId: string;
@@ -22,6 +25,10 @@ const PAYMENT_CREATE_REQUESTED = 'payment.create.requested';
 // Same retry/backoff constants as RabbitMqOrderSagaEventPublisher — see that file for why.
 const INITIAL_CONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY_MS = 3000;
+// How many times RabbitMQ redelivers a nacked-and-requeued message (via the queue's quorum
+// `x-delivery-limit`) before routing it to the DLX instead — broker-enforced, no code-side
+// counting needed. Same default/env var as order-service and product-service.
+const DEFAULT_SAGA_QUEUE_DELIVERY_LIMIT = 10;
 
 /**
  * Consumes the checkout saga's `payment.create.requested` step off the `order-saga-events`
@@ -35,13 +42,18 @@ const RECONNECT_DELAY_MS = 3000;
  *
  * A message that fails to parse as JSON or is missing required fields is a permanent,
  * non-retryable failure — requeuing it would loop forever and, combined with `prefetch(1)`,
- * block every other message behind it. There's no dead-letter exchange configured in this
- * project, so such a message is nacked with `requeue=false` (dropped) and logged loudly.
+ * block every other message behind it, so such a message is nacked with `requeue=false`
+ * and logged loudly. The queue's `x-dead-letter-exchange` argument (see `connect()`) routes
+ * it to the shared `order-saga-events.dlx` instead of dropping it — same for any message
+ * that exceeds the queue's `x-delivery-limit` from repeated nack-and-requeue. This class's
+ * own nack/ack decisions are unchanged either way; only the queue declaration knows about
+ * the DLX.
  */
 @Injectable()
 export class OrderSagaEventConsumer implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(OrderSagaEventConsumer.name);
   private readonly url: string;
+  private readonly deliveryLimit: number;
   private connection: amqplib.ChannelModel | undefined;
   private channel: amqplib.Channel | undefined;
   private reconnectTimer: NodeJS.Timeout | undefined;
@@ -56,6 +68,11 @@ export class OrderSagaEventConsumer implements OnModuleInit, OnModuleDestroy {
       throw new Error('RABBITMQ_URL is not set — check your .env file.');
     }
     this.url = url;
+    this.deliveryLimit = parseInt(
+      this.configService.get<string>('SAGA_QUEUE_DELIVERY_LIMIT') ??
+        String(DEFAULT_SAGA_QUEUE_DELIVERY_LIMIT),
+      10,
+    );
   }
 
   async onModuleInit(): Promise<void> {
@@ -109,7 +126,20 @@ export class OrderSagaEventConsumer implements OnModuleInit, OnModuleDestroy {
     await channel.assertExchange(ORDER_SAGA_EVENTS_EXCHANGE, 'topic', {
       durable: true,
     });
-    const queue = await channel.assertQueue(QUEUE_NAME, { durable: true });
+    // Shared DLX for the saga queues (idempotent to assert repeatedly). Only order-service
+    // asserts/binds the actual DLQ — this just ensures the exchange this queue's
+    // `x-dead-letter-exchange` argument points at actually exists.
+    await channel.assertExchange(ORDER_SAGA_EVENTS_DLX, 'fanout', {
+      durable: true,
+    });
+    const queue = await channel.assertQueue(QUEUE_NAME, {
+      durable: true,
+      arguments: {
+        'x-queue-type': 'quorum',
+        'x-dead-letter-exchange': ORDER_SAGA_EVENTS_DLX,
+        'x-delivery-limit': this.deliveryLimit,
+      },
+    });
     await channel.bindQueue(
       queue.queue,
       ORDER_SAGA_EVENTS_EXCHANGE,

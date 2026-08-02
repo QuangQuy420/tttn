@@ -33,4 +33,11 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     List<Object[]> countOrdersGroupedByStatus();
 
     boolean existsByOrderCode(String orderCode);
+
+    // SagaReconciliationJob (FR1/FR4): candidates are filtered further in Java against the
+    // "stuck" time threshold, since that depends on lastReconciliationAttemptAt OR updatedAt
+    // (whichever is set) — not expressible as a single simple derived-query condition.
+    List<Order> findByStatusInAndReconciliationExhaustedFalse(List<OrderStatus> statuses);
+
+    List<Order> findByStockReleasePendingTrueAndReconciliationExhaustedFalse();
 }

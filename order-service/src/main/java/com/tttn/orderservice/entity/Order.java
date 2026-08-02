@@ -98,6 +98,24 @@ public class Order {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    // Checkout-saga reconciliation (SagaReconciliationJob): tracks retry bookkeeping for
+    // orders stuck mid-saga (PENDING/AWAITING_PAYMENT) or cancelled with an unconfirmed
+    // stock.release.requested publish — see OrderSagaEventPublisher#publishStockReleaseRequested.
+    @Builder.Default
+    @Column(name = "reconciliation_attempts", nullable = false)
+    private int reconciliationAttempts = 0;
+
+    @Column(name = "last_reconciliation_attempt_at")
+    private LocalDateTime lastReconciliationAttemptAt;
+
+    @Builder.Default
+    @Column(name = "reconciliation_exhausted", nullable = false)
+    private boolean reconciliationExhausted = false;
+
+    @Builder.Default
+    @Column(name = "stock_release_pending", nullable = false)
+    private boolean stockReleasePending = false;
+
     @PrePersist
     protected void onCreate() {
         LocalDateTime now = LocalDateTime.now();

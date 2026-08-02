@@ -10,6 +10,9 @@ import com.tttn.orderservice.entity.OrderItem;
 import com.tttn.orderservice.entity.OrderStatusHistory;
 import com.tttn.orderservice.enums.OrderStatus;
 import com.tttn.orderservice.enums.PaymentStatus;
+import com.tttn.orderservice.enums.SagaLogLevel;
+import com.tttn.orderservice.enums.SagaLogService;
+import com.tttn.orderservice.enums.SagaLogStage;
 import com.tttn.orderservice.exception.BadRequestException;
 import com.tttn.orderservice.exception.ResourceNotFoundException;
 import com.tttn.orderservice.mapper.OrderMapper;
@@ -18,6 +21,7 @@ import com.tttn.orderservice.model.cart.Cart;
 import com.tttn.orderservice.model.cart.CartItem;
 import com.tttn.orderservice.repository.OrderRepository;
 import com.tttn.orderservice.service.CartService;
+import com.tttn.orderservice.service.OrderSagaLogService;
 import com.tttn.orderservice.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -46,6 +50,7 @@ public class OrderServiceImpl implements OrderService {
     private final ProductClient productClient;
     private final OrderSagaEventPublisher orderSagaEventPublisher;
     private final OrderMapper orderMapper;
+    private final OrderSagaLogService orderSagaLogService;
 
     @Override
     @Transactional
@@ -154,9 +159,31 @@ public class OrderServiceImpl implements OrderService {
 
         Order savedOrder = orderRepository.save(order);
 
+        orderSagaLogService.log(
+                savedOrder,
+                SagaLogStage.CREATED,
+                SagaLogLevel.INFO,
+                "Đơn hàng được tạo",
+                SagaLogService.ORDER_SERVICE,
+                null,
+                null,
+                null
+        );
+
         orderSagaEventPublisher.publishStockReserveRequested(
                 savedOrder.getId(),
                 savedOrder.getItems()
+        );
+
+        orderSagaLogService.log(
+                savedOrder,
+                SagaLogStage.STOCK_RESERVE_REQUESTED,
+                SagaLogLevel.INFO,
+                "Đã gửi yêu cầu giữ hàng",
+                SagaLogService.ORDER_SERVICE,
+                SagaLogService.PRODUCT_SERVICE,
+                null,
+                null
         );
 
         return new CheckoutResponse(
@@ -261,8 +288,19 @@ public class OrderServiceImpl implements OrderService {
             );
         }
 
+        OrderStatus previousStatus = order.getStatus();
         boolean wasAwaitingPayment =
-                order.getStatus() == OrderStatus.AWAITING_PAYMENT;
+                previousStatus == OrderStatus.AWAITING_PAYMENT;
+
+        // PENDING is included too, not just AWAITING_PAYMENT: product-service may have already
+        // reserved stock and replied 'stock.reserved' before order-service could process that
+        // reply (e.g. the reply got lost/dead-lettered) — order.status would still read PENDING
+        // even though a real reservation exists downstream. Releasing here is always safe even
+        // when nothing was actually reserved (product-service's release is a no-op in that case,
+        // see InventoryService.release's idempotency note) — CONFIRMED is deliberately excluded,
+        // matching the plan's "no refund logic" scope for cancelling an already-paid order.
+        boolean shouldReleaseStock =
+                wasAwaitingPayment || previousStatus == OrderStatus.PENDING;
 
         order.setStatus(OrderStatus.CANCELLED);
 
@@ -274,10 +312,30 @@ public class OrderServiceImpl implements OrderService {
                         .build()
         );
 
-        if (wasAwaitingPayment) {
-            orderSagaEventPublisher.publishStockReleaseRequested(
-                    order.getId(),
-                    order.getItems()
+        if (shouldReleaseStock) {
+            order.setStockReleasePending(true);
+
+            boolean published = orderSagaEventPublisher
+                    .publishStockReleaseRequested(
+                            order.getId(),
+                            order.getItems()
+                    );
+
+            if (published) {
+                order.setStockReleasePending(false);
+            }
+
+            orderSagaLogService.log(
+                    order,
+                    SagaLogStage.STOCK_RELEASE_REQUESTED,
+                    published ? SagaLogLevel.INFO : SagaLogLevel.WARN,
+                    published
+                            ? "Đã gửi yêu cầu nhả hàng thành công"
+                            : "Gửi yêu cầu nhả hàng thất bại, sẽ được thử lại tự động",
+                    SagaLogService.ORDER_SERVICE,
+                    SagaLogService.PRODUCT_SERVICE,
+                    published ? null : "Gửi yêu cầu nhả hàng thất bại",
+                    null
             );
         }
 

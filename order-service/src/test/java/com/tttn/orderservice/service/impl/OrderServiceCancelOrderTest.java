@@ -13,6 +13,7 @@ import com.tttn.orderservice.mapper.OrderMapper;
 import com.tttn.orderservice.messaging.OrderSagaEventPublisher;
 import com.tttn.orderservice.repository.OrderRepository;
 import com.tttn.orderservice.service.CartService;
+import com.tttn.orderservice.service.OrderSagaLogService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -50,6 +51,9 @@ class OrderServiceCancelOrderTest {
     private OrderMapper orderMapper;
 
     @Mock
+    private OrderSagaLogService orderSagaLogService;
+
+    @Mock
     private CancelOrderRequest cancelOrderRequest;
 
     private OrderServiceImpl orderService;
@@ -64,7 +68,8 @@ class OrderServiceCancelOrderTest {
                 cartService,
                 productClient,
                 orderSagaEventPublisher,
-                orderMapper
+                orderMapper,
+                orderSagaLogService
         );
 
         userId = UUID.randomUUID();
@@ -409,7 +414,7 @@ class OrderServiceCancelOrderTest {
     }
 
     @Test
-    @DisplayName("Không sử dụng CartService, ProductClient hoặc OrderSagaEventPublisher")
+    @DisplayName("Không sử dụng CartService hoặc ProductClient")
     void cancelOrder_ShouldNotUseUnrelatedDependencies() {
         Order order = createOrder(OrderStatus.PENDING);
 
@@ -433,9 +438,89 @@ class OrderServiceCancelOrderTest {
 
         verifyNoInteractions(
                 cartService,
-                productClient,
-                orderSagaEventPublisher
+                productClient
         );
+    }
+
+    @Test
+    @DisplayName("Hủy đơn PENDING vẫn thử gửi nhả hàng, đề phòng hàng đã được giữ thật trước khi "
+            + "order-service kịp xử lý phản hồi 'stock.reserved'")
+    void cancelOrder_WhenStatusIsPending_ShouldStillAttemptStockRelease() {
+        Order order = createOrder(OrderStatus.PENDING);
+
+        when(cancelOrderRequest.reason())
+                .thenReturn("Hủy");
+
+        when(orderRepository.findByIdAndUserId(orderId, userId))
+                .thenReturn(Optional.of(order));
+
+        when(orderRepository.save(order))
+                .thenReturn(order);
+
+        when(orderMapper.toResponse(order))
+                .thenReturn(mock(OrderResponse.class));
+
+        orderService.cancelOrder(
+                userId,
+                orderId,
+                cancelOrderRequest
+        );
+
+        verify(orderSagaEventPublisher)
+                .publishStockReleaseRequested(orderId, order.getItems());
+    }
+
+    @Test
+    @DisplayName("Hủy đơn AWAITING_PAYMENT vẫn thử gửi nhả hàng như trước")
+    void cancelOrder_WhenStatusIsAwaitingPayment_ShouldAttemptStockRelease() {
+        Order order = createOrder(OrderStatus.AWAITING_PAYMENT);
+
+        when(cancelOrderRequest.reason())
+                .thenReturn("Hủy");
+
+        when(orderRepository.findByIdAndUserId(orderId, userId))
+                .thenReturn(Optional.of(order));
+
+        when(orderRepository.save(order))
+                .thenReturn(order);
+
+        when(orderMapper.toResponse(order))
+                .thenReturn(mock(OrderResponse.class));
+
+        orderService.cancelOrder(
+                userId,
+                orderId,
+                cancelOrderRequest
+        );
+
+        verify(orderSagaEventPublisher)
+                .publishStockReleaseRequested(orderId, order.getItems());
+    }
+
+    @Test
+    @DisplayName("Hủy đơn CONFIRMED không gửi nhả hàng (không có logic hoàn tiền/nhả hàng cho đơn đã thanh toán)")
+    void cancelOrder_WhenStatusIsConfirmed_ShouldNotAttemptStockRelease() {
+        Order order = createOrder(OrderStatus.CONFIRMED);
+
+        when(cancelOrderRequest.reason())
+                .thenReturn("Hủy");
+
+        when(orderRepository.findByIdAndUserId(orderId, userId))
+                .thenReturn(Optional.of(order));
+
+        when(orderRepository.save(order))
+                .thenReturn(order);
+
+        when(orderMapper.toResponse(order))
+                .thenReturn(mock(OrderResponse.class));
+
+        orderService.cancelOrder(
+                userId,
+                orderId,
+                cancelOrderRequest
+        );
+
+        verifyNoInteractions(orderSagaEventPublisher);
     }
 
     private void assertCannotCancelStatus(OrderStatus status) {
