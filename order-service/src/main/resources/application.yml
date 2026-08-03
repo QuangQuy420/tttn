@@ -33,7 +33,14 @@ spring:
       password: ${REDIS_PASSWORD:}
       timeout: 3s
 
-
+  cloud:
+    openfeign:
+      client:
+        config:
+          payment-service:
+            connectTimeout: 5000
+            readTimeout: 5000
+            loggerLevel: basic
 management:
   endpoints:
     web:
@@ -56,8 +63,8 @@ services:
   product-service:
     base-url: ${PRODUCT_SERVICE_URL:http://localhost:3002}
 
-  payment-service:
-    base-url: ${PAYMENT_SERVICE_URL:http://localhost:8084}
+  payment:
+    url: ${PAYMENT_SERVICE_URL:http://localhost:8084}
 
 cart:
   key-prefix: "cart:"

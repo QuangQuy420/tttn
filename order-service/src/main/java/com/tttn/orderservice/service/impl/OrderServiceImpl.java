@@ -35,7 +35,6 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class OrderServiceImpl implements OrderService {
-
     private final OrderRepository orderRepository;
     private final CartService cartService;
     private final ProductClient productClient;
@@ -248,6 +247,13 @@ public class OrderServiceImpl implements OrderService {
         }
 
         order.setStatus(OrderStatus.CANCELLED);
+
+        if (order.getPaymentId() != null) {
+            PaymentCreationResponse cancelledPayment =
+                    paymentClient.cancelPayment(order.getPaymentId());
+
+            order.setPaymentStatus(cancelledPayment.status());
+        }
 
         order.addStatusHistory(
                 OrderStatusHistory.builder()

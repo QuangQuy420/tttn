@@ -1,33 +1,33 @@
-# Dependencies
-node_modules/
-.pnp/
-__pycache__/
-*.py[cod]
-.venv/
-venv/
-vendor/
+HELP.md
 target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
 
-# Build output
-dist/
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
 build/
-.next/
-out/
+!**/src/main/**/build/
+!**/src/test/**/build/
 
-# Env & secrets
-.env
-.env.local
-.env.*.local
-
-# Logs
-*.log
-logs/
-
-# IDE / OS
-.idea/
+### VS Code ###
 .vscode/
-.DS_Store
-
-# Test / coverage
-coverage/
-.pytest_cache/

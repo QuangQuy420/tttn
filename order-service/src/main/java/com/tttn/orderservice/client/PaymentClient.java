@@ -14,4 +14,6 @@ public interface PaymentClient {
             BigDecimal amount,
             String paymentMethod
     );
+
+    PaymentCreationResponse cancelPayment(UUID paymentId);
 }

@@ -1,11 +1,9 @@
-package com.tttn.orderservice.enums;
+package com.tttn.paymentservice.entity.enums;
 
 public enum PaymentStatus {
-    UNPAID,
     PENDING,
     PROCESSING,
     SUCCESS,
-    PAID,
     FAILED,
     CANCELLED,
     REFUNDED
