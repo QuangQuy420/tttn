@@ -10,12 +10,15 @@ import {
   Query,
   Req,
   UseGuards,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthenticatedUser, JwtGuard } from '../auth/jwt.guard';
 import { RequirePermission } from '../auth/permissions.decorator';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { OrdersProxyService } from '../services/orders-proxy.service';
+import { UpdateSagaSettingsDto } from './dto/update-saga-settings.dto';
 
 /**
  * Thin controller: parses the incoming request and delegates to
@@ -203,5 +206,47 @@ export class AdminSagaLogsController {
   @RequirePermission('order:manage')
   getOrderLogs(@Param('orderId') orderId: string): Promise<unknown> {
     return this.ordersProxyService.getOrderSagaLogs(orderId);
+  }
+}
+
+/**
+ * Thin controller: parses the incoming request and delegates to
+ * `OrdersProxyService` — no forwarding/HTTP logic here. Proxies
+ * order-service's `/api/v1/admin/saga-settings` routes (the checkout saga
+ * reconciliation job's live retry config), same "no in-service permission
+ * guard, trusts the gateway" convention as `AdminSagaLogsController` above,
+ * but gated by its own `saga-settings:manage` permission rather than
+ * `order:manage`.
+ */
+@Controller('api/admin/saga-settings')
+export class AdminSagaSettingsController {
+  constructor(private readonly ordersProxyService: OrdersProxyService) {}
+
+  @Get()
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @RequirePermission('saga-settings:manage')
+  getSettings(): Promise<unknown> {
+    return this.ordersProxyService.getSagaSettings();
+  }
+
+  @Put()
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @RequirePermission('saga-settings:manage')
+  @UsePipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+      transformOptions: { enableImplicitConversion: true },
+    }),
+  )
+  updateSettings(
+    @Body() body: UpdateSagaSettingsDto,
+    @Req() request: Request & { user: AuthenticatedUser },
+  ): Promise<unknown> {
+    return this.ordersProxyService.updateSagaSettings(
+      body,
+      request.user.userId,
+    );
   }
 }

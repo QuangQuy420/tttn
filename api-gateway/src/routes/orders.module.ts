@@ -7,16 +7,18 @@ import { UsersProxyService } from '../services/users-proxy.service';
 import {
   AdminOrdersController,
   AdminSagaLogsController,
+  AdminSagaSettingsController,
   CartController,
   OrdersController,
 } from './orders.controller';
 
 /**
- * Wires the `/api/cart/*`, `/api/orders/*`, `/api/admin/orders/*`, and
- * `/api/admin/saga-logs/*` proxy routes to `order-service`, per the route
- * table in README.md. `UsersProxyService` is also provided here (alongside
- * `OrdersProxyService`) because `AdminOrdersController`'s and
- * `AdminSagaLogsController`'s routes use `PermissionsGuard`, which calls
+ * Wires the `/api/cart/*`, `/api/orders/*`, `/api/admin/orders/*`,
+ * `/api/admin/saga-logs/*`, and `/api/admin/saga-settings/*` proxy routes to
+ * `order-service`, per the route table in README.md. `UsersProxyService` is
+ * also provided here (alongside `OrdersProxyService`) because
+ * `AdminOrdersController`'s, `AdminSagaLogsController`'s, and
+ * `AdminSagaSettingsController`'s routes use `PermissionsGuard`, which calls
  * `UsersProxyService.getPermissions` to check the caller's live permissions
  * against user-service.
  */
@@ -34,6 +36,7 @@ import {
     OrdersController,
     AdminOrdersController,
     AdminSagaLogsController,
+    AdminSagaSettingsController,
   ],
   providers: [OrdersProxyService, UsersProxyService],
 })

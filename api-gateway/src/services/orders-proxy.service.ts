@@ -9,12 +9,13 @@ import { ConfigService } from '@nestjs/config';
 import { AxiosError } from 'axios';
 import { firstValueFrom } from 'rxjs';
 import { AppConfig } from '../config/configuration';
+import { UpdateSagaSettingsDto } from '../routes/dto/update-saga-settings.dto';
 
 /**
- * Forwards `/api/cart/*`, `/api/orders/*`, `/api/admin/orders/*` and
- * `/api/admin/saga-logs/*` requests to `order-service`. Holds no business
- * logic of its own — it's a thin, typed HTTP client (per README: gateway
- * owns no data, only proxies).
+ * Forwards `/api/cart/*`, `/api/orders/*`, `/api/admin/orders/*`,
+ * `/api/admin/saga-logs/*` and `/api/admin/saga-settings/*` requests to
+ * `order-service`. Holds no business logic of its own — it's a thin, typed
+ * HTTP client (per README: gateway owns no data, only proxies).
  *
  * order-service's cart/order endpoints take `userId` as a path segment
  * (`/api/v1/carts/{userId}/...`, `/api/v1/users/{userId}/orders/...`), so
@@ -175,6 +176,27 @@ export class OrdersProxyService {
 
   async getOrderSagaLogs(orderId: string): Promise<unknown> {
     return this.forwardGet(`/api/v1/admin/saga-logs/orders/${orderId}`);
+  }
+
+  async getSagaSettings(): Promise<unknown> {
+    return this.forwardGet('/api/v1/admin/saga-settings');
+  }
+
+  async updateSagaSettings(
+    body: UpdateSagaSettingsDto,
+    updatedByUserId: string,
+  ): Promise<unknown> {
+    const path = '/api/v1/admin/saga-settings';
+    try {
+      const response = await firstValueFrom(
+        this.httpService.put(`${this.baseUrl}${path}`, body, {
+          headers: { 'X-User-Id': updatedByUserId },
+        }),
+      );
+      return response.data;
+    } catch (error) {
+      throw this.toGatewayError(error as AxiosError, path);
+    }
   }
 
   private async forwardGet(

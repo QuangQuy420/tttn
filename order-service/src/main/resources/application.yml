@@ -67,10 +67,6 @@ cart:
   expiration-days: ${CART_EXPIRATION_DAYS:7}
 
 app:
-  reconciliation:
-    interval-ms: ${RECONCILIATION_JOB_INTERVAL_MS:60000}
-    stuck-threshold-minutes: ${RECONCILIATION_STUCK_THRESHOLD_MINUTES:2}
-    max-attempts: ${RECONCILIATION_MAX_ATTEMPTS:3}
   saga:
     delivery-limit: ${SAGA_QUEUE_DELIVERY_LIMIT:10}
     chaos-mode: ${SAGA_CHAOS_MODE:NONE}
