@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { label: "Nhật ký xử lý đơn hàng", href: "/admin/saga-logs" },
   { label: "Khách hàng", href: "/admin/users" },
   { label: "Vai trò", href: "/admin/roles" },
+  { label: "Cài đặt", href: "/admin/settings" },
 ];
 
 export default function AdminLayout({

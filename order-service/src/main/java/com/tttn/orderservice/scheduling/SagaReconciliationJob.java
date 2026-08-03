@@ -1,5 +1,6 @@
 package com.tttn.orderservice.scheduling;
 
+import com.tttn.orderservice.dto.response.ReconciliationSettingsResponse;
 import com.tttn.orderservice.entity.Order;
 import com.tttn.orderservice.entity.OrderStatusHistory;
 import com.tttn.orderservice.enums.OrderStatus;
@@ -9,13 +10,14 @@ import com.tttn.orderservice.enums.SagaLogStage;
 import com.tttn.orderservice.messaging.OrderSagaEventPublisher;
 import com.tttn.orderservice.repository.OrderRepository;
 import com.tttn.orderservice.service.OrderSagaLogService;
+import com.tttn.orderservice.service.ReconciliationSettingsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -45,9 +47,17 @@ import java.util.List;
  *
  * <p>Note on retry cadence: because every processed attempt (successful publish or not) bumps
  * {@code lastReconciliationAttemptAt = now}, an order only becomes "stuck" again after another
- * full {@code stuck-threshold-minutes} has passed — so the effective resend cadence is ~2 minutes
- * apart, not every 60-second job tick, even though the job itself runs every 60 seconds. This is
- * intentional (see plan's Risks &amp; dependencies), not an off-by-one bug.
+ * full {@code stuckThresholdMinutes} has passed — so the effective resend cadence follows that
+ * setting, not the job's own wake-up frequency. This is intentional (see plan's Risks &amp;
+ * dependencies), not an off-by-one bug.
+ *
+ * <p>Live settings: {@code intervalMs}, {@code stuckThresholdMinutes} and {@code maxAttempts} used
+ * to be static {@code @Value}-injected config, read once at startup. They now come from
+ * {@link ReconciliationSettingsService#get()}, re-read on every wake-up. The method itself always
+ * wakes up every 10 seconds ({@code fixedDelay = 10000}), but only actually runs the reconciliation
+ * logic once at least {@code intervalMs} has elapsed since the previous real run — see
+ * {@link #lastRunAt} — so an admin-saved change to {@code intervalMs} takes effect on the next
+ * wake-up after the save, without an order-service restart.
  */
 @Slf4j
 @Component
@@ -60,32 +70,53 @@ public class SagaReconciliationJob {
     private final OrderRepository orderRepository;
     private final OrderSagaEventPublisher orderSagaEventPublisher;
     private final OrderSagaLogService orderSagaLogService;
+    private final ReconciliationSettingsService reconciliationSettingsService;
 
-    @Value("${app.reconciliation.stuck-threshold-minutes}")
-    private int stuckThresholdMinutes;
-
-    @Value("${app.reconciliation.max-attempts}")
-    private int maxAttempts;
+    // Set to "now" at the end of every tick that actually runs the reconciliation logic (never on
+    // a tick that gets skipped) — see reconcile()'s elapsed-time check just below. volatile
+    // because @Scheduled tasks run on a Spring task-scheduler thread that isn't necessarily the
+    // same thread every time.
+    private volatile LocalDateTime lastRunAt;
 
     // @Transactional here (not on the private helpers) because Spring's proxy only intercepts
     // calls that come in through it — the helpers below are invoked via internal self-invocation,
     // so this is the only method boundary where the annotation actually takes effect. Keeps the
     // Hibernate session open for the whole run, which order.getItems() (a lazy collection) needs
     // when a stuck order is resent.
-    @Scheduled(fixedDelayString = "${app.reconciliation.interval-ms}")
+    //
+    // fixedDelay is now a fixed 10-second wake-up, no longer tied to the configurable interval —
+    // the actual "did enough time pass" decision happens below, against the live intervalMs read
+    // from ReconciliationSettingsService, so a saved change takes effect within ~10s without a
+    // restart (NFR1/AC3).
+    @Scheduled(fixedDelay = 10000)
     @Transactional
     public void reconcile() {
-        reconcileStuckOrders();
-        reconcileUnconfirmedStockReleases();
+        ReconciliationSettingsResponse settings = reconciliationSettingsService.get();
+
+        LocalDateTime now = LocalDateTime.now();
+        boolean intervalElapsed = lastRunAt == null
+                || !lastRunAt.plus(Duration.ofMillis(settings.intervalMs())).isAfter(now);
+
+        if (!intervalElapsed) {
+            return;
+        }
+
+        lastRunAt = now;
+
+        int stuckThresholdMinutes = settings.stuckThresholdMinutes();
+        int maxAttempts = settings.maxAttempts();
+
+        reconcileStuckOrders(stuckThresholdMinutes, maxAttempts);
+        reconcileUnconfirmedStockReleases(stuckThresholdMinutes, maxAttempts);
     }
 
-    private void reconcileStuckOrders() {
+    private void reconcileStuckOrders(int stuckThresholdMinutes, int maxAttempts) {
         List<Order> candidates = orderRepository
                 .findByStatusInAndReconciliationExhaustedFalse(STUCK_STATUSES);
 
         for (Order order : candidates) {
             try {
-                processStuckOrder(order);
+                processStuckOrder(order, stuckThresholdMinutes, maxAttempts);
             } catch (Exception exception) {
                 log.error(
                         "SagaReconciliationJob: lỗi khi xử lý đơn hàng {} (trạng thái {}): {}",
@@ -98,13 +129,13 @@ public class SagaReconciliationJob {
         }
     }
 
-    private void processStuckOrder(Order order) {
-        if (!isStuck(order)) {
+    private void processStuckOrder(Order order, int stuckThresholdMinutes, int maxAttempts) {
+        if (!isStuck(order, stuckThresholdMinutes)) {
             return;
         }
 
         if (order.getReconciliationAttempts() >= maxAttempts) {
-            markExhausted(order);
+            markExhausted(order, maxAttempts);
             return;
         }
 
@@ -156,13 +187,13 @@ public class SagaReconciliationJob {
         }
     }
 
-    private void reconcileUnconfirmedStockReleases() {
+    private void reconcileUnconfirmedStockReleases(int stuckThresholdMinutes, int maxAttempts) {
         List<Order> candidates = orderRepository
                 .findByStockReleasePendingTrueAndReconciliationExhaustedFalse();
 
         for (Order order : candidates) {
             try {
-                processPendingStockRelease(order);
+                processPendingStockRelease(order, stuckThresholdMinutes, maxAttempts);
             } catch (Exception exception) {
                 log.error(
                         "SagaReconciliationJob: lỗi khi xử lý nhả hàng cho đơn hàng {}: {}",
@@ -174,13 +205,13 @@ public class SagaReconciliationJob {
         }
     }
 
-    private void processPendingStockRelease(Order order) {
-        if (!isStuck(order)) {
+    private void processPendingStockRelease(Order order, int stuckThresholdMinutes, int maxAttempts) {
+        if (!isStuck(order, stuckThresholdMinutes)) {
             return;
         }
 
         if (order.getReconciliationAttempts() >= maxAttempts) {
-            markExhausted(order);
+            markExhausted(order, maxAttempts);
             return;
         }
 
@@ -196,7 +227,7 @@ public class SagaReconciliationJob {
         bumpAttempt(order, published, SagaLogService.PRODUCT_SERVICE);
     }
 
-    private boolean isStuck(Order order) {
+    private boolean isStuck(Order order, int stuckThresholdMinutes) {
         LocalDateTime reference = order.getLastReconciliationAttemptAt() != null
                 ? order.getLastReconciliationAttemptAt()
                 : order.getUpdatedAt();
@@ -225,7 +256,7 @@ public class SagaReconciliationJob {
      *   {@code CANCELLED} order re-triggers release instead of wrongly advancing the order.</li>
      * </ul>
      */
-    private void markExhausted(Order order) {
+    private void markExhausted(Order order, int maxAttempts) {
         order.setReconciliationExhausted(true);
 
         boolean alreadyCancelled = order.getStatus() == OrderStatus.CANCELLED;

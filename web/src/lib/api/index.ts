@@ -74,3 +74,6 @@ export {
   getSagaLogDays,
   getSagaLogsForDay,
 } from "./admin-saga-logs";
+
+export { getSagaSettings, updateSagaSettings } from "./admin-settings";
+export type { SagaSettings, UpdateSagaSettingsRequest } from "./admin-settings";
