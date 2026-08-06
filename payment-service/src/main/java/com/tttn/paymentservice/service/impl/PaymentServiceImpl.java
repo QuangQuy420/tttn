@@ -12,6 +12,7 @@ import com.tttn.paymentservice.repository.PaymentRepository;
 import com.tttn.paymentservice.service.PaymentService;
 import com.tttn.paymentservice.service.VnPayService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +21,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -34,7 +36,10 @@ public class PaymentServiceImpl implements PaymentService {
     public PaymentResponse createPayment(
             CreatePaymentRequest request
     ) {
-        return createPayment(request, "127.0.0.1");
+        return createPayment(
+                request,
+                "127.0.0.1"
+        );
     }
 
     @Override
@@ -63,12 +68,31 @@ public class PaymentServiceImpl implements PaymentService {
                     );
 
             savedPayment.setPaymentUrl(paymentUrl);
+
+            /*
+             * Trước khi VNPay trả mã giao dịch chính thức,
+             * transactionId tạm lưu Payment UUID.
+             */
             savedPayment.setTransactionId(
                     savedPayment.getId().toString()
             );
 
             savedPayment =
                     paymentRepository.save(savedPayment);
+
+            log.info(
+                    "Created VNPay payment URL for paymentId={}, orderId={}",
+                    savedPayment.getId(),
+                    savedPayment.getOrderId()
+            );
+        } else {
+
+            log.info(
+                    "Created payment paymentId={}, orderId={}, method={}",
+                    savedPayment.getId(),
+                    savedPayment.getOrderId(),
+                    savedPayment.getPaymentMethod()
+            );
         }
 
         return paymentMapper.toResponse(savedPayment);
@@ -83,13 +107,14 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public PaymentResponse getPaymentByOrderId(UUID orderId) {
-        Payment payment = paymentRepository.findByOrderId(orderId)
-                .orElseThrow(() ->
-                        new ResourceNotFoundException(
-                                "Payment not found for order: "
-                                        + orderId
-                        )
-                );
+        Payment payment =
+                paymentRepository.findByOrderId(orderId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Payment not found for order: "
+                                                + orderId
+                                )
+                        );
 
         return paymentMapper.toResponse(payment);
     }
@@ -117,15 +142,22 @@ public class PaymentServiceImpl implements PaymentService {
 
         payment.setStatus(PaymentStatus.CANCELLED);
         payment.setPaymentUrl(null);
+        payment.setFailureReason("Payment cancelled");
 
         Payment updatedPayment =
                 paymentRepository.save(payment);
+
+        log.info(
+                "Cancelled payment paymentId={}, orderId={}",
+                updatedPayment.getId(),
+                updatedPayment.getOrderId()
+        );
 
         return paymentMapper.toResponse(updatedPayment);
     }
 
     @Override
-    @Transactional
+    @Transactional(readOnly = true)
     public PaymentResponse processVnPayReturn(
             Map<String, String> parameters
     ) {
@@ -140,13 +172,23 @@ public class PaymentServiceImpl implements PaymentService {
                         parameters.get("vnp_TxnRef")
                 );
 
-        validateVnPayAmount(payment, parameters);
-        updatePaymentFromVnPay(payment, parameters);
+        validateVnPayAmount(
+                payment,
+                parameters
+        );
 
-        Payment updatedPayment =
-                paymentRepository.save(payment);
+        /*
+         * Return URL chỉ xác minh dữ liệu và trả trạng thái hiện có.
+         * Việc cập nhật chính thức thực hiện tại IPN.
+         */
+        log.info(
+                "Processed VNPay return for paymentId={}, responseCode={}, transactionStatus={}",
+                payment.getId(),
+                parameters.get("vnp_ResponseCode"),
+                parameters.get("vnp_TransactionStatus")
+        );
 
-        return paymentMapper.toResponse(updatedPayment);
+        return paymentMapper.toResponse(payment);
     }
 
     @Override
@@ -154,52 +196,102 @@ public class PaymentServiceImpl implements PaymentService {
     public Map<String, String> processVnPayIpn(
             Map<String, String> parameters
     ) {
-        if (!vnPayService.verifyCallback(parameters)) {
-            return Map.of(
-                    "RspCode", "97",
-                    "Message", "Invalid Signature"
-            );
-        }
-
-        Payment payment;
-
         try {
-            payment = findPaymentByTransactionReference(
-                    parameters.get("vnp_TxnRef")
+            if (!vnPayService.verifyCallback(parameters)) {
+                log.warn(
+                        "Rejected VNPay IPN because signature is invalid"
+                );
+
+                return Map.of(
+                        "RspCode", "97",
+                        "Message", "Invalid Signature"
+                );
+            }
+
+            Payment payment;
+
+            try {
+                payment =
+                        findPaymentByTransactionReference(
+                                parameters.get("vnp_TxnRef")
+                        );
+            } catch (
+                    ResourceNotFoundException
+                    | BadRequestException exception
+            ) {
+                log.warn(
+                        "VNPay IPN payment not found for txnRef={}",
+                        parameters.get("vnp_TxnRef")
+                );
+
+                return Map.of(
+                        "RspCode", "01",
+                        "Message", "Order not found"
+                );
+            }
+
+            try {
+                validateVnPayAmount(
+                        payment,
+                        parameters
+                );
+            } catch (BadRequestException exception) {
+                log.warn(
+                        "VNPay IPN amount mismatch for paymentId={}",
+                        payment.getId()
+                );
+
+                return Map.of(
+                        "RspCode", "04",
+                        "Message", "Invalid Amount"
+                );
+            }
+
+            if (isFinalStatus(payment.getStatus())) {
+                log.info(
+                        "VNPay IPN ignored because payment is already finalized: paymentId={}, status={}",
+                        payment.getId(),
+                        payment.getStatus()
+                );
+
+                return Map.of(
+                        "RspCode", "02",
+                        "Message", "Order already confirmed"
+                );
+            }
+
+            updatePaymentFromVnPay(
+                    payment,
+                    parameters
             );
-        } catch (
-                ResourceNotFoundException
-                | BadRequestException exception
-        ) {
+
+            Payment updatedPayment =
+                    paymentRepository.save(payment);
+
+            log.info(
+                    "VNPay IPN processed successfully: paymentId={}, orderId={}, status={}, transactionId={}",
+                    updatedPayment.getId(),
+                    updatedPayment.getOrderId(),
+                    updatedPayment.getStatus(),
+                    updatedPayment.getTransactionId()
+            );
+
             return Map.of(
-                    "RspCode", "01",
-                    "Message", "Order not found"
+                    "RspCode", "00",
+                    "Message", "Confirm Success"
+            );
+
+        } catch (Exception exception) {
+            log.error(
+                    "Unexpected error while processing VNPay IPN",
+                    exception
+            );
+
+            return Map.of(
+                    "RspCode", "99",
+                    "Message", "Unknown error"
             );
         }
-
-        try {
-            validateVnPayAmount(payment, parameters);
-        } catch (BadRequestException exception) {
-            return Map.of(
-                    "RspCode", "04",
-                    "Message", "Invalid Amount"
-            );
-        }
-
-        if (payment.getStatus() == PaymentStatus.SUCCESS) {
-            return Map.of(
-                    "RspCode", "02",
-                    "Message", "Order already confirmed"
-            );
-        }
-
-        updatePaymentFromVnPay(payment, parameters);
-        paymentRepository.save(payment);
-
-        return Map.of(
-                "RspCode", "00",
-                "Message", "Confirm Success"
-        );
     }
 
     private Payment findPaymentByTransactionReference(
@@ -215,9 +307,8 @@ public class PaymentServiceImpl implements PaymentService {
         UUID paymentId;
 
         try {
-            paymentId = UUID.fromString(
-                    transactionReference
-            );
+            paymentId =
+                    UUID.fromString(transactionReference);
         } catch (IllegalArgumentException exception) {
             throw new BadRequestException(
                     "vnp_TxnRef không hợp lệ"
@@ -231,7 +322,8 @@ public class PaymentServiceImpl implements PaymentService {
             Payment payment,
             Map<String, String> parameters
     ) {
-        String vnpAmount = parameters.get("vnp_Amount");
+        String vnpAmount =
+                parameters.get("vnp_Amount");
 
         if (vnpAmount == null || vnpAmount.isBlank()) {
             throw new BadRequestException(
@@ -282,6 +374,7 @@ public class PaymentServiceImpl implements PaymentService {
             payment.setFailureReason(null);
         } else {
             payment.setStatus(PaymentStatus.FAILED);
+            payment.setPaidAt(null);
             payment.setFailureReason(
                     "VNPay responseCode="
                             + responseCode
@@ -299,6 +392,15 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         payment.setPaymentUrl(null);
+    }
+
+    private boolean isFinalStatus(
+            PaymentStatus status
+    ) {
+        return status == PaymentStatus.SUCCESS
+                || status == PaymentStatus.FAILED
+                || status == PaymentStatus.CANCELLED
+                || status == PaymentStatus.REFUNDED;
     }
 
     private Payment findPaymentById(UUID paymentId) {
