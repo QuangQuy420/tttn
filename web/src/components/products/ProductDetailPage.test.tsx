@@ -63,7 +63,7 @@ describe("ProductDetailPage", () => {
     expect(
       screen.getByText((_content, element) => element?.textContent === formatPriceVnd(129.5)),
     ).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "Gold" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Gold" })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Aviator Classic" })).toHaveAttribute("src", "/img.jpg");
   });
 
@@ -103,10 +103,10 @@ describe("ProductDetailPage", () => {
     render(<ProductDetailPage id="p1" />);
 
     // Two variants share the "Gold" color, so only one swatch renders for it (deduplicated).
-    expect(screen.getAllByRole("img", { name: "Gold" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Gold" })).toHaveLength(1);
     // "Rose Quartz" isn't in the known-color lookup, so it gets a visible text label too, not
     // just a colored circle with no accessible name.
-    expect(screen.getByRole("img", { name: "Rose Quartz" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Rose Quartz" })).toBeInTheDocument();
     expect(screen.getByText("Rose Quartz")).toBeInTheDocument();
   });
 
