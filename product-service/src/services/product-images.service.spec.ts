@@ -21,14 +21,17 @@ describe('ProductImagesService', () => {
       softDelete: jest.fn(),
     };
     imageRepository = {
+      findById: jest.fn(),
       findByProductIds: jest.fn(),
       findByProductAndUrl: jest.fn(),
       findByProductAndSortOrder: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
       deleteById: jest.fn(),
     };
     imageStorageRepository = {
       upload: jest.fn(),
+      deleteByUrl: jest.fn(),
     };
     service = new ProductImagesService(
       variantRepository,

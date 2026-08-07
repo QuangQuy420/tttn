@@ -1442,6 +1442,7 @@ class CartServiceImplTest {
                     new ProductVariantResponse(
                             variantId,
                             "Đen",
+                            "#000000",
                             "M",
                             null,
                             "SKU-VARIANT-001",
@@ -1628,6 +1629,7 @@ class CartServiceImplTest {
         return new ProductVariantResponse(
                 variantId,
                 "Đen",
+                "#000000",
                 "M",
                 new BigDecimal("200000"),
                 "SKU-VARIANT-001",

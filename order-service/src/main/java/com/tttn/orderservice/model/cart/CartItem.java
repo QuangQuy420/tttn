@@ -23,6 +23,8 @@ public class CartItem implements Serializable {
 
     private String color;
 
+    private String colorHex;
+
     private String size;
 
     private String productImageUrl;

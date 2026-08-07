@@ -34,6 +34,7 @@ interface SeedCategoryInput {
 
 interface SeedVariantInput {
   color: string;
+  color_hex?: string | null;
   size: string;
   extra_price?: number;
   sku_variant: string;
@@ -44,6 +45,8 @@ interface SeedImageInput {
   image_url: string;
   is_thumbnail?: boolean;
   sort_order?: number;
+  /** `sku_variant` of a variant on the same product to attach this image to instead of the base product. */
+  variant_sku?: string;
 }
 
 interface SeedProductInput {
@@ -306,10 +309,12 @@ export class SeedService {
     let variantsCreated = 0;
     let imagesCreated = 0;
     try {
+      const variantIdBySkuVariant = new Map<string, string>();
       for (const variantInput of productInput.variants ?? []) {
         const variant = await this.variantRepository.create({
           productId: product.id,
           color: variantInput.color,
+          colorHex: variantInput.color_hex ?? null,
           size: variantInput.size,
           extraPrice: variantInput.extra_price ?? 0,
           skuVariant: variantInput.sku_variant,
@@ -319,12 +324,23 @@ export class SeedService {
           quantity: variantInput.stock ?? 0,
           reservedQuantity: 0,
         });
+        variantIdBySkuVariant.set(variantInput.sku_variant, variant.id);
         variantsCreated += 1;
       }
 
       for (const imageInput of productInput.images ?? []) {
+        let variantId: string | undefined;
+        if (imageInput.variant_sku) {
+          variantId = variantIdBySkuVariant.get(imageInput.variant_sku);
+          if (!variantId) {
+            throw new Error(
+              `Seed product "${productInput.sku}" image references unknown variant_sku "${imageInput.variant_sku}"`,
+            );
+          }
+        }
         await this.productImagesService.create({
           productId: product.id,
+          variantId,
           imageUrl: imageInput.image_url,
           isThumbnail: imageInput.is_thumbnail ?? false,
           sortOrder: imageInput.sort_order ?? 0,

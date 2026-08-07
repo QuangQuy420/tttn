@@ -855,6 +855,7 @@ class OrderServiceCheckoutTest {
         return new ProductVariantResponse(
                 id,
                 "Black",
+                "#000000",
                 "M",
                 extraPrice,
                 "GLASSES-BLACK-M",

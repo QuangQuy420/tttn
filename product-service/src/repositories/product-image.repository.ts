@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { ProductImage } from '../db/entities/product-image.entity';
 
 export interface IProductImageRepository {
+  findById(id: string): Promise<ProductImage | null>;
   findByProductIds(productIds: string[]): Promise<ProductImage[]>;
   findByProductAndUrl(
     productId: string,
@@ -14,6 +15,7 @@ export interface IProductImageRepository {
     sortOrder: number,
   ): Promise<ProductImage | null>;
   create(data: Partial<ProductImage>): Promise<ProductImage>;
+  update(id: string, data: Partial<ProductImage>): Promise<ProductImage>;
   deleteById(id: string): Promise<void>;
 }
 
@@ -23,6 +25,10 @@ export class TypeOrmProductImageRepository implements IProductImageRepository {
     @InjectRepository(ProductImage)
     private readonly repo: Repository<ProductImage>,
   ) {}
+
+  findById(id: string): Promise<ProductImage | null> {
+    return this.repo.findOne({ where: { id } });
+  }
 
   findByProductIds(productIds: string[]): Promise<ProductImage[]> {
     if (productIds.length === 0) return Promise.resolve([]);
@@ -49,6 +55,15 @@ export class TypeOrmProductImageRepository implements IProductImageRepository {
 
   create(data: Partial<ProductImage>): Promise<ProductImage> {
     return this.repo.save(this.repo.create(data));
+  }
+
+  async update(id: string, data: Partial<ProductImage>): Promise<ProductImage> {
+    await this.repo.update({ id }, data);
+    const updated = await this.findById(id);
+    if (!updated) {
+      throw new Error(`ProductImage ${id} not found after update`);
+    }
+    return updated;
   }
 
   async deleteById(id: string): Promise<void> {

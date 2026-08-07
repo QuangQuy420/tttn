@@ -68,6 +68,7 @@ public class OrderMapper {
                 item.getProductName(),
                 item.getSkuVariant(),
                 item.getColor(),
+                item.getColorHex(),
                 item.getSize(),
                 item.getProductImageUrl(),
                 item.getUnitPrice(),

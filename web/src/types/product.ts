@@ -31,6 +31,7 @@ export interface Brand {
 export interface ProductVariant {
   id: string;
   color: string;
+  colorHex: string | null;
   size: string;
   extraPrice: number;
   skuVariant: string;
@@ -98,6 +99,7 @@ export type UpdateProductPayload = Partial<CreateProductPayload>;
 // Mirrors product-service's CreateVariantDto (src/routes/dto/create-variant.dto.ts).
 export interface CreateVariantPayload {
   color: string;
+  colorHex: string;
   size: string;
   extraPrice?: number;
   stock?: number;

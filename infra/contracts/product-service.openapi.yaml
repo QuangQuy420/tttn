@@ -239,11 +239,14 @@ paths:
   /products/{id}/images:
     post:
       tags: [products]
-      summary: Upload/replace a product image slot (admin)
+      summary: Upload a product or variant image (admin)
       description: >
-        Multipart upload. `slot` maps to `sortOrder` (`main`→0, `angle1`→1, `angle2`→2,
-        `angle3`→3); `main` is also marked `isThumbnail`. Re-uploading to a slot already
-        in use replaces the existing image for that slot rather than duplicating it.
+        Multipart upload. Appends to the image list rather than replacing anything —
+        `sortOrder` is the current max within the target group + 1. Omitting `variantId`
+        attaches the image to the base product (max 8 images); passing a `variantId`
+        attaches it to that variant instead (max 5 images), and the variant must belong
+        to this product. A newly uploaded image never starts as the thumbnail — the
+        admin sets it explicitly via `PATCH .../images/{imageId}`.
         Rejects anything that isn't `image/jpeg`, `image/png`, or `image/webp`, or is
         over 5 MB, with a 400 (server-side check, not just a client-side hint).
       operationId: uploadProductImage
@@ -264,10 +267,11 @@ paths:
                 file:
                   type: string
                   format: binary
-                slot:
+                variantId:
                   type: string
-                  enum: [main, angle1, angle2, angle3]
-              required: [file, slot]
+                  format: uuid
+                  description: Omit to attach the image to the base product.
+              required: [file]
       responses:
         "201":
           description: Image uploaded and attached
@@ -277,9 +281,77 @@ paths:
                 $ref: "#/components/schemas/ProductImageResponse"
         "400":
           description: >
-            Missing file/slot, disallowed content type, or file over 5 MB.
+            Missing file, disallowed content type, file over 5 MB, `variantId` not
+            belonging to this product, or the group's image count limit (8 for the
+            product, 5 for a variant) already reached.
         "404":
           description: Product not found
+
+  /products/{id}/images/{imageId}:
+    patch:
+      tags: [products]
+      summary: Set an image as the thumbnail of its group (admin)
+      description: >
+        Marks `imageId` as the thumbnail and unsets any other thumbnail within the same
+        group (the base product's own images, or a specific variant's images).
+      operationId: setProductImageThumbnail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: imageId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                isThumbnail:
+                  type: boolean
+                  enum: [true]
+              required: [isThumbnail]
+      responses:
+        "200":
+          description: Image updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductImageResponse"
+        "400":
+          description: "`isThumbnail` was not `true`."
+        "404":
+          description: Image not found, or it doesn't belong to this product.
+    delete:
+      tags: [products]
+      summary: Delete a product or variant image (admin)
+      operationId: deleteProductImage
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: imageId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Image deleted
+        "404":
+          description: Image not found, or it doesn't belong to this product.
 
   /categories:
     get:
@@ -394,13 +466,19 @@ components:
           format: uuid
         color:
           type: string
+        colorHex:
+          type: string
+          nullable: true
+          description: >
+            Hex color code (e.g. `#E53935`), or `null` for a legacy variant created
+            before the color picker was added.
         size:
           type: string
         extraPrice:
           type: number
         skuVariant:
           type: string
-      required: [id, color, size, extraPrice, skuVariant]
+      required: [id, color, colorHex, size, extraPrice, skuVariant]
 
     ProductImageResponse:
       type: object

@@ -55,6 +55,7 @@ export class ProductVariantsService {
     const variant = await this.variantRepository.create({
       productId,
       color: dto.color,
+      colorHex: dto.colorHex,
       size: dto.size,
       extraPrice: dto.extraPrice ?? 0,
       skuVariant,
@@ -86,6 +87,7 @@ export class ProductVariantsService {
 
     const updateData: Partial<ProductVariant> = {};
     if (dto.color !== undefined) updateData.color = dto.color;
+    if (dto.colorHex !== undefined) updateData.colorHex = dto.colorHex;
     if (dto.size !== undefined) updateData.size = dto.size;
     if (dto.extraPrice !== undefined) updateData.extraPrice = dto.extraPrice;
 
@@ -170,6 +172,7 @@ export class ProductVariantsService {
     const dto = new ProductVariantResponseDto();
     dto.id = variant.id;
     dto.color = variant.color;
+    dto.colorHex = variant.colorHex;
     dto.size = variant.size;
     dto.extraPrice = variant.extraPrice;
     dto.skuVariant = variant.skuVariant;

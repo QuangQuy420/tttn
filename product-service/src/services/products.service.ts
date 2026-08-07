@@ -307,6 +307,7 @@ export class ProductsService {
       .map((variant) => ({
         id: variant.id,
         color: variant.color,
+        colorHex: variant.colorHex,
         size: variant.size,
         extraPrice: variant.extraPrice,
         skuVariant: variant.skuVariant,

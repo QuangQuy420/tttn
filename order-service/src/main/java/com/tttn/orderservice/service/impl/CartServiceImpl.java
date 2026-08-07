@@ -267,6 +267,7 @@ public class CartServiceImpl implements CartService {
                 .productName(product.name())
                 .skuVariant(variant.skuVariant())
                 .color(variant.color())
+                .colorHex(variant.colorHex())
                 .size(variant.size())
                 .productImageUrl(
                         selectProductImage(
@@ -297,6 +298,7 @@ public class CartServiceImpl implements CartService {
         item.setProductName(product.name());
         item.setSkuVariant(variant.skuVariant());
         item.setColor(variant.color());
+        item.setColorHex(variant.colorHex());
         item.setSize(variant.size());
 
         item.setProductImageUrl(

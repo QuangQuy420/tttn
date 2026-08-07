@@ -133,12 +133,14 @@ export class ProductsProxyService {
 
   async uploadProductImage(
     id: string,
-    slot: string,
     file: Express.Multer.File,
+    variantId?: string,
   ): Promise<unknown> {
     const path = `/products/${id}/images`;
     const form = new FormData();
-    form.append('slot', slot);
+    if (variantId) {
+      form.append('variantId', variantId);
+    }
     form.append('file', file.buffer, {
       filename: file.originalname,
       contentType: file.mimetype,
@@ -149,6 +151,33 @@ export class ProductsProxyService {
         this.httpService.post(`${this.baseUrl}${path}`, form, {
           headers: form.getHeaders(),
         }),
+      );
+      return response.data;
+    } catch (error) {
+      throw this.toGatewayError(error as AxiosError, path);
+    }
+  }
+
+  async setProductImageThumbnail(
+    productId: string,
+    imageId: string,
+  ): Promise<unknown> {
+    const path = `/products/${productId}/images/${imageId}`;
+    try {
+      const response = await firstValueFrom(
+        this.httpService.patch(`${this.baseUrl}${path}`, { isThumbnail: true }),
+      );
+      return response.data;
+    } catch (error) {
+      throw this.toGatewayError(error as AxiosError, path);
+    }
+  }
+
+  async deleteProductImage(productId: string, imageId: string): Promise<unknown> {
+    const path = `/products/${productId}/images/${imageId}`;
+    try {
+      const response = await firstValueFrom(
+        this.httpService.delete(`${this.baseUrl}${path}`),
       );
       return response.data;
     } catch (error) {

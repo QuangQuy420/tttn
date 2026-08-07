@@ -53,6 +53,7 @@ function makeVariant(overrides: Partial<ProductVariant> = {}): ProductVariant {
     id: 'variant-1',
     productId: 'product-1',
     color: 'Black',
+    colorHex: null,
     size: 'M',
     extraPrice: 0,
     skuVariant: 'SKU-1-BLK-M',
@@ -108,10 +109,12 @@ describe('ProductsService', () => {
       softDelete: jest.fn(),
     };
     imageRepository = {
+      findById: jest.fn(),
       findByProductIds: jest.fn(),
       findByProductAndUrl: jest.fn(),
       findByProductAndSortOrder: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
       deleteById: jest.fn(),
     };
     faceShapeRepository = {

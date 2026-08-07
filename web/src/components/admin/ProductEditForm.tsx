@@ -26,7 +26,7 @@ import type {
   ProductStatus,
 } from "@/types/product";
 import { FaceShapeTagPicker } from "./FaceShapeTagPicker";
-import { ImageUploadSlot } from "./ImageUploadSlot";
+import { ProductImageManager } from "./ProductImageManager";
 import { ProductVariantsEditor } from "./ProductVariantsEditor";
 import type { ProductVariant } from "@/types/product";
 
@@ -81,18 +81,6 @@ function formFromProduct(product: Product): FormState {
   };
 }
 
-function imageBySortOrder(product: Product | null, sortOrder: number): string | null {
-  if (!product) return null;
-  return product.images.find((image) => image.sortOrder === sortOrder)?.imageUrl ?? null;
-}
-
-const IMAGE_SLOTS = [
-  { slot: "main" as const, sortOrder: 0, placeholder: "Ảnh chính diện" },
-  { slot: "angle1" as const, sortOrder: 1, placeholder: "Góc nghiêng" },
-  { slot: "angle2" as const, sortOrder: 2, placeholder: "Mặt sau" },
-  { slot: "angle3" as const, sortOrder: 3, placeholder: "Trên tay" },
-];
-
 // Shared create/edit form (T18), matching Product Edit.dc.html's field set, order, and Vietnamese
 // labels. `product === null` means "create" (isNew); otherwise the form is prefilled for edit.
 export function ProductEditForm({ product }: ProductEditFormProps) {
@@ -103,12 +91,6 @@ export function ProductEditForm({ product }: ProductEditFormProps) {
   // Once a new product is created, further image uploads attach to this id (uploads need an
   // existing product — see ImageUploadSlot). Starts as the existing product's id in edit mode.
   const [savedProductId, setSavedProductId] = useState<string | null>(product?.id ?? null);
-  const [images, setImages] = useState<Record<number, string | null>>({
-    0: imageBySortOrder(product, 0),
-    1: imageBySortOrder(product, 1),
-    2: imageBySortOrder(product, 2),
-    3: imageBySortOrder(product, 3),
-  });
   // Same "needs an existing product" constraint as image uploads — see ProductVariantsEditor.
   const [variants, setVariants] = useState<ProductVariant[]>(product?.variants ?? []);
 
@@ -247,28 +229,13 @@ export function ProductEditForm({ product }: ProductEditFormProps) {
               {!savedProductId && (
                 <p className="admin-table__tag">Lưu sản phẩm trước để tải ảnh lên.</p>
               )}
-              <ImageUploadSlot
+              <ProductImageManager
                 productId={savedProductId}
-                slot="main"
-                placeholder="Ảnh chính diện"
-                imageUrl={images[0]}
-                onUploaded={(url) => setImages((current) => ({ ...current, 0: url }))}
+                variantId={null}
+                maxCount={8}
+                images={product?.images.filter((image) => image.variantId === null) ?? []}
+                onChange={() => {}}
               />
-              <div className="admin-image-slot__grid">
-                {IMAGE_SLOTS.slice(1).map(({ slot, sortOrder, placeholder }) => (
-                  <ImageUploadSlot
-                    key={slot}
-                    productId={savedProductId}
-                    slot={slot}
-                    placeholder={placeholder}
-                    imageUrl={images[sortOrder]}
-                    onUploaded={(url) =>
-                      setImages((current) => ({ ...current, [sortOrder]: url }))
-                    }
-                    small
-                  />
-                ))}
-              </div>
             </div>
           </div>
 
@@ -427,6 +394,7 @@ export function ProductEditForm({ product }: ProductEditFormProps) {
               <ProductVariantsEditor
                 productId={savedProductId}
                 variants={variants}
+                images={product?.images ?? []}
                 onChange={setVariants}
               />
             </div>

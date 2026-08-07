@@ -58,6 +58,9 @@ export class ProductVariant {
   @Column({ name: 'sku_variant', type: 'varchar', length: 100, unique: true })
   skuVariant: string;
 
+  @Column({ name: 'color_hex', type: 'varchar', length: 7, nullable: true })
+  colorHex: string | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 
