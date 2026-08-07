@@ -126,6 +126,7 @@ public class OrderServiceImpl implements OrderService {
                     .productName(product.name())
                     .skuVariant(variant.skuVariant())
                     .color(variant.color())
+                    .colorHex(variant.colorHex())
                     .size(variant.size())
                     .productImageUrl(cartItem.getProductImageUrl())
                     .unitPrice(unitPrice)

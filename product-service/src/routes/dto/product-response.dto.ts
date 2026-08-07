@@ -18,6 +18,7 @@ export class CategorySummaryDto {
 export class ProductVariantResponseDto {
   id: string;
   color: string;
+  colorHex: string | null;
   size: string;
   extraPrice: number;
   skuVariant: string;

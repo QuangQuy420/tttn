@@ -9,6 +9,7 @@ export interface CartItem {
   productName: string;
   skuVariant: string;
   color: string;
+  colorHex: string | null;
   size: string;
   productImageUrl: string | null;
   basePrice: number;

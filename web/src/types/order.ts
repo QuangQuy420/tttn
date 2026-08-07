@@ -25,6 +25,7 @@ export interface OrderItem {
   productName: string;
   skuVariant: string;
   color: string;
+  colorHex: string | null;
   size: string;
   productImageUrl: string | null;
   unitPrice: number;

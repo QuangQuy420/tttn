@@ -8,6 +8,7 @@ import { LoadingState } from "@/components/common/LoadingState";
 import { dispatchCartChange, useCart } from "@/hooks/useCart";
 import { ApiError, removeCartItem, updateCartItem } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth/session";
+import { getColorSwatch } from "@/lib/format/color";
 import { formatPriceVnd } from "@/lib/format/price";
 
 // FR1/T16: list cart items, let the user change quantity or remove an item, show the running
@@ -142,6 +143,13 @@ export function CartPage() {
                 <div className="cart-item__info">
                   <p className="cart-item__name">{item.productName}</p>
                   <p className="cart-item__variant">
+                    <span
+                      className="swatch swatch--inline"
+                      style={{ backgroundColor: item.colorHex ?? getColorSwatch(item.color).hex }}
+                      role="img"
+                      aria-label={item.color}
+                      title={item.color}
+                    />
                     Màu: {item.color} · Kích thước: {item.size}
                   </p>
                   <p className="cart-item__price">{formatPriceVnd(item.unitPrice)}</p>

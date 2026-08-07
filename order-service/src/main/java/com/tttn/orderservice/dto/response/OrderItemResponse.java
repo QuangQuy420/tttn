@@ -10,6 +10,7 @@ public record OrderItemResponse(
         String productName,
         String skuVariant,
         String color,
+        String colorHex,
         String size,
         String productImageUrl,
         BigDecimal unitPrice,

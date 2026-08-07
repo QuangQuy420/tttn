@@ -25,16 +25,16 @@ export {
   createProduct,
   createVariant,
   deleteProduct,
+  deleteProductImage,
   deleteVariant,
   getCategories,
   getProductById,
   getProducts,
+  setProductImageThumbnail,
   updateProduct,
   updateVariant,
   uploadProductImage,
 } from "./products";
-
-export type { ImageSlot } from "./products";
 
 export {
   addCartItem,

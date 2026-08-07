@@ -9,6 +9,7 @@ public record CartItemResponse(
         String productName,
         String skuVariant,
         String color,
+        String colorHex,
         String size,
         String productImageUrl,
         BigDecimal basePrice,

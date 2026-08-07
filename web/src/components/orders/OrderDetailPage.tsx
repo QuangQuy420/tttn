@@ -6,6 +6,7 @@ import { ErrorState } from "@/components/common/ErrorState";
 import { LoadingState } from "@/components/common/LoadingState";
 import { ApiError, cancelOrder, getOrderById } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth/session";
+import { getColorSwatch } from "@/lib/format/color";
 import { formatPriceVnd } from "@/lib/format/price";
 import { formatOrderStatusVi } from "@/lib/labels";
 import type { Order } from "@/types/order";
@@ -148,7 +149,14 @@ export function OrderDetailPage({ id }: OrderDetailPageProps) {
         <ul className="order-detail__items">
           {order.items.map((item) => (
             <li key={item.id} className="order-item">
-              <span>
+              <span className="order-item__product">
+                <span
+                  className="swatch swatch--inline"
+                  style={{ backgroundColor: item.colorHex ?? getColorSwatch(item.color).hex }}
+                  role="img"
+                  aria-label={item.color}
+                  title={item.color}
+                />
                 {item.productName} ({item.color}, {item.size}) x{item.quantity}
               </span>
               <span>{formatPriceVnd(item.subtotal)}</span>

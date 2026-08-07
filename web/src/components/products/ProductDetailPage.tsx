@@ -18,17 +18,46 @@ interface ProductDetailPageProps {
 export function ProductDetailPage({ id }: ProductDetailPageProps) {
   const { product, isLoading, error } = useProduct(id);
   const [isAddToCartOpen, setIsAddToCartOpen] = useState(false);
+  // FR6/AC7: which swatch the customer picked, if any — drives which image group is shown below.
+  const [selectedColor, setSelectedColor] = useState<string | null>(null);
 
   if (isLoading) return <LoadingState label="Đang tải sản phẩm..." />;
   if (error) return <ErrorState message={error} />;
   if (!product) return <ErrorState message="Không tìm thấy sản phẩm." />;
 
-  const sortedImages = [...product.images].sort((a, b) => a.sortOrder - b.sortOrder);
-  const mainImage = product.images.find((image) => image.isThumbnail) ?? sortedImages[0];
-  const thumbnailImages = sortedImages.filter((image) => image.id !== mainImage?.id);
+  // FR7: one swatch per distinct variant.color, in first-seen order — colorHex takes priority
+  // over the legacy name->hex lookup (AC13: colorHex null falls back to getColorSwatch).
+  const colors: { color: string; hex: string; isKnown: boolean }[] = [];
+  const seenColors = new Set<string>();
+  for (const variant of product.variants) {
+    if (seenColors.has(variant.color)) continue;
+    seenColors.add(variant.color);
+    const swatch = variant.colorHex
+      ? { hex: variant.colorHex, isKnown: true }
+      : getColorSwatch(variant.color);
+    colors.push({ color: variant.color, hex: swatch.hex, isKnown: swatch.isKnown });
+  }
 
-  // FR7: one swatch per distinct variant.color, in first-seen order.
-  const colors = [...new Set(product.variants.map((variant) => variant.color))];
+  // FR6/AC7: when a color is selected, prefer images belonging to a variant of that color;
+  // fall back to the base product's own images (variantId === null) when that variant has none.
+  const selectedVariantIds = selectedColor
+    ? new Set(
+        product.variants
+          .filter((variant) => variant.color === selectedColor)
+          .map((variant) => variant.id),
+      )
+    : null;
+  const variantImages = selectedVariantIds
+    ? product.images.filter(
+        (image) => image.variantId !== null && selectedVariantIds.has(image.variantId),
+      )
+    : [];
+  const baseImages = product.images.filter((image) => image.variantId === null);
+  const activeImages = variantImages.length > 0 ? variantImages : baseImages;
+
+  const sortedImages = [...activeImages].sort((a, b) => a.sortOrder - b.sortOrder);
+  const mainImage = activeImages.find((image) => image.isThumbnail) ?? sortedImages[0];
+  const thumbnailImages = sortedImages.filter((image) => image.id !== mainImage?.id);
 
   return (
     <article aria-labelledby="product-heading" className="product-detail">
@@ -104,18 +133,20 @@ export function ProductDetailPage({ id }: ProductDetailPageProps) {
               <p>Chưa có phiên bản màu nào.</p>
             ) : (
               <ul className="product-detail__swatches">
-                {colors.map((color) => {
-                  const swatch = getColorSwatch(color);
+                {colors.map(({ color, hex, isKnown }) => {
+                  const isSelected = color === selectedColor;
                   return (
                     <li key={color} className="swatch-item">
-                      <span
-                        className="swatch"
-                        style={{ backgroundColor: swatch.hex }}
-                        role="img"
+                      <button
+                        type="button"
+                        className={`swatch swatch--selectable${isSelected ? " swatch--selected" : ""}`}
+                        style={{ backgroundColor: hex }}
+                        aria-pressed={isSelected}
                         aria-label={color}
                         title={color}
+                        onClick={() => setSelectedColor(isSelected ? null : color)}
                       />
-                      {!swatch.isKnown && <span className="swatch-label">{color}</span>}
+                      {!isKnown && <span className="swatch-label">{color}</span>}
                     </li>
                   );
                 })}

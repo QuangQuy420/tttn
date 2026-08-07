@@ -78,6 +78,9 @@ public class OrderItem {
     @Column(name = "color", length = 100)
     private String color;
 
+    @Column(name = "color_hex", length = 7)
+    private String colorHex;
+
     @Column(name = "size", length = 100)
     private String size;
 }

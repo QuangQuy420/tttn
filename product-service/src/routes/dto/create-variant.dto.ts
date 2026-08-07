@@ -3,6 +3,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   Min,
   MaxLength,
 } from 'class-validator';
@@ -11,6 +12,9 @@ export class CreateVariantDto {
   @IsString()
   @MaxLength(100)
   color: string;
+
+  @Matches(/^#[0-9A-Fa-f]{6}$/)
+  colorHex: string;
 
   @IsString()
   @MaxLength(50)

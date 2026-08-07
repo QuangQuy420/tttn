@@ -103,10 +103,31 @@ export class ProductsController {
   @UseInterceptors(FileInterceptor('file'))
   uploadImage(
     @Param('id') id: string,
-    @Body('slot') slot: string,
+    @Body('variantId') variantId: string | undefined,
     @UploadedFile() file: Express.Multer.File,
   ): Promise<unknown> {
-    return this.productsProxyService.uploadProductImage(id, slot, file);
+    return this.productsProxyService.uploadProductImage(id, file, variantId);
+  }
+
+  @Patch(':id/images/:imageId')
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @RequirePermission('product:manage')
+  setImageThumbnail(
+    @Param('id') id: string,
+    @Param('imageId') imageId: string,
+  ): Promise<unknown> {
+    return this.productsProxyService.setProductImageThumbnail(id, imageId);
+  }
+
+  @Delete(':id/images/:imageId')
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @RequirePermission('product:manage')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  removeImage(
+    @Param('id') id: string,
+    @Param('imageId') imageId: string,
+  ): Promise<unknown> {
+    return this.productsProxyService.deleteProductImage(id, imageId);
   }
 }
 

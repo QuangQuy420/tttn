@@ -26,6 +26,7 @@ import {
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { UploadProductImageDto } from './dto/upload-product-image.dto';
+import { SetImageThumbnailDto } from './dto/set-image-thumbnail.dto';
 
 const ALLOWED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
@@ -86,10 +87,16 @@ export class ProductsController {
     if (file.size > MAX_IMAGE_SIZE_BYTES) {
       throw new BadRequestException('Tệp phải nhỏ hơn hoặc bằng 5 MB');
     }
+    if (body.variantId) {
+      await this.productImagesService.assertVariantBelongsToProduct(
+        id,
+        body.variantId,
+      );
+    }
 
     const image = await this.productImagesService.uploadAndAttach(
       id,
-      body.slot,
+      body.variantId ?? null,
       file,
     );
 
@@ -100,5 +107,34 @@ export class ProductsController {
       isThumbnail: image.isThumbnail,
       sortOrder: image.sortOrder,
     };
+  }
+
+  @Patch(':id/images/:imageId')
+  async setImageThumbnail(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('imageId', ParseUUIDPipe) imageId: string,
+    @Body() body: SetImageThumbnailDto,
+  ): Promise<ProductImageResponseDto> {
+    if (!body.isThumbnail) {
+      throw new BadRequestException('isThumbnail phải là true');
+    }
+    const image = await this.productImagesService.setThumbnail(id, imageId);
+
+    return {
+      id: image.id,
+      variantId: image.variantId,
+      imageUrl: image.imageUrl,
+      isThumbnail: image.isThumbnail,
+      sortOrder: image.sortOrder,
+    };
+  }
+
+  @Delete(':id/images/:imageId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  removeImage(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('imageId', ParseUUIDPipe) imageId: string,
+  ): Promise<void> {
+    return this.productImagesService.remove(id, imageId);
   }
 }

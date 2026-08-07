@@ -172,20 +172,24 @@ export function AddToCartModal({ product, onClose }: AddToCartModalProps) {
           ) : (
             <ul className="product-detail__swatches">
               {colors.map((color) => {
-                const swatch = getColorSwatch(color);
+                // AC6/AC13: prefer a real variant's colorHex; fall back to the legacy name->hex
+                // lookup when no variant of this color has one set yet.
+                const variantOfColor = product.variants.find((variant) => variant.color === color);
+                const legacySwatch = getColorSwatch(color);
+                const hex = variantOfColor?.colorHex ?? legacySwatch.hex;
                 const isSelected = color === selectedColor;
                 return (
                   <li key={color} className="swatch-item">
                     <button
                       type="button"
                       className={`swatch swatch--selectable${isSelected ? " swatch--selected" : ""}`}
-                      style={{ backgroundColor: swatch.hex }}
+                      style={{ backgroundColor: hex }}
                       aria-pressed={isSelected}
                       aria-label={color}
                       title={color}
                       onClick={() => handleSelectColor(color)}
                     />
-                    {!swatch.isKnown && <span className="swatch-label">{color}</span>}
+                    <span className="swatch-label">{color}</span>
                   </li>
                 );
               })}

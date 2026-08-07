@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   CreateBucketCommand,
+  DeleteObjectCommand,
   PutBucketPolicyCommand,
   PutObjectCommand,
   S3Client,
@@ -15,6 +16,8 @@ export interface UploadImageInput {
 
 export interface IImageStorageRepository {
   upload(input: UploadImageInput): Promise<string>;
+  /** Deletes the object behind a URL previously returned by `upload()`. */
+  deleteByUrl(url: string): Promise<void>;
 }
 
 /**
@@ -101,5 +104,19 @@ export class S3ImageStorageRepository
       }),
     );
     return `${this.publicUrl}/${this.bucket}/${input.key}`;
+  }
+
+  async deleteByUrl(url: string): Promise<void> {
+    const prefix = `${this.publicUrl}/${this.bucket}/`;
+    if (!url.startsWith(prefix)) {
+      this.logger.warn(
+        `Skipping storage delete — URL doesn't match this bucket: ${url}`,
+      );
+      return;
+    }
+    const key = url.slice(prefix.length);
+    await this.client.send(
+      new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
   }
 }

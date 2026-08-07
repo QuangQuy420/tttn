@@ -6,6 +6,7 @@ import java.util.UUID;
 public record ProductVariantResponse(
         UUID id,
         String color,
+        String colorHex,
         String size,
         BigDecimal extraPrice,
         String skuVariant,
