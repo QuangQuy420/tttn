@@ -113,6 +113,29 @@ describe("useProducts", () => {
     );
   });
 
+  it("refetches when the brand filter changes", async () => {
+    mockedGetProducts.mockResolvedValue({
+      items: [sampleProduct],
+      total: 1,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
+    });
+
+    const { rerender } = renderHook(({ brandId }) => useProducts({ brandId }), {
+      initialProps: { brandId: undefined as string | undefined },
+    });
+
+    await waitFor(() => expect(mockedGetProducts).toHaveBeenCalledTimes(1));
+
+    rerender({ brandId: "brand-1" });
+
+    await waitFor(() => expect(mockedGetProducts).toHaveBeenCalledTimes(2));
+    expect(mockedGetProducts).toHaveBeenLastCalledWith(
+      expect.objectContaining({ brandId: "brand-1" }),
+    );
+  });
+
   it("refetches when the minPrice/maxPrice params change", async () => {
     mockedGetProducts.mockResolvedValue({
       items: [sampleProduct],

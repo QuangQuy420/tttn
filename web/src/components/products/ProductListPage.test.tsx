@@ -2,6 +2,7 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAvailableFrameShapes } from "@/hooks/useAvailableFrameShapes";
+import { useBrands } from "@/hooks/useBrands";
 import { useCategories } from "@/hooks/useCategories";
 import { useProducts } from "@/hooks/useProducts";
 import type { Product } from "@/types/product";
@@ -14,12 +15,14 @@ jest.mock("next/navigation", () => ({
 jest.mock("@/hooks/useProducts", () => ({ useProducts: jest.fn() }));
 jest.mock("@/hooks/useCategories", () => ({ useCategories: jest.fn() }));
 jest.mock("@/hooks/useAvailableFrameShapes", () => ({ useAvailableFrameShapes: jest.fn() }));
+jest.mock("@/hooks/useBrands", () => ({ useBrands: jest.fn() }));
 
 const mockedUseRouter = useRouter as jest.Mock;
 const mockedUseSearchParams = useSearchParams as jest.Mock;
 const mockedUseProducts = useProducts as jest.Mock;
 const mockedUseCategories = useCategories as jest.Mock;
 const mockedUseAvailableFrameShapes = useAvailableFrameShapes as jest.Mock;
+const mockedUseBrands = useBrands as jest.Mock;
 
 const sampleProduct: Product = {
   id: "p1",
@@ -54,6 +57,11 @@ describe("ProductListPage", () => {
       error: null,
     });
     mockedUseAvailableFrameShapes.mockReturnValue({ frameShapes: ["AVIATOR"] });
+    mockedUseBrands.mockReturnValue({
+      brands: [{ id: "brand-1", name: "RayShade", logoUrl: null }],
+      isLoading: false,
+      error: null,
+    });
     setSearchParams();
   });
 
@@ -97,26 +105,46 @@ describe("ProductListPage", () => {
     expect(screen.getByText("Aviator Classic")).toBeInTheDocument();
   });
 
-  it("pushes the categoryId filter onto the URL when a category pill is clicked", async () => {
+  it("pushes the categoryId filter onto the URL when selected in the filter panel", async () => {
     mockedUseProducts.mockReturnValue({ products: [sampleProduct], isLoading: false, error: null });
     const user = userEvent.setup();
 
     render(<ProductListPage />);
 
-    await user.click(screen.getByRole("button", { name: /sunglasses/i }));
+    await user.click(screen.getByRole("button", { name: /^filter$/i }));
+    await user.selectOptions(screen.getByLabelText("Danh mục"), "cat-1");
+    expect(push).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Xong" }));
 
     expect(push).toHaveBeenCalledWith("/?categoryId=cat-1");
   });
 
-  it("pushes minPrice/maxPrice onto the URL when a price-range pill is clicked", async () => {
+  it("pushes minPrice/maxPrice onto the URL when a price range is selected", async () => {
     mockedUseProducts.mockReturnValue({ products: [sampleProduct], isLoading: false, error: null });
     const user = userEvent.setup();
 
     render(<ProductListPage />);
 
-    await user.click(screen.getByRole("button", { name: /dưới 1\.500\.000/i }));
+    await user.click(screen.getByRole("button", { name: /^filter$/i }));
+    await user.selectOptions(screen.getByLabelText("Giá tiền"), "0");
+    expect(push).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Xong" }));
 
     expect(push).toHaveBeenCalledWith("/?maxPrice=1500000");
+  });
+
+  it("pushes the brandId filter onto the URL when selected in the filter panel", async () => {
+    mockedUseProducts.mockReturnValue({ products: [sampleProduct], isLoading: false, error: null });
+    const user = userEvent.setup();
+
+    render(<ProductListPage />);
+
+    await user.click(screen.getByRole("button", { name: /^filter$/i }));
+    await user.selectOptions(screen.getByLabelText("Thương hiệu"), "brand-1");
+    expect(push).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Xong" }));
+
+    expect(push).toHaveBeenCalledWith("/?brandId=brand-1");
   });
 
   it("pushes a debounced search filter to the URL after the user stops typing", async () => {
@@ -178,10 +206,12 @@ describe("ProductListPage", () => {
 
     await user.type(screen.getByRole("searchbox", { name: /tìm sản phẩm/i }), "avi");
 
-    // Before the search debounce fires, the user clicks a category pill. In the real app this
+    // Before the search debounce fires, the user selects a category. In the real app this
     // pushes a new URL and next/navigation's useSearchParams() re-renders the page with it —
     // simulate that here by updating the mocked search params and re-rendering.
-    await user.click(screen.getByRole("button", { name: /sunglasses/i }));
+    await user.click(screen.getByRole("button", { name: /^filter$/i }));
+    await user.selectOptions(screen.getByLabelText("Danh mục"), "cat-1");
+    await user.click(screen.getByRole("button", { name: "Xong" }));
     expect(push).toHaveBeenCalledWith("/?categoryId=cat-1");
     setSearchParams({ categoryId: "cat-1" });
     rerender(<ProductListPage />);

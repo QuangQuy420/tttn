@@ -18,7 +18,7 @@ export function useProducts(params: ProductListParams): UseProductsResult {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { categoryId, frameShape, page, limit, search, minPrice, maxPrice, includeAllStatuses } =
+  const { categoryId, brandId, frameShape, page, limit, search, minPrice, maxPrice, includeAllStatuses } =
     params;
 
   async function run() {
@@ -27,6 +27,7 @@ export function useProducts(params: ProductListParams): UseProductsResult {
     try {
       const response = await getProducts({
         categoryId,
+        brandId,
         frameShape,
         page,
         limit,
@@ -52,6 +53,7 @@ export function useProducts(params: ProductListParams): UseProductsResult {
       try {
         const response = await getProducts({
           categoryId,
+          brandId,
           frameShape,
           page,
           limit,
@@ -75,7 +77,7 @@ export function useProducts(params: ProductListParams): UseProductsResult {
     return () => {
       cancelled = true;
     };
-  }, [categoryId, frameShape, page, limit, search, minPrice, maxPrice, includeAllStatuses]);
+  }, [categoryId, brandId, frameShape, page, limit, search, minPrice, maxPrice, includeAllStatuses]);
 
   return { products, isLoading, error, refetch: run };
 }
