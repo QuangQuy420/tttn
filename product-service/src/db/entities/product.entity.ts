@@ -14,7 +14,7 @@ import { Brand } from './brand.entity';
 import { Category } from './category.entity';
 import { ProductVariant } from './product-variant.entity';
 import { ProductImage } from './product-image.entity';
-import { ProductFaceShape } from './product-face-shape.entity';
+import { FaceShape } from '../enums/face-shape.enum';
 import { FrameShape } from '../enums/frame-shape.enum';
 import { GenderTarget } from '../enums/gender-target.enum';
 import { ProductStatus } from '../enums/product-status.enum';
@@ -67,6 +67,16 @@ export class Product {
   faceFitNote: string | null;
 
   @Column({
+    name: 'face_shapes',
+    type: 'enum',
+    enum: FaceShape,
+    enumName: 'ps_face_shape_enum',
+    array: true,
+    default: () => "'{}'",
+  })
+  faceShapes: FaceShape[];
+
+  @Column({
     name: 'frame_shape',
     type: 'enum',
     enum: FrameShape,
@@ -116,7 +126,4 @@ export class Product {
 
   @OneToMany(() => ProductImage, (image) => image.product)
   images?: ProductImage[];
-
-  @OneToMany(() => ProductFaceShape, (faceShape) => faceShape.product)
-  faceShapes?: ProductFaceShape[];
 }

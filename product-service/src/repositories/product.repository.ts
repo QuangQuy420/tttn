@@ -77,14 +77,7 @@ export class TypeOrmProductRepository implements IProductRepository {
     }
     if (filter.faceShape) {
       qb.andWhere(
-        (qb2) =>
-          `EXISTS ${qb2
-            .subQuery()
-            .select('1')
-            .from('ps_product_face_shapes', 'product_face_shape')
-            .where('product_face_shape.product_id = product.id')
-            .andWhere('product_face_shape.face_shape = :faceShape')
-            .getQuery()}`,
+        'product.face_shapes @> ARRAY[:faceShape]::ps_face_shape_enum[]',
         { faceShape: filter.faceShape },
       );
     }

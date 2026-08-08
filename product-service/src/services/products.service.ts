@@ -11,7 +11,6 @@ import {
 } from '../repositories/product.repository';
 import { IProductVariantRepository } from '../repositories/product-variant.repository';
 import { IProductImageRepository } from '../repositories/product-image.repository';
-import { IProductFaceShapeRepository } from '../repositories/product-face-shape.repository';
 import { IBrandRepository } from '../repositories/brand.repository';
 import { ICategoryRepository } from '../repositories/category.repository';
 import { IProductEventPublisher } from '../repositories/product-event-publisher.repository';
@@ -20,7 +19,6 @@ import {
   PRODUCT_REPOSITORY,
   PRODUCT_VARIANT_REPOSITORY,
   PRODUCT_IMAGE_REPOSITORY,
-  PRODUCT_FACE_SHAPE_REPOSITORY,
   BRAND_REPOSITORY,
   CATEGORY_REPOSITORY,
   PRODUCT_EVENT_PUBLISHER,
@@ -34,7 +32,6 @@ import { UpdateProductDto } from '../routes/dto/update-product.dto';
 import { Product } from '../db/entities/product.entity';
 import { ProductVariant } from '../db/entities/product-variant.entity';
 import { ProductImage } from '../db/entities/product-image.entity';
-import { ProductFaceShape } from '../db/entities/product-face-shape.entity';
 import { ProductStatus } from '../db/enums/product-status.enum';
 
 @Injectable()
@@ -46,8 +43,6 @@ export class ProductsService {
     private readonly variantRepository: IProductVariantRepository,
     @Inject(PRODUCT_IMAGE_REPOSITORY)
     private readonly imageRepository: IProductImageRepository,
-    @Inject(PRODUCT_FACE_SHAPE_REPOSITORY)
-    private readonly faceShapeRepository: IProductFaceShapeRepository,
     @Inject(BRAND_REPOSITORY)
     private readonly brandRepository: IBrandRepository,
     @Inject(CATEGORY_REPOSITORY)
@@ -88,14 +83,13 @@ export class ProductsService {
     }
 
     const productIds = items.map((product) => product.id);
-    const [variants, images, faceShapes] = await Promise.all([
+    const [variants, images] = await Promise.all([
       this.variantRepository.findByProductIds(productIds),
       this.imageRepository.findByProductIds(productIds),
-      this.faceShapeRepository.findByProductIds(productIds),
     ]);
 
     const dtos = items.map((product) =>
-      this.toResponseDto(product, variants, images, faceShapes),
+      this.toResponseDto(product, variants, images),
     );
 
     return new PaginatedResponseDto<ProductResponseDto>(
@@ -113,10 +107,9 @@ export class ProductsService {
       throw new NotFoundException(`Không tìm thấy sản phẩm ${id}`);
     }
 
-    const [variants, images, faceShapes] = await Promise.all([
+    const [variants, images] = await Promise.all([
       this.variantRepository.findByProductIds([id]),
       this.imageRepository.findByProductIds([id]),
-      this.faceShapeRepository.findByProductIds([id]),
     ]);
 
     // stock (FR7) is only sourced here — order-service's single call point for pricing
@@ -126,13 +119,7 @@ export class ProductsService {
         variants.map((variant) => variant.id),
       );
 
-    return this.toResponseDto(
-      product,
-      variants,
-      images,
-      faceShapes,
-      stockByVariantId,
-    );
+    return this.toResponseDto(product, variants, images, stockByVariantId);
   }
 
   async create(dto: CreateProductDto): Promise<ProductResponseDto> {
@@ -149,17 +136,13 @@ export class ProductsService {
       slug,
       description: dto.description ?? null,
       faceFitNote: dto.faceFitNote ?? null,
+      faceShapes: dto.faceShapes ?? [],
       frameShape: dto.frameShape,
       genderTarget: dto.genderTarget,
       material: dto.material ?? null,
       basePrice: dto.basePrice,
       status: dto.status ?? ProductStatus.PUBLISHED,
     });
-
-    await this.faceShapeRepository.replaceForProduct(
-      product.id,
-      dto.faceShapes ?? [],
-    );
 
     return this.findOne(product.id);
   }
@@ -189,14 +172,11 @@ export class ProductsService {
     if (dto.basePrice !== undefined) updateData.basePrice = dto.basePrice;
     if (dto.description !== undefined) updateData.description = dto.description;
     if (dto.faceFitNote !== undefined) updateData.faceFitNote = dto.faceFitNote;
+    if (dto.faceShapes !== undefined) updateData.faceShapes = dto.faceShapes;
     if (dto.status !== undefined) updateData.status = dto.status;
 
     if (Object.keys(updateData).length > 0) {
       await this.productRepository.update(id, updateData);
-    }
-
-    if (dto.faceShapes !== undefined) {
-      await this.faceShapeRepository.replaceForProduct(id, dto.faceShapes);
     }
 
     await this.eventPublisher.publish({
@@ -271,7 +251,6 @@ export class ProductsService {
     product: Product,
     allVariants: ProductVariant[],
     allImages: ProductImage[],
-    allFaceShapes: ProductFaceShape[],
     stockByVariantId?: Map<string, number>,
   ): ProductResponseDto {
     if (!product.brand || !product.category) {
@@ -312,7 +291,7 @@ export class ProductsService {
         extraPrice: variant.extraPrice,
         skuVariant: variant.skuVariant,
         // undefined (omitted from JSON) when the caller (findAll()) didn't pass a stock
-        // map at all; defaults to 0 for a variant with no ps_inventory row when it did.
+        // map at all; defaults to 0 for a variant with no available stock when it did.
         stock: stockByVariantId
           ? (stockByVariantId.get(variant.id) ?? 0)
           : undefined,
@@ -326,9 +305,7 @@ export class ProductsService {
         isThumbnail: image.isThumbnail,
         sortOrder: image.sortOrder,
       }));
-    dto.faceShapes = allFaceShapes
-      .filter((faceShape) => faceShape.productId === product.id)
-      .map((faceShape) => faceShape.faceShape);
+    dto.faceShapes = product.faceShapes;
     dto.createdAt = product.createdAt;
     dto.updatedAt = product.updatedAt;
 

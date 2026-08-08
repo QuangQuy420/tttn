@@ -2,9 +2,7 @@
 service's README: "Maps face shape -> suitable frame shapes (config) and scores
 candidates", collaborative/content-based filtering explicitly out of scope).
 
-Kept as static Python config rather than sourced from product-service's (currently
-unwired) `ps_face_shape_styles` table — see the plan's "Current code analysis"
-section for that trade-off discussion.
+Kept as static Python config so the service owns its scoring rules directly.
 
 Each `FaceShape` maps to an ordered list of `(FrameShape, score)` pairs, highest score
 first. Scores are on a 0-10 scale, purely relative within one face shape (used to rank
