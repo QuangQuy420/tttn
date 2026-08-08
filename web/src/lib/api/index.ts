@@ -17,14 +17,16 @@ export {
   deleteMyAddress,
 } from "./users";
 
-export { getBrands } from "./brands";
+export { createBrand, deleteBrand, getBrands, updateBrand } from "./brands";
 export { analyzeFace, deleteFaceAnalysisHistory, getFaceAnalysisHistory } from "./face";
 export { getRecommendations } from "./recommendations";
 
 export {
   createProduct,
+  createCategory,
   createVariant,
   deleteProduct,
+  deleteCategory,
   deleteProductImage,
   deleteVariant,
   getCategories,
@@ -32,6 +34,7 @@ export {
   getProducts,
   setProductImageThumbnail,
   updateProduct,
+  updateCategory,
   updateVariant,
   uploadProductImage,
 } from "./products";

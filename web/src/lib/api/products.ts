@@ -1,5 +1,9 @@
 import type { PaginatedResponse } from "@/types/api";
-import type { Category } from "@/types/category";
+import type {
+  Category,
+  CreateCategoryPayload,
+  UpdateCategoryPayload,
+} from "@/types/category";
 import type {
   CreateProductPayload,
   CreateVariantPayload,
@@ -44,6 +48,36 @@ export function getProductById(id: string): Promise<Product> {
 
 export function getCategories(): Promise<Category[]> {
   return apiFetch<Category[]>("/categories");
+}
+
+export function createCategory(
+  payload: CreateCategoryPayload,
+  token: string,
+): Promise<Category> {
+  return apiFetch<Category>("/categories", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateCategory(
+  id: string,
+  payload: UpdateCategoryPayload,
+  token: string,
+): Promise<Category> {
+  return apiFetch<Category>(`/categories/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteCategory(id: string, token: string): Promise<void> {
+  return apiFetch<void>(`/categories/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
 }
 
 export function createProduct(

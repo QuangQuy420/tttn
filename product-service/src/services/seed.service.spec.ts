@@ -36,7 +36,7 @@ function buildProduct(index: number, overrides: Record<string, unknown> = {}) {
 function buildValidSeedFile(productCount = 20) {
   return {
     brands: [{ name: 'Brand A' }],
-    categories: [{ name: 'Category A', slug: 'category-a', parent: null }],
+    categories: [{ name: 'Category A', slug: 'category-a' }],
     products: Array.from({ length: productCount }, (_, i) => buildProduct(i)),
   };
 }
@@ -55,12 +55,15 @@ describe('SeedService', () => {
     brandRepository = {
       findAll: jest.fn(),
       findById: jest.fn(),
-      findByName: jest.fn().mockResolvedValue(null),
+      findByNameKey: jest.fn().mockResolvedValue(null),
       create: jest
         .fn()
         .mockImplementation((data) =>
-          Promise.resolve({ id: `brand-${data.name}`, ...data } as Brand),
+          Promise.resolve({ id: `brand-${data.name}`, ...data }),
         ),
+      update: jest.fn(),
+      countProducts: jest.fn(),
+      delete: jest.fn(),
     };
     categoryRepository = {
       findAll: jest.fn(),
@@ -69,9 +72,11 @@ describe('SeedService', () => {
       create: jest
         .fn()
         .mockImplementation((data) =>
-          Promise.resolve({ id: `category-${data.slug}`, ...data } as Category),
+          Promise.resolve({ id: `category-${data.slug}`, ...data }),
         ),
       update: jest.fn(),
+      countProducts: jest.fn(),
+      delete: jest.fn(),
     };
     productRepository = {
       findAndCount: jest.fn(),
@@ -139,7 +144,7 @@ describe('SeedService', () => {
   });
 
   it('is idempotent: skips brands/categories/products that already exist', async () => {
-    brandRepository.findByName.mockResolvedValue({
+    brandRepository.findByNameKey.mockResolvedValue({
       id: 'existing-brand',
     } as Brand);
     categoryRepository.findBySlug.mockResolvedValue({

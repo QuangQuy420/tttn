@@ -11,6 +11,7 @@ public record ProfileResponse(
         String email,
         String username,
         List<String> roles,
+        List<String> permissions,
         UserStatus status,
         String fullName,
         String phone,

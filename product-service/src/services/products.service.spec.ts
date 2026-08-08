@@ -121,8 +121,11 @@ describe('ProductsService', () => {
     brandRepository = {
       findAll: jest.fn(),
       findById: jest.fn(),
-      findByName: jest.fn(),
+      findByNameKey: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
+      countProducts: jest.fn(),
+      delete: jest.fn(),
     };
     categoryRepository = {
       findAll: jest.fn(),
@@ -130,6 +133,8 @@ describe('ProductsService', () => {
       findById: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      countProducts: jest.fn(),
+      delete: jest.fn(),
     };
     eventPublisher = {
       publish: jest.fn(),

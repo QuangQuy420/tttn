@@ -72,7 +72,7 @@ export class Product {
     enum: FaceShape,
     enumName: 'ps_face_shape_enum',
     array: true,
-    default: () => "'{}'",
+    default: [],
   })
   faceShapes: FaceShape[];
 

@@ -736,6 +736,14 @@ main {
   grid-template-columns: 1fr 1.4fr 1.6fr 90px;
 }
 
+.admin-table__row--catalog {
+  grid-template-columns: 1.5fr 1fr 100px;
+}
+
+.admin-table__row--catalog.admin-table__row--brands {
+  grid-template-columns: 1.1fr 1.3fr 1.5fr 100px;
+}
+
 .admin-table__row--orders {
   grid-template-columns: 1.2fr 1.8fr 1fr 1fr 1.3fr;
 }

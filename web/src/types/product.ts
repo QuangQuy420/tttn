@@ -26,7 +26,16 @@ export interface Brand {
   id: string;
   name: string;
   logoUrl: string | null;
+  description?: string | null;
 }
+
+export interface CreateBrandPayload {
+  name: string;
+  logoUrl?: string | null;
+  description?: string | null;
+}
+
+export type UpdateBrandPayload = Partial<CreateBrandPayload>;
 
 export interface ProductVariant {
   id: string;

@@ -25,7 +25,6 @@ interface SeedBrandInput {
 interface SeedCategoryInput {
   name: string;
   slug: string;
-  parent?: string | null;
 }
 
 interface SeedVariantInput {
@@ -142,7 +141,9 @@ export class SeedService {
   ): Promise<Map<string, string>> {
     const brandIdByName = new Map<string, string>();
     for (const brandInput of brands) {
-      let brand = await this.brandRepository.findByName(brandInput.name);
+      let brand = await this.brandRepository.findByNameKey(
+        this.toBrandNameKey(brandInput.name),
+      );
       if (!brand) {
         brand = await this.brandRepository.create({
           name: brandInput.name,
@@ -156,14 +157,16 @@ export class SeedService {
     return brandIdByName;
   }
 
+  private toBrandNameKey(name: string): string {
+    return name.trim().toLowerCase();
+  }
+
   private async seedCategories(
     categories: SeedCategoryInput[],
     summary: SeedSummary,
   ): Promise<Map<string, string>> {
     const categoryIdByName = new Map<string, string>();
 
-    // Pass 1: create/find every category without wiring parents yet, so a parent
-    // referenced later in the array can still be resolved regardless of order.
     for (const categoryInput of categories) {
       let category = await this.categoryRepository.findBySlug(
         categoryInput.slug,
@@ -172,25 +175,10 @@ export class SeedService {
         category = await this.categoryRepository.create({
           name: categoryInput.name,
           slug: categoryInput.slug,
-          parentId: null,
         });
         summary.categoriesCreated += 1;
       }
       categoryIdByName.set(categoryInput.name, category.id);
-    }
-
-    // Pass 2: wire up `parent_id` for categories that declare a `parent` (matched by
-    // parent category name, same reference style products use for brand/category).
-    for (const categoryInput of categories) {
-      if (!categoryInput.parent) continue;
-      const categoryId = categoryIdByName.get(categoryInput.name);
-      const parentId = categoryIdByName.get(categoryInput.parent);
-      if (!categoryId || !parentId) {
-        throw new Error(
-          `Seed category "${categoryInput.name}" references unknown parent "${categoryInput.parent}"`,
-        );
-      }
-      await this.categoryRepository.update(categoryId, { parentId });
     }
 
     return categoryIdByName;

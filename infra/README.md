@@ -22,6 +22,8 @@ This syncs source changes for `api-gateway`, `product-service`, `web`, and
 ## Seed data
 
 Loads `seed/products.json` into `product_db` (`product-service` only).
+Categories in the seed are one level only (`name` and legacy-valid `slug`); do not add a
+`parent` field. Products continue to reference categories by their names.
 
 Local:
 

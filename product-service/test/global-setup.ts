@@ -62,7 +62,6 @@ export default async function globalSetup(): Promise<void> {
     categoryRepo.create({
       name: 'E2E Test Category',
       slug: 'e2e-test-category',
-      parentId: null,
     }),
   );
 

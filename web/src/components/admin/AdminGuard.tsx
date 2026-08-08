@@ -1,98 +1,67 @@
 "use client";
 
-import {
-    useEffect,
-    useState,
-    type ReactNode,
-} from "react";
-import { useRouter } from "next/navigation";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { ApiError, getMyProfile } from "@/lib/api";
+import { getAccessToken, removeAccessToken } from "@/lib/auth/session";
+import type { UserProfile } from "@/types/user";
 
-import {
-    ApiError,
-    getMyProfile,
-} from "@/lib/api";
+const CATALOG_PERMISSION = "catalog:manage";
+const AdminAccessContext = createContext<UserProfile | null>(null);
 
-import {
-    getAccessToken,
-    removeAccessToken,
-} from "@/lib/auth/session";
-
-// Decision: gate on role *name*, not a fine-grained permission code. `GET /users/me`
-// only ever returns `roles: string[]` (role names) — the one endpoint that returns actual
-// permission codes (`/internal/v1/users/{id}/permissions`) is deliberately internal-only
-// (NFR2, not proxied through api-gateway), so the browser has no way to ask "do I hold
-// product:manage / role:manage / ...". Gating on the "ADMIN" role name is the only option
-// that's actually backed by data the frontend can see, and it satisfies AC7 (existing ADMIN
-// users keep admin access) without guessing at a permission the client can't verify. If a
-// non-ADMIN role (e.g. a future "STAFF") should also reach /admin, add its name here.
-const ADMIN_ROLE_NAMES = ["ADMIN"];
-
-function hasAdminAccess(roles: string[] | undefined): boolean {
-    if (!roles) return false;
-    const upper = roles.map((role) => role.toUpperCase());
-    return ADMIN_ROLE_NAMES.some((role) => upper.includes(role));
+export function useAdminProfile(): UserProfile | null {
+  return useContext(AdminAccessContext);
 }
 
-interface AdminGuardProps {
-    children: ReactNode;
+function hasAdminAccess(profile: UserProfile): boolean {
+  return profile.roles.some((role) => role.toUpperCase() === "ADMIN");
 }
 
-export function AdminGuard({
-                               children,
-                           }: AdminGuardProps) {
-    const router = useRouter();
+function canOpenPath(profile: UserProfile, pathname: string): boolean {
+  if (hasAdminAccess(profile)) return true;
+  const isCatalogPath = pathname === "/admin/brands" || pathname === "/admin/categories";
+  return isCatalogPath && profile.permissions.includes(CATALOG_PERMISSION);
+}
 
-    const [allowed, setAllowed] = useState(false);
-    const [checking, setChecking] = useState(true);
+export function AdminGuard({ children }: { children: ReactNode }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [checking, setChecking] = useState(true);
 
-    useEffect(() => {
-        async function verifyAdmin() {
-            const token = getAccessToken();
+  useEffect(() => {
+    async function verifyAccess() {
+      const token = getAccessToken();
+      if (!token) {
+        router.replace("/login");
+        return;
+      }
 
-            if (!token) {
-                router.replace("/login");
-                return;
-            }
-
-            try {
-                const response = await getMyProfile(token);
-
-                if (!hasAdminAccess(response.data.roles)) {
-                    removeAccessToken();
-                    router.replace("/login");
-                    return;
-                }
-
-                setAllowed(true);
-            } catch (error) {
-                if (
-                    error instanceof ApiError &&
-                    (error.status === 401 ||
-                        error.status === 403)
-                ) {
-                    removeAccessToken();
-                }
-
-                router.replace("/login");
-            } finally {
-                setChecking(false);
-            }
+      try {
+        const response = await getMyProfile(token);
+        if (!canOpenPath(response.data, pathname)) {
+          router.replace("/login");
+          return;
         }
-
-        void verifyAdmin();
-    }, [router]);
-
-    if (checking) {
-        return (
-            <main className="admin-auth-check">
-                <p>Đang kiểm tra quyền quản trị...</p>
-            </main>
-        );
+        setProfile(response.data);
+      } catch (error) {
+        if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+          removeAccessToken();
+        }
+        router.replace("/login");
+      } finally {
+        setChecking(false);
+      }
     }
 
-    if (!allowed) {
-        return null;
-    }
+    void verifyAccess();
+  }, [pathname, router]);
 
-    return <>{children}</>;
+  if (checking) {
+    return <main className="admin-auth-check"><p>Đang kiểm tra quyền quản trị...</p></main>;
+  }
+
+  if (!profile) return null;
+
+  return <AdminAccessContext.Provider value={profile}>{children}</AdminAccessContext.Provider>;
 }
