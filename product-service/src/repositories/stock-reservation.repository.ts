@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, Repository } from 'typeorm';
+import { EntityManager, In, Repository } from 'typeorm';
 import { StockReservation } from '../db/entities/stock-reservation.entity';
 import { StockReservationStatus } from '../db/enums/stock-reservation-status.enum';
 import { ReserveItem } from './inventory.repository';
@@ -33,6 +33,19 @@ export interface IStockReservationRepository {
     orderId: string,
     manager?: EntityManager,
   ): Promise<boolean>;
+  /**
+   * Locks and returns every currently-held reservation for an order. The caller must use the
+   * same transaction to adjust the corresponding variant rows and transition these rows.
+   */
+  lockReservedForOrder(
+    orderId: string,
+    manager: EntityManager,
+  ): Promise<StockReservation[]>;
+  /** Marks exactly the reservations locked by `lockReservedForOrder()` as committed. */
+  markCommitted(
+    reservations: StockReservation[],
+    manager: EntityManager,
+  ): Promise<void>;
 }
 
 @Injectable()
@@ -76,5 +89,35 @@ export class TypeOrmStockReservationRepository implements IStockReservationRepos
       { status: StockReservationStatus.RELEASED },
     );
     return (result.affected ?? 0) > 0;
+  }
+
+  async lockReservedForOrder(
+    orderId: string,
+    manager: EntityManager,
+  ): Promise<StockReservation[]> {
+    return manager
+      .getRepository(StockReservation)
+      .createQueryBuilder('reservation')
+      .setLock('pessimistic_write')
+      .where('reservation.order_id = :orderId', { orderId })
+      .andWhere('reservation.status = :status', {
+        status: StockReservationStatus.RESERVED,
+      })
+      .orderBy('reservation.variant_id', 'ASC')
+      .getMany();
+  }
+
+  async markCommitted(
+    reservations: StockReservation[],
+    manager: EntityManager,
+  ): Promise<void> {
+    if (reservations.length === 0) return;
+    await manager.getRepository(StockReservation).update(
+      {
+        id: In(reservations.map((reservation) => reservation.id)),
+        status: StockReservationStatus.RESERVED,
+      },
+      { status: StockReservationStatus.COMMITTED },
+    );
   }
 }

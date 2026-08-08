@@ -8,8 +8,8 @@ client-side using the T2 face-shape -> frame-shape score table, rather than issu
 call per candidate frame shape.
 
 Why: `GET /products?faceShape=X` already returns exactly the pool of products this
-service is allowed to recommend for face shape X (every product tagged with that face
-shape in `ps_product_face_shapes`), regardless of the product's own `frameShape`. Doing
+service is allowed to recommend for face shape X (every product whose `faceShapes`
+includes that face shape), regardless of the product's own `frameShape`. Doing
 N calls (one per candidate frame shape in the T2 mapping) would mean unioning many
 paginated calls back together and would still miss/duplicate products whose tagged
 face shape doesn't line up 1:1 with their own frame shape — needless complexity for no

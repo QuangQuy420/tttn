@@ -15,8 +15,9 @@ import {
 } from '../repositories/tokens';
 
 /**
- * Orchestrates the checkout saga's two stock steps for `OrderSagaEventConsumer` (T-PS-3):
- * reserve on `stock.reserve.requested`, release on `stock.release.requested`. Thin —
+ * Orchestrates the checkout saga's stock steps for `OrderSagaEventConsumer` (T-PS-3): reserve
+ * on `stock.reserve.requested`, release on `stock.release.requested`, and commit on
+ * `payment.completed`. Thin —
  * delegates locking/quantity math to `IInventoryRepository` and idempotency bookkeeping to
  * `IStockReservationRepository`, and replies via `IOrderSagaEventPublisher`.
  */
@@ -110,6 +111,41 @@ export class InventoryService {
     if (!wasReserved) {
       this.logger.warn(
         `stock.release.requested for order ${orderId} with no RESERVED row — safe no-op`,
+      );
+    }
+  }
+
+  /**
+   * Handles `payment.completed`. It derives quantities from the rows held by this service rather
+   * than trusting payment payload line items, then atomically converts the held stock into sold
+   * stock and transitions those rows from RESERVED to COMMITTED.
+   */
+  async commit(orderId: string): Promise<void> {
+    const wasReserved = await this.dataSource.transaction(async (manager) => {
+      const reservations =
+        await this.stockReservationRepository.lockReservedForOrder(
+          orderId,
+          manager,
+        );
+      if (reservations.length === 0) {
+        return false;
+      }
+      await this.inventoryRepository.commit(
+        reservations.map(({ variantId, quantity }) => ({
+          variantId,
+          quantity,
+        })),
+        manager,
+      );
+      await this.stockReservationRepository.markCommitted(
+        reservations,
+        manager,
+      );
+      return true;
+    });
+    if (!wasReserved) {
+      this.logger.warn(
+        `payment.completed for order ${orderId} with no RESERVED row — safe no-op`,
       );
     }
   }

@@ -4,8 +4,6 @@ import { IBrandRepository } from '../repositories/brand.repository';
 import { ICategoryRepository } from '../repositories/category.repository';
 import { IProductRepository } from '../repositories/product.repository';
 import { IProductVariantRepository } from '../repositories/product-variant.repository';
-import { IProductFaceShapeRepository } from '../repositories/product-face-shape.repository';
-import { IInventoryRepository } from '../repositories/inventory.repository';
 import { ProductImagesService } from './product-images.service';
 import { Brand } from '../db/entities/brand.entity';
 import { Category } from '../db/entities/category.entity';
@@ -48,8 +46,6 @@ describe('SeedService', () => {
   let categoryRepository: jest.Mocked<ICategoryRepository>;
   let productRepository: jest.Mocked<IProductRepository>;
   let variantRepository: jest.Mocked<IProductVariantRepository>;
-  let faceShapeRepository: jest.Mocked<IProductFaceShapeRepository>;
-  let inventoryRepository: jest.Mocked<IInventoryRepository>;
   let productImagesService: jest.Mocked<
     Pick<ProductImagesService, 'create' | 'assertVariantBelongsToProduct'>
   >;
@@ -99,17 +95,6 @@ describe('SeedService', () => {
       update: jest.fn(),
       softDelete: jest.fn(),
     };
-    faceShapeRepository = {
-      findByProductIds: jest.fn().mockResolvedValue([]),
-      replaceForProduct: jest.fn().mockResolvedValue([]),
-    };
-    inventoryRepository = {
-      reserve: jest.fn(),
-      release: jest.fn(),
-      findAvailableByVariantIds: jest.fn(),
-      create: jest.fn().mockResolvedValue(undefined),
-      setQuantity: jest.fn(),
-    };
     productImagesService = {
       create: jest.fn().mockResolvedValue({ id: 'image-x' }),
       assertVariantBelongsToProduct: jest.fn(),
@@ -120,8 +105,6 @@ describe('SeedService', () => {
       categoryRepository,
       productRepository,
       variantRepository,
-      faceShapeRepository,
-      inventoryRepository,
       productImagesService as unknown as ProductImagesService,
     );
 

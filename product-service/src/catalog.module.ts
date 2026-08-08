@@ -5,8 +5,6 @@ import { Category } from './db/entities/category.entity';
 import { Product } from './db/entities/product.entity';
 import { ProductVariant } from './db/entities/product-variant.entity';
 import { ProductImage } from './db/entities/product-image.entity';
-import { ProductFaceShape } from './db/entities/product-face-shape.entity';
-import { Inventory } from './db/entities/inventory.entity';
 import { StockReservation } from './db/entities/stock-reservation.entity';
 import { ProductsController } from './routes/products.controller';
 import { ProductVariantsController } from './routes/product-variants.controller';
@@ -24,7 +22,6 @@ import { TypeOrmCategoryRepository } from './repositories/category.repository';
 import { TypeOrmProductRepository } from './repositories/product.repository';
 import { TypeOrmProductVariantRepository } from './repositories/product-variant.repository';
 import { TypeOrmProductImageRepository } from './repositories/product-image.repository';
-import { TypeOrmProductFaceShapeRepository } from './repositories/product-face-shape.repository';
 import { S3ImageStorageRepository } from './repositories/image-storage.repository';
 import { RabbitMqProductEventPublisher } from './repositories/product-event-publisher.repository';
 import { TypeOrmInventoryRepository } from './repositories/inventory.repository';
@@ -37,7 +34,6 @@ import {
   PRODUCT_REPOSITORY,
   PRODUCT_VARIANT_REPOSITORY,
   PRODUCT_IMAGE_REPOSITORY,
-  PRODUCT_FACE_SHAPE_REPOSITORY,
   IMAGE_STORAGE_REPOSITORY,
   PRODUCT_EVENT_PUBLISHER,
   INVENTORY_REPOSITORY,
@@ -48,8 +44,7 @@ import {
 /**
  * Catalog feature module: brands/categories/products/variants/images (Q10), plus
  * inventory/stock-reservation wiring for the checkout saga (2026-07-28 saga plan) —
- * tags/product_tags/ratings/face_shape_styles still have entities/migrations only, no
- * repository/service/controller wiring.
+ * stock-reservation wiring for the checkout saga (2026-07-28 saga plan).
  */
 @Module({
   imports: [
@@ -59,8 +54,6 @@ import {
       Product,
       ProductVariant,
       ProductImage,
-      ProductFaceShape,
-      Inventory,
       StockReservation,
     ]),
   ],
@@ -89,10 +82,6 @@ import {
     {
       provide: PRODUCT_IMAGE_REPOSITORY,
       useClass: TypeOrmProductImageRepository,
-    },
-    {
-      provide: PRODUCT_FACE_SHAPE_REPOSITORY,
-      useClass: TypeOrmProductFaceShapeRepository,
     },
     {
       provide: IMAGE_STORAGE_REPOSITORY,

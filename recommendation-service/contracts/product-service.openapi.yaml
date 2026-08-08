@@ -8,8 +8,7 @@ info:
     `product-service/src`, not the other way around. Documents GET/POST/PATCH/DELETE
     /products, POST /products/:id/images, GET /categories, GET /brands, GET /health
     (admin product management pass, see .planning/2026-07-11-admin-product-management.md).
-    `ps_inventory`/`ps_tags`/`ps_product_tags`/`ps_ratings`/`ps_face_shape_styles` have
-    migrated tables but no endpoints yet (Sprint 1 Q10) and are intentionally absent here.
+    Face shapes are stored as a product enum array; variant stock is stored on the variant.
   version: "0.2.0"
 servers:
   - url: http://localhost:3002
@@ -74,8 +73,7 @@ paths:
         - name: faceShape
           in: query
           description: >
-            Filters to products tagged (via `ps_product_face_shapes`) as suiting this
-            face shape.
+            Filters to products whose `faceShapes` array includes this face shape.
           schema:
             $ref: "#/components/schemas/FaceShape"
         - name: status
@@ -400,8 +398,7 @@ components:
     FaceShape:
       type: string
       description: >
-        Which face shapes a product suits (FR7) — independent of the global
-        face-shape → frame-shape recommendation rule table (`ps_face_shape_styles`).
+        Which face shapes a product suits (FR7).
       enum: [ROUND, SQUARE, OVAL, HEART, DIAMOND, OBLONG]
 
     BrandSummary:
@@ -478,6 +475,11 @@ components:
           type: number
         skuVariant:
           type: string
+        stock:
+          type: integer
+          description: >
+            Available stock (`quantity - reservedQuantity`). Present only in
+            `GET /products/:id`; omitted from catalog listing responses.
       required: [id, color, colorHex, size, extraPrice, skuVariant]
 
     ProductImageResponse:

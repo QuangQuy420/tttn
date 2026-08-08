@@ -1,4 +1,5 @@
 import {
+  Check,
   Column,
   CreateDateColumn,
   DeleteDateColumn,
@@ -26,6 +27,15 @@ import { numericTransformer } from '../transformers/numeric.transformer';
   'color',
   'size',
 ])
+@Check('chk_ps_product_variants_quantity_non_negative', '"quantity" >= 0')
+@Check(
+  'chk_ps_product_variants_reserved_quantity_non_negative',
+  '"reserved_quantity" >= 0',
+)
+@Check(
+  'chk_ps_product_variants_reserved_quantity_within_quantity',
+  '"reserved_quantity" <= "quantity"',
+)
 export class ProductVariant {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -60,6 +70,12 @@ export class ProductVariant {
 
   @Column({ name: 'color_hex', type: 'varchar', length: 7, nullable: true })
   colorHex: string | null;
+
+  @Column({ type: 'int', default: 0 })
+  quantity: number;
+
+  @Column({ name: 'reserved_quantity', type: 'int', default: 0 })
+  reservedQuantity: number;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

@@ -3,7 +3,6 @@ import { ProductsService } from './products.service';
 import { IProductRepository } from '../repositories/product.repository';
 import { IProductVariantRepository } from '../repositories/product-variant.repository';
 import { IProductImageRepository } from '../repositories/product-image.repository';
-import { IProductFaceShapeRepository } from '../repositories/product-face-shape.repository';
 import { IBrandRepository } from '../repositories/brand.repository';
 import { ICategoryRepository } from '../repositories/category.repository';
 import { IProductEventPublisher } from '../repositories/product-event-publisher.repository';
@@ -26,6 +25,7 @@ function makeProduct(overrides: Partial<Product> = {}): Product {
     slug: 'test-product',
     description: null,
     faceFitNote: null,
+    faceShapes: [],
     frameShape: FrameShape.ROUND,
     genderTarget: GenderTarget.UNISEX,
     material: 'Metal',
@@ -54,6 +54,8 @@ function makeVariant(overrides: Partial<ProductVariant> = {}): ProductVariant {
     productId: 'product-1',
     color: 'Black',
     colorHex: null,
+    quantity: 0,
+    reservedQuantity: 0,
     size: 'M',
     extraPrice: 0,
     skuVariant: 'SKU-1-BLK-M',
@@ -82,7 +84,6 @@ describe('ProductsService', () => {
   let productRepository: jest.Mocked<IProductRepository>;
   let variantRepository: jest.Mocked<IProductVariantRepository>;
   let imageRepository: jest.Mocked<IProductImageRepository>;
-  let faceShapeRepository: jest.Mocked<IProductFaceShapeRepository>;
   let brandRepository: jest.Mocked<IBrandRepository>;
   let categoryRepository: jest.Mocked<ICategoryRepository>;
   let eventPublisher: jest.Mocked<IProductEventPublisher>;
@@ -117,10 +118,6 @@ describe('ProductsService', () => {
       update: jest.fn(),
       deleteById: jest.fn(),
     };
-    faceShapeRepository = {
-      findByProductIds: jest.fn().mockResolvedValue([]),
-      replaceForProduct: jest.fn(),
-    };
     brandRepository = {
       findAll: jest.fn(),
       findById: jest.fn(),
@@ -140,8 +137,8 @@ describe('ProductsService', () => {
     inventoryRepository = {
       reserve: jest.fn(),
       release: jest.fn(),
+      commit: jest.fn(),
       findAvailableByVariantIds: jest.fn().mockResolvedValue(new Map()),
-      create: jest.fn(),
       setQuantity: jest.fn(),
     };
 
@@ -149,7 +146,6 @@ describe('ProductsService', () => {
       productRepository,
       variantRepository,
       imageRepository,
-      faceShapeRepository,
       brandRepository,
       categoryRepository,
       eventPublisher,

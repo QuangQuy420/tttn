@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
-import { Inventory } from '../db/entities/inventory.entity';
+import { ProductVariant } from '../db/entities/product-variant.entity';
 
 export interface ReserveItem {
   variantId: string;
@@ -28,20 +28,18 @@ export class InsufficientStockError extends Error {
   }
 }
 
-// Q3 (carried over from the superseded plan): single fixed warehouse, no
-// multi-warehouse support anywhere in this project.
-const WAREHOUSE_CODE = 'MAIN';
-
-export interface CreateInventoryInput {
-  variantId: string;
-  quantity: number;
-  reservedQuantity?: number;
+/** Thrown when stored reservation data cannot safely be committed. */
+export class InvalidStockReservationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidStockReservationError';
+  }
 }
 
 export interface IInventoryRepository {
   /**
    * All-or-nothing across every item (NFR1/AC1-AC3): locks every requested variant's
-   * `ps_inventory` row (pessimistic write, sorted by variantId to keep lock order stable
+   * `ps_product_variants` row (pessimistic write, sorted by variantId to keep lock order stable
    * across concurrent multi-item checkouts and avoid deadlocks), verifies
    * `quantity - reservedQuantity >= requested` for every item, then increments
    * `reservedQuantity` for all of them. Throws `InsufficientStockError` (without changing
@@ -67,13 +65,16 @@ export interface IInventoryRepository {
     items: ReserveItem[],
     manager?: EntityManager,
   ): Promise<void>;
+  /**
+   * Converts an already-held reservation into a sale by reducing both total and reserved stock.
+   * The caller supplies the transaction that also transitions the reservation rows to COMMITTED.
+   */
+  commit(items: ReserveItem[], manager: EntityManager): Promise<void>;
   /** Plain unlocked read of `quantity - reservedQuantity` per variant (FR7). */
   findAvailableByVariantIds(variantIds: string[]): Promise<Map<string, number>>;
-  /** Creates a `ps_inventory` row for a variant in the fixed `"MAIN"` warehouse (seeding, T-PS-7). */
-  create(data: CreateInventoryInput): Promise<void>;
   /**
-   * Admin restock (T-PS-variants) — sets the raw `quantity` for a variant in the `"MAIN"`
-   * warehouse, creating the row if it doesn't exist yet. Leaves `reservedQuantity` untouched:
+   * Admin restock (T-PS-variants) — sets the raw `quantity` for a variant. Leaves
+   * `reservedQuantity` untouched:
    * this is a total-on-hand correction, not a reservation event, so it must never be routed
    * through `reserve()`/`release()`.
    */
@@ -83,8 +84,8 @@ export interface IInventoryRepository {
 @Injectable()
 export class TypeOrmInventoryRepository implements IInventoryRepository {
   constructor(
-    @InjectRepository(Inventory)
-    private readonly repo: Repository<Inventory>,
+    @InjectRepository(ProductVariant)
+    private readonly repo: Repository<ProductVariant>,
     @InjectDataSource()
     private readonly dataSource: DataSource,
   ) {}
@@ -110,26 +111,22 @@ export class TypeOrmInventoryRepository implements IInventoryRepository {
     items: ReserveItem[],
   ): Promise<void> {
     const sortedItems = this.sortByVariantId(items);
-    const rows: Inventory[] = [];
+    const rows: ProductVariant[] = [];
     for (const item of sortedItems) {
       const row = await manager
-        .createQueryBuilder(Inventory, 'inventory')
+        .createQueryBuilder(ProductVariant, 'variant')
         .setLock('pessimistic_write')
-        .where('inventory.variant_id = :variantId', {
+        .where('variant.id = :variantId', {
           variantId: item.variantId,
         })
-        .andWhere('inventory.warehouse_code = :warehouseCode', {
-          warehouseCode: WAREHOUSE_CODE,
-        })
         .getOne();
-      // No inventory row at all counts as zero available, same as a row with quantity 0.
+      // No variant row at all counts as zero available, same as a row with quantity 0.
       rows.push(
         row ??
           ({
-            variantId: item.variantId,
             quantity: 0,
             reservedQuantity: 0,
-          } as Inventory),
+          } as ProductVariant),
       );
     }
 
@@ -153,7 +150,7 @@ export class TypeOrmInventoryRepository implements IInventoryRepository {
     for (let i = 0; i < sortedItems.length; i += 1) {
       const row = rows[i];
       row.reservedQuantity += sortedItems[i].quantity;
-      await manager.save(Inventory, row);
+      await manager.save(ProductVariant, row);
     }
   }
 
@@ -172,6 +169,44 @@ export class TypeOrmInventoryRepository implements IInventoryRepository {
     );
   }
 
+  async commit(items: ReserveItem[], manager: EntityManager): Promise<void> {
+    const quantitiesByVariant = new Map<string, number>();
+    for (const item of items) {
+      quantitiesByVariant.set(
+        item.variantId,
+        (quantitiesByVariant.get(item.variantId) ?? 0) + item.quantity,
+      );
+    }
+
+    const committedItems = [...quantitiesByVariant.entries()].map(
+      ([variantId, quantity]) => ({ variantId, quantity }),
+    );
+    const sortedItems = this.sortByVariantId(committedItems);
+    for (const item of sortedItems) {
+      const row = await manager
+        .createQueryBuilder(ProductVariant, 'variant')
+        .setLock('pessimistic_write')
+        .where('variant.id = :variantId', { variantId: item.variantId })
+        .getOne();
+      if (!row) {
+        throw new InvalidStockReservationError(
+          `Reserved variant ${item.variantId} no longer exists`,
+        );
+      }
+      if (
+        row.quantity < item.quantity ||
+        row.reservedQuantity < item.quantity
+      ) {
+        throw new InvalidStockReservationError(
+          `Reserved stock for variant ${item.variantId} is inconsistent`,
+        );
+      }
+      row.quantity -= item.quantity;
+      row.reservedQuantity -= item.quantity;
+      await manager.save(ProductVariant, row);
+    }
+  }
+
   /** Core release logic, run against whichever `EntityManager` (own or a caller's) is in scope. */
   private async doRelease(
     manager: EntityManager,
@@ -180,23 +215,20 @@ export class TypeOrmInventoryRepository implements IInventoryRepository {
     const sortedItems = this.sortByVariantId(items);
     for (const item of sortedItems) {
       const row = await manager
-        .createQueryBuilder(Inventory, 'inventory')
+        .createQueryBuilder(ProductVariant, 'variant')
         .setLock('pessimistic_write')
-        .where('inventory.variant_id = :variantId', {
+        .where('variant.id = :variantId', {
           variantId: item.variantId,
-        })
-        .andWhere('inventory.warehouse_code = :warehouseCode', {
-          warehouseCode: WAREHOUSE_CODE,
         })
         .getOne();
       if (!row) {
-        // Nothing to release for a variant with no inventory row — shouldn't happen
+        // Nothing to release for a missing variant — shouldn't happen
         // in practice (reserve() would have rejected it first), but releasing must
         // never throw (fire-and-forget compensation).
         continue;
       }
       row.reservedQuantity = Math.max(0, row.reservedQuantity - item.quantity);
-      await manager.save(Inventory, row);
+      await manager.save(ProductVariant, row);
     }
   }
 
@@ -207,34 +239,23 @@ export class TypeOrmInventoryRepository implements IInventoryRepository {
     if (variantIds.length === 0) return result;
 
     const rows = await this.repo.find({
-      where: { variantId: In(variantIds), warehouseCode: WAREHOUSE_CODE },
+      where: { id: In(variantIds) },
     });
     for (const row of rows) {
-      result.set(row.variantId, row.quantity - row.reservedQuantity);
+      result.set(row.id, row.quantity - row.reservedQuantity);
     }
     return result;
   }
 
-  async create(data: CreateInventoryInput): Promise<void> {
-    const inventory = this.repo.create({
-      variantId: data.variantId,
-      warehouseCode: WAREHOUSE_CODE,
-      quantity: data.quantity,
-      reservedQuantity: data.reservedQuantity ?? 0,
-    });
-    await this.repo.save(inventory);
-  }
-
   async setQuantity(variantId: string, quantity: number): Promise<void> {
     const existing = await this.repo.findOne({
-      where: { variantId, warehouseCode: WAREHOUSE_CODE },
+      where: { id: variantId },
     });
-    if (existing) {
-      existing.quantity = quantity;
-      await this.repo.save(existing);
-      return;
+    if (!existing) {
+      throw new Error(`ProductVariant ${variantId} not found for stock update`);
     }
-    await this.create({ variantId, quantity });
+    existing.quantity = quantity;
+    await this.repo.save(existing);
   }
 
   /** Stable lock order across concurrent multi-item checkouts, to avoid deadlocks. */

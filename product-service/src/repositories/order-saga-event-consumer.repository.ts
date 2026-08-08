@@ -18,9 +18,16 @@ interface StockRequestedPayload {
   items: ReserveItem[];
 }
 
+interface PaymentCompletedPayload {
+  orderId: string;
+}
+
+type SagaPayload = StockRequestedPayload | PaymentCompletedPayload;
+
 const QUEUE_NAME = 'product-service.order-saga-events';
 const STOCK_RESERVE_REQUESTED = 'stock.reserve.requested';
 const STOCK_RELEASE_REQUESTED = 'stock.release.requested';
+const PAYMENT_COMPLETED = 'payment.completed';
 // Same retry/backoff constants as RabbitMqProductEventPublisher — see that file for why.
 const INITIAL_CONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY_MS = 3000;
@@ -32,7 +39,8 @@ const DEFAULT_SAGA_QUEUE_DELIVERY_LIMIT = 10;
 
 /**
  * Consumes the checkout saga's stock steps (`stock.reserve.requested` /
- * `stock.release.requested`) off the `order-saga-events` topic exchange (T-PS-3). Mirrors
+ * `stock.release.requested` / `payment.completed`) off the `order-saga-events` topic exchange
+ * (T-PS-3). Mirrors
  * `RabbitMqProductEventPublisher`'s raw `amqplib` connect/retry/reconnect style. Manually
  * acks after the handler completes; nacks + requeues on unexpected (e.g. transient DB)
  * errors so a broker restart or brief DB blip doesn't drop a saga message (NFR3). Domain
@@ -153,6 +161,11 @@ export class OrderSagaEventConsumer implements OnModuleInit, OnModuleDestroy {
       ORDER_SAGA_EVENTS_EXCHANGE,
       STOCK_RELEASE_REQUESTED,
     );
+    await channel.bindQueue(
+      queue.queue,
+      ORDER_SAGA_EVENTS_EXCHANGE,
+      PAYMENT_COMPLETED,
+    );
     await channel.prefetch(1);
     await channel.consume(queue.queue, (msg) => {
       if (msg) {
@@ -168,9 +181,13 @@ export class OrderSagaEventConsumer implements OnModuleInit, OnModuleDestroy {
     msg: amqplib.ConsumeMessage,
   ): Promise<void> {
     const routingKey = msg.fields.routingKey;
-    let payload: StockRequestedPayload;
+    let payload: SagaPayload;
     try {
-      payload = this.parsePayload(msg);
+      payload = this.parsePayload(
+        msg,
+        routingKey === STOCK_RESERVE_REQUESTED ||
+          routingKey === STOCK_RELEASE_REQUESTED,
+      );
     } catch (error) {
       // Permanent failure — the message itself is malformed, so redelivery would never
       // succeed. Drop it (no dead-letter exchange configured) instead of requeuing forever
@@ -186,9 +203,17 @@ export class OrderSagaEventConsumer implements OnModuleInit, OnModuleDestroy {
 
     try {
       if (routingKey === STOCK_RESERVE_REQUESTED) {
-        await this.inventoryService.reserve(payload.orderId, payload.items);
+        await this.inventoryService.reserve(
+          payload.orderId,
+          (payload as StockRequestedPayload).items,
+        );
       } else if (routingKey === STOCK_RELEASE_REQUESTED) {
-        await this.inventoryService.release(payload.orderId, payload.items);
+        await this.inventoryService.release(
+          payload.orderId,
+          (payload as StockRequestedPayload).items,
+        );
+      } else if (routingKey === PAYMENT_COMPLETED) {
+        await this.inventoryService.commit(payload.orderId);
       } else {
         this.logger.warn(
           `Ignoring message with unexpected routing key "${routingKey}"`,
@@ -206,10 +231,13 @@ export class OrderSagaEventConsumer implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Parses and shape-checks the message body. Throws (synchronously) on invalid JSON or a
-   * missing/wrong-typed `orderId`/`items` — the caller treats that as a permanent,
+   * missing/wrong-typed `orderId` (or `items` for stock messages) — the caller treats that as a permanent,
    * non-retryable failure.
    */
-  private parsePayload(msg: amqplib.ConsumeMessage): StockRequestedPayload {
+  private parsePayload(
+    msg: amqplib.ConsumeMessage,
+    requiresItems: boolean,
+  ): SagaPayload {
     let parsed: unknown;
     try {
       parsed = JSON.parse(msg.content.toString());
@@ -221,13 +249,15 @@ export class OrderSagaEventConsumer implements OnModuleInit, OnModuleDestroy {
       typeof candidate !== 'object' ||
       candidate === null ||
       typeof candidate.orderId !== 'string' ||
-      !Array.isArray(candidate.items)
+      (requiresItems && !Array.isArray(candidate.items))
     ) {
       throw new Error(
-        'message payload is missing required "orderId"/"items" fields',
+        requiresItems
+          ? 'message payload is missing required "orderId"/"items" fields'
+          : 'message payload is missing required "orderId" field',
       );
     }
-    return candidate as StockRequestedPayload;
+    return candidate as SagaPayload;
   }
 
   private handleDisconnect(error: Error): void {

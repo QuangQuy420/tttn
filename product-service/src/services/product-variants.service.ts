@@ -21,10 +21,9 @@ import { ProductVariantResponseDto } from '../routes/dto/product-response.dto';
 import { ProductVariant } from '../db/entities/product-variant.entity';
 
 /**
- * Owns `ps_product_variants` + the variant's own `ps_inventory` row together — a variant
- * without a stock quantity isn't a meaningful admin concept here, so create/update take a
- * single `stock` field and fan it out to the inventory repository rather than exposing
- * inventory as a separate admin resource.
+ * Owns `ps_product_variants`, including the variant's stock quantities. A variant without a
+ * stock quantity isn't a meaningful admin concept here, so create/update take a single `stock`
+ * field rather than exposing inventory as a separate admin resource.
  */
 @Injectable()
 export class ProductVariantsService {
@@ -59,14 +58,13 @@ export class ProductVariantsService {
       size: dto.size,
       extraPrice: dto.extraPrice ?? 0,
       skuVariant,
+      quantity: dto.stock ?? 0,
+      reservedQuantity: 0,
     });
-
-    const stock = dto.stock ?? 0;
-    await this.inventoryRepository.setQuantity(variant.id, stock);
 
     await this.eventPublisher.publish({ type: 'product.updated', productId });
 
-    return this.toDto(variant, stock);
+    return this.toDto(variant, variant.quantity - variant.reservedQuantity);
   }
 
   async update(

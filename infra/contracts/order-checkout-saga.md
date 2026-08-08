@@ -3,10 +3,8 @@
 Event-driven contract for the checkout Saga introduced in
 `.planning/2026-07-28-checkout-payment-saga-rabbitmq.md`. This is the spec whoever builds
 `payment-service` implements against — it should be enough on its own, without reading
-`order-service`'s Java source. Not code-first like `product-service.openapi.yaml`: `payment-service`
-has no application code yet, so this is written ahead of any implementation and both
-`order-service`'s publisher/listener and `product-service`'s consumer/publisher are built to match
-it exactly.
+`order-service`'s Java source. Not code-first like `product-service.openapi.yaml`: the contract
+is the shared source of truth for `order-service`, `payment-service`, and `product-service`.
 
 ## Exchange
 
@@ -46,13 +44,14 @@ it was in when the message was published (see "Delivery guarantees" below).
 | `stock.reserved` | product-service | order-service | Every item was reserved successfully. |
 | `stock.reserve.rejected` | product-service | order-service | At least one item was short on stock — nothing was reserved. |
 | `payment.create.requested` | order-service | payment-service | Ask payment-service to create/process a payment for this order. |
-| `payment.completed` | payment-service | order-service | Payment succeeded. |
+| `payment.completed` | payment-service | order-service, product-service | Payment succeeded; order-service confirms the order while product-service commits the stock reservation. |
 | `payment.failed` | payment-service | order-service | Payment failed, was declined, or errored. |
 | `stock.release.requested` | order-service | product-service | Compensating step: give back stock already reserved (payment failed, or the order was cancelled while `AWAITING_PAYMENT`). |
 
 `payment-service` is the only consumer of `payment.create.requested` and the only publisher of
 `payment.completed`/`payment.failed` — it has no other role in this saga (it never touches stock
-messages).
+messages). Because `order-saga-events` is a topic exchange, its `payment.completed` publication
+is fanned out to the separate order-service and product-service queues.
 
 ## Payload per routing key
 
@@ -113,7 +112,7 @@ messages).
   (including the retired `"COD"`/`"BANK_TRANSFER"`) is treated as an unsupported method and fails
   immediately with a Vietnamese reason naming it.
 
-### `payment.completed` (payment-service → order-service)
+### `payment.completed` (payment-service → order-service, product-service)
 ```json
 {
   "orderId": "3e2f9c2a-1234-4a5b-8c6d-000000000001",
@@ -123,8 +122,10 @@ messages).
 }
 ```
 - `paymentId` (uuid) and `transactionCode` (string) are saved onto the order (mirrors
-  `PaymentCreationResponse.paymentId`/`.transactionCode`). Payment status itself is implied by
-  the routing key (`payment.completed` ⇒ `PaymentStatus.PAID`) — not repeated in the body.
+  `PaymentCreationResponse.paymentId`/`.transactionCode`). Product-service only requires
+  `orderId`; it gets the affected variants and quantities from its own stock-reservation rows,
+  rather than accepting line items from this event. Payment status itself is implied by the
+  routing key (`payment.completed` ⇒ `PaymentStatus.PAID`) — not repeated in the body.
 
 ### `payment.failed` (payment-service → order-service)
 ```json
@@ -156,8 +157,10 @@ messages).
   crash before ack). Every consumer must be idempotent: check the order's/reservation's *current*
   status before acting, not just react to "a message of this type arrived." A repeat
   `stock.reserve.requested` for an order that already has a `RESERVED` row is a no-op reply, not a
-  double reservation; a repeat `stock.release.requested` for an already-released order is a safe
-  no-op.
+  double reservation. For a `RESERVED` reservation, either `payment.completed` commits it
+  (`RESERVED` → `COMMITTED`) or `stock.release.requested` releases it (`RESERVED` → `RELEASED`);
+  only one transition may win. A duplicate `payment.completed`, or a late/duplicate
+  `stock.release.requested` after `COMMITTED`, is a safe no-op.
 - **Possibly out of order relative to a user action.** A customer can cancel an order the instant
   after `stock.reserve.requested` is sent, before the `stock.reserved`/`stock.reserve.rejected`
   reply arrives. A late `stock.reserved` for an order already `CANCELLED` must trigger
@@ -172,14 +175,13 @@ messages).
 
 ## Queues (for reference — each service owns/declares its own)
 
-- **product-service** declares one durable queue bound to `stock.reserve.requested` and
-  `stock.release.requested`.
+- **product-service** declares one durable queue bound to `stock.reserve.requested`,
+  `stock.release.requested`, and `payment.completed`.
 - **order-service** declares one durable queue bound to `stock.reserved`,
   `stock.reserve.rejected`, `payment.completed`, and `payment.failed`.
-- **payment-service** (not built yet) will need its own durable queue bound to
-  `payment.create.requested`, and must publish `payment.completed`/`payment.failed` back onto the
-  `order-saga-events` exchange (not a queue/exchange of its own) so order-service's existing
-  binding picks them up.
+- **payment-service** declares one durable queue bound to `payment.create.requested`, and
+  publishes `payment.completed`/`payment.failed` back onto the `order-saga-events` exchange (not
+  a queue/exchange of its own) so the order-service and product-service bindings pick them up.
 
 Each service is responsible for declaring and binding its own queue — this contract only fixes
 the exchange name/type and the routing keys/payloads flowing through it, not each service's

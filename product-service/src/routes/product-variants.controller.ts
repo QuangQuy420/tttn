@@ -16,8 +16,8 @@ import { UpdateVariantDto } from './dto/update-variant.dto';
 
 /**
  * Thin controller, mirrors `ProductsController`'s `:id/images` nesting — parses the request
- * and delegates to `ProductVariantsService`, which owns `ps_product_variants` +
- * the variant's `ps_inventory` row together.
+ * and delegates to `ProductVariantsService`, which owns `ps_product_variants` including
+ * its stock quantities.
  */
 @Controller('products/:productId/variants')
 export class ProductVariantsController {
