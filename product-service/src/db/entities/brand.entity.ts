@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
@@ -19,6 +20,16 @@ export class Brand {
 
   @Column({ type: 'varchar', length: 255 })
   name: string;
+
+  @Index({ unique: true })
+  @Column({
+    name: 'name_key',
+    type: 'varchar',
+    length: 255,
+    asExpression: 'lower(trim(name))',
+    generatedType: 'STORED',
+  })
+  nameKey: string;
 
   @Column({ name: 'logo_url', type: 'varchar', length: 512, nullable: true })
   logoUrl: string | null;

@@ -2,8 +2,6 @@ import {
   Column,
   CreateDateColumn,
   Entity,
-  JoinColumn,
-  ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
@@ -18,19 +16,6 @@ import { Product } from './product.entity';
 export class Category {
   @PrimaryGeneratedColumn('uuid')
   id: string;
-
-  @Column({ name: 'parent_id', type: 'uuid', nullable: true })
-  parentId: string | null;
-
-  @ManyToOne(() => Category, (category) => category.children, {
-    nullable: true,
-    onDelete: 'SET NULL',
-  })
-  @JoinColumn({ name: 'parent_id' })
-  parent?: Category | null;
-
-  @OneToMany(() => Category, (category) => category.parent)
-  children?: Category[];
 
   @Column({ type: 'varchar', length: 255 })
   name: string;

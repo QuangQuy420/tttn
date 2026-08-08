@@ -11,11 +11,11 @@
     { "name": "EyeBuyDirect", "logo_url": "https://cdn.smarteyewear.local/brands/eyebuydirect/logo.png", "description": "Thương hiệu kính mắt trực tuyến giá tốt, đa dạng kiểu dáng, giao hàng nhanh." }
   ],
   "categories": [
-    { "name": "Kính mát", "slug": "sunglasses", "parent": null },
-    { "name": "Gọng kính", "slug": "optical-frames", "parent": null },
-    { "name": "Kính đọc sách", "slug": "reading-glasses", "parent": null },
-    { "name": "Kính thể thao", "slug": "sports-eyewear", "parent": null },
-    { "name": "Kính trẻ em", "slug": "kids-eyewear", "parent": null }
+    { "name": "Kính mát", "slug": "sunglasses" },
+    { "name": "Gọng kính", "slug": "optical-frames" },
+    { "name": "Kính đọc sách", "slug": "reading-glasses" },
+    { "name": "Kính thể thao", "slug": "sports-eyewear" },
+    { "name": "Kính trẻ em", "slug": "kids-eyewear" }
   ],
   "products": [
     {

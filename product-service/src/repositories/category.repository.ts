@@ -2,13 +2,16 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Category } from '../db/entities/category.entity';
+import { Product } from '../db/entities/product.entity';
 
 export interface ICategoryRepository {
   findAll(): Promise<Category[]>;
   findBySlug(slug: string): Promise<Category | null>;
   findById(id: string): Promise<Category | null>;
   create(data: Partial<Category>): Promise<Category>;
-  update(id: string, data: Partial<Category>): Promise<Category>;
+  update(id: string, data: Partial<Category>): Promise<Category | null>;
+  countProducts(id: string): Promise<number>;
+  delete(id: string): Promise<boolean>;
 }
 
 @Injectable()
@@ -33,12 +36,20 @@ export class TypeOrmCategoryRepository implements ICategoryRepository {
     return this.repo.save(this.repo.create(data));
   }
 
-  async update(id: string, data: Partial<Category>): Promise<Category> {
-    await this.repo.update({ id }, data);
-    const updated = await this.findById(id);
-    if (!updated) {
-      throw new Error(`Category ${id} not found after update`);
-    }
-    return updated;
+  async update(id: string, data: Partial<Category>): Promise<Category | null> {
+    const result = await this.repo.update({ id }, data);
+    return result.affected ? this.findById(id) : null;
+  }
+
+  countProducts(id: string): Promise<number> {
+    return this.repo.manager.getRepository(Product).count({
+      where: { categoryId: id },
+      withDeleted: true,
+    });
+  }
+
+  async delete(id: string): Promise<boolean> {
+    const result = await this.repo.delete({ id });
+    return Boolean(result.affected);
   }
 }

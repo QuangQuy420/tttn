@@ -10,10 +10,8 @@ import {
     removeAccessToken,
 } from "@/lib/auth/session";
 
-// Same role-name gate as AdminGuard.tsx (see its comment) — the browser only ever sees
-// role names, not permission codes, so "Quản trị" shows for the same set of roles that are
-// actually let into /admin.
 const ADMIN_ROLE_NAMES = ["ADMIN"];
+const CATALOG_PERMISSION = "catalog:manage";
 
 // "/" only matches the exact catalog root; every other tab also covers its sub-routes
 // (e.g. "/admin/orders" should still highlight "Quản trị").
@@ -36,6 +34,7 @@ export function Header() {
     // Roles are only known once we've fetched the profile — null covers both "not logged
     // in" and "not fetched yet", so the Admin tab (FR7) stays hidden until we're sure.
     const [roles, setRoles] = useState<string[] | null>(null);
+    const [permissions, setPermissions] = useState<string[] | null>(null);
 
     // Same fallback convention as profile/page.tsx: fullName if set, else username.
     const [displayName, setDisplayName] = useState<string | null>(null);
@@ -54,6 +53,7 @@ export function Header() {
 
             if (!token) {
                 setRoles(null);
+                setPermissions(null);
                 setDisplayName(null);
                 return;
             }
@@ -63,11 +63,13 @@ export function Header() {
                     setRoles(
                         response.data.roles?.map((r) => r.toUpperCase()) ?? null,
                     );
+                    setPermissions(response.data.permissions ?? null);
                     setDisplayName(response.data.fullName || response.data.username);
                 })
                 .catch((error) => {
                     if (!(error instanceof ApiError)) throw error;
                     setRoles(null);
+                    setPermissions(null);
                     setDisplayName(null);
                 });
         }
@@ -99,6 +101,7 @@ export function Header() {
         removeAccessToken();
         setAuthenticated(false);
         setRoles(null);
+        setPermissions(null);
         setDisplayName(null);
         setMenuOpen(false);
         router.push("/login");
@@ -136,9 +139,12 @@ export function Header() {
                     Thử Kính
                 </Link>
 
-                {authenticated && roles?.some((r) => ADMIN_ROLE_NAMES.includes(r)) && (
+                {authenticated && (
+                    roles?.some((r) => ADMIN_ROLE_NAMES.includes(r)) ||
+                    permissions?.includes(CATALOG_PERMISSION)
+                ) && (
                     <Link
-                        href="/admin/products"
+                        href={roles?.some((r) => ADMIN_ROLE_NAMES.includes(r)) ? "/admin/products" : "/admin/brands"}
                         className={`site-nav__link${isNavLinkActive(pathname, "/admin") ? " site-nav__link--active" : ""}`}
                         aria-current={isNavLinkActive(pathname, "/admin") ? "page" : undefined}
                     >

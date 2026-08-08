@@ -12,6 +12,7 @@ import com.tttn.userservice.exception.BusinessException;
 import com.tttn.userservice.exception.ErrorCode;
 import com.tttn.userservice.repository.ProfileRepository;
 import com.tttn.userservice.repository.UserRepository;
+import com.tttn.userservice.service.PermissionService;
 import com.tttn.userservice.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -29,6 +30,7 @@ public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final ProfileRepository profileRepository;
+    private final PermissionService permissionService;
     private final PasswordEncoder passwordEncoder;
 
     @Override
@@ -159,6 +161,7 @@ public class UserServiceImpl implements UserService {
                 user.getEmail(),
                 user.getUsername(),
                 toRoleNames(user),
+                permissionService.getPermissions(user.getId()),
                 user.getStatus(),
                 profile.getFullName(),
                 profile.getPhone(),

@@ -26,7 +26,7 @@ export function useCategories(): UseCategoriesResult {
         if (!cancelled) setCategories(result);
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof ApiError ? err.message : "Failed to load categories.");
+          setError(err instanceof ApiError ? err.message : "Không thể tải danh mục.");
         }
       } finally {
         if (!cancelled) setIsLoading(false);

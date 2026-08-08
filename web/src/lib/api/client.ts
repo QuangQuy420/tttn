@@ -17,7 +17,7 @@ function getBaseUrl(): string {
   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
   if (!baseUrl) {
     throw new ApiError(
-      "NEXT_PUBLIC_API_BASE_URL is not set — web must always call api-gateway through this env var.",
+      "Chưa cấu hình địa chỉ API. Vui lòng liên hệ quản trị viên.",
       500,
     );
   }
@@ -41,11 +41,11 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
       },
     });
   } catch {
-    throw new ApiError(`Could not reach the API gateway (${path}).`, 0);
+    throw new ApiError(`Không thể kết nối đến cổng API (${path}).`, 0);
   }
 
   if (!response.ok) {
-    let message = response.statusText || `Request to ${path} failed`;
+    let message = response.statusText || `Yêu cầu đến ${path} thất bại`;
     try {
       const body = (await response.json()) as { message?: string };
       if (body?.message) message = body.message;

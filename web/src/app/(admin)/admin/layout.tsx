@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { AdminGuard } from "@/components/admin/AdminGuard";
+import { AdminGuard, useAdminProfile } from "@/components/admin/AdminGuard";
 import { removeAccessToken } from "@/lib/auth/session";
 
 const NAV_ITEMS = [
@@ -13,6 +13,11 @@ const NAV_ITEMS = [
   { label: "Khách hàng", href: "/admin/users" },
   { label: "Vai trò", href: "/admin/roles" },
   { label: "Cài đặt", href: "/admin/settings" },
+];
+
+const CATALOG_NAV_ITEMS = [
+  { label: "Thương hiệu", href: "/admin/brands" },
+  { label: "Danh mục", href: "/admin/categories" },
 ];
 
 export default function AdminLayout({
@@ -29,8 +34,23 @@ export default function AdminLayout({
     router.refresh();
   }
 
+  return <AdminGuard><AdminLayoutContent pathname={pathname} onLogout={handleLogout}>{children}</AdminLayoutContent></AdminGuard>;
+}
+
+function AdminLayoutContent({
+  children,
+  pathname,
+  onLogout,
+}: {
+  children: React.ReactNode;
+  pathname: string;
+  onLogout: () => void;
+}) {
+  const profile = useAdminProfile();
+  const isAdmin = profile?.roles.some((role) => role.toUpperCase() === "ADMIN");
+  const navItems = isAdmin ? [...NAV_ITEMS, ...CATALOG_NAV_ITEMS] : CATALOG_NAV_ITEMS;
+
   return (
-      <AdminGuard>
         <div className="admin-shell">
           <aside className="admin-sidebar">
             <div className="admin-sidebar__brand">
@@ -41,7 +61,7 @@ export default function AdminLayout({
             </div>
 
             <nav className="admin-sidebar__nav">
-              {NAV_ITEMS.map((item) => {
+              {navItems.map((item) => {
                 // "/admin" (Tổng quan) is a prefix of every other admin route, so it needs an
                 // exact match — otherwise it would also light up on /admin/products etc.
                 const active =
@@ -76,7 +96,7 @@ export default function AdminLayout({
               <button
                   type="button"
                   className="admin-sidebar__logout"
-                  onClick={handleLogout}
+                  onClick={onLogout}
               >
                 Đăng xuất
               </button>
@@ -87,6 +107,5 @@ export default function AdminLayout({
             {children}
           </div>
         </div>
-      </AdminGuard>
   );
 }

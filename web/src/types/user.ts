@@ -3,6 +3,7 @@ export interface UserProfile {
     email: string;
     username: string;
     roles: string[];
+    permissions: string[];
     status: string;
     fullName?: string | null;
     phone?: string | null;

@@ -17,9 +17,9 @@ import { AppConfig } from '../config/configuration';
  * a thin, typed HTTP client (per README: gateway owns no data, only
  * proxies).
  *
- * No auth guard here: edge JWT verification is explicitly deferred (see
- * api-gateway/README.md "see ADR on JWT" and the sprint plan's Q3) — these
- * routes are proxied unauthenticated for now.
+ * Public reads do not require authentication. Write authorization is enforced
+ * by the controllers: products require `product:manage`; brands and
+ * categories require `catalog:manage`.
  */
 @Injectable()
 export class ProductsProxyService {
@@ -47,6 +47,36 @@ export class ProductsProxyService {
 
   async getBrands(query: Record<string, unknown>): Promise<unknown> {
     return this.forwardGet('/brands', query);
+  }
+
+  async createCategory(body: Record<string, unknown>): Promise<unknown> {
+    return this.forwardPost('/categories', body);
+  }
+
+  async updateCategory(
+    id: string,
+    body: Record<string, unknown>,
+  ): Promise<unknown> {
+    return this.forwardPatch(`/categories/${id}`, body);
+  }
+
+  async deleteCategory(id: string): Promise<unknown> {
+    return this.forwardDelete(`/categories/${id}`);
+  }
+
+  async createBrand(body: Record<string, unknown>): Promise<unknown> {
+    return this.forwardPost('/brands', body);
+  }
+
+  async updateBrand(
+    id: string,
+    body: Record<string, unknown>,
+  ): Promise<unknown> {
+    return this.forwardPatch(`/brands/${id}`, body);
+  }
+
+  async deleteBrand(id: string): Promise<unknown> {
+    return this.forwardDelete(`/brands/${id}`);
   }
 
   async createProduct(body: Record<string, unknown>): Promise<unknown> {
@@ -192,6 +222,45 @@ export class ProductsProxyService {
     try {
       const response = await firstValueFrom(
         this.httpService.get(`${this.baseUrl}${path}`, { params }),
+      );
+      return response.data;
+    } catch (error) {
+      throw this.toGatewayError(error as AxiosError, path);
+    }
+  }
+
+  private async forwardPost(
+    path: string,
+    body: Record<string, unknown>,
+  ): Promise<unknown> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(`${this.baseUrl}${path}`, body),
+      );
+      return response.data;
+    } catch (error) {
+      throw this.toGatewayError(error as AxiosError, path);
+    }
+  }
+
+  private async forwardPatch(
+    path: string,
+    body: Record<string, unknown>,
+  ): Promise<unknown> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.patch(`${this.baseUrl}${path}`, body),
+      );
+      return response.data;
+    } catch (error) {
+      throw this.toGatewayError(error as AxiosError, path);
+    }
+  }
+
+  private async forwardDelete(path: string): Promise<unknown> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.delete(`${this.baseUrl}${path}`),
       );
       return response.data;
     } catch (error) {

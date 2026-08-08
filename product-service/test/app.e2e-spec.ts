@@ -52,7 +52,7 @@ describe('product-service (e2e)', () => {
       );
       expect(testCategory).toBeDefined();
       expect(testCategory.name).toBe('E2E Test Category');
-      expect(testCategory.parentId).toBeNull();
+      expect(testCategory).not.toHaveProperty('parentId');
     });
   });
 

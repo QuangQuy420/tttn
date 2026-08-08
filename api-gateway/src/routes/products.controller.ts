@@ -139,6 +139,31 @@ export class CategoriesController {
   findAll(@Query() query: Record<string, unknown>): Promise<unknown> {
     return this.productsProxyService.getCategories(query);
   }
+
+  @Post()
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @RequirePermission('catalog:manage')
+  create(@Body() body: Record<string, unknown>): Promise<unknown> {
+    return this.productsProxyService.createCategory(body);
+  }
+
+  @Patch(':id')
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @RequirePermission('catalog:manage')
+  update(
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+  ): Promise<unknown> {
+    return this.productsProxyService.updateCategory(id, body);
+  }
+
+  @Delete(':id')
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @RequirePermission('catalog:manage')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  remove(@Param('id') id: string): Promise<unknown> {
+    return this.productsProxyService.deleteCategory(id);
+  }
 }
 
 @Controller('api/brands')
@@ -148,5 +173,30 @@ export class BrandsController {
   @Get()
   findAll(@Query() query: Record<string, unknown>): Promise<unknown> {
     return this.productsProxyService.getBrands(query);
+  }
+
+  @Post()
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @RequirePermission('catalog:manage')
+  create(@Body() body: Record<string, unknown>): Promise<unknown> {
+    return this.productsProxyService.createBrand(body);
+  }
+
+  @Patch(':id')
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @RequirePermission('catalog:manage')
+  update(
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+  ): Promise<unknown> {
+    return this.productsProxyService.updateBrand(id, body);
+  }
+
+  @Delete(':id')
+  @UseGuards(JwtGuard, PermissionsGuard)
+  @RequirePermission('catalog:manage')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  remove(@Param('id') id: string): Promise<unknown> {
+    return this.productsProxyService.deleteBrand(id);
   }
 }

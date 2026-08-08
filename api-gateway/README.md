@@ -16,16 +16,15 @@ applies rate-limiting.
 
 | Route | Downstream service | Status |
 |---|---|---|
-| `/api/products/*`, `/api/categories/*`, `/api/brands/*` | `product-service` | **Implemented** (Sprint 1) — proxied via `HttpService`, no auth guard yet |
+| `/api/products/*`, `/api/categories/*`, `/api/brands/*` | `product-service` | **Implemented** — public reads are proxied via `HttpService`; writes require JWT and the matching live permission (`product:manage` or `catalog:manage`) |
 | `/api/auth/*` | `user-service` | Reserved — not implemented, service doesn't exist yet |
 | `/api/orders/*` | `order-service` | Reserved — not implemented, service doesn't exist yet |
 | `/api/face/*` | `face-processing-service` | Reserved — not implemented, no route wired yet |
 | `/api/recommendations/*` | `recommendation-service` | Reserved — not implemented, no route wired yet |
 
-> **Edge JWT verification is deferred** (see the ADR referenced above, once written by the
-> `user-service` owner). Until then, all proxied routes — including `/api/products/*` — are
-> unauthenticated. Add the auth guard here once the ADR lands; never let a route bypass it
-> afterwards.
+> Public catalog reads remain unauthenticated. Product writes require `product:manage`; Brand
+> and Category writes require `catalog:manage`. The gateway verifies JWTs at the edge and checks
+> the caller's current permissions with `user-service` before forwarding a write.
 
 ## Structure
 ```
