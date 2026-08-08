@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ErrorState } from "@/components/common/ErrorState";
 import { LoadingState } from "@/components/common/LoadingState";
 import { useAvailableFrameShapes } from "@/hooks/useAvailableFrameShapes";
+import { useBrands } from "@/hooks/useBrands";
 import { useCategories } from "@/hooks/useCategories";
 import { useProducts } from "@/hooks/useProducts";
 import type { FrameShape } from "@/types/product";
@@ -18,6 +19,7 @@ const SEARCH_DEBOUNCE_MS = 300;
 
 interface FilterUpdate {
   categoryId?: string;
+  brandId?: string;
   frameShape?: FrameShape;
   minPrice?: number;
   maxPrice?: number;
@@ -31,6 +33,7 @@ export function ProductListPage() {
   const searchParams = useSearchParams();
 
   const categoryId = searchParams.get("categoryId") ?? undefined;
+  const brandId = searchParams.get("brandId") ?? undefined;
   const frameShape = (searchParams.get("frameShape") as FrameShape | null) ?? undefined;
   const minPrice = searchParams.has("minPrice") ? Number(searchParams.get("minPrice")) : undefined;
   const maxPrice = searchParams.has("maxPrice") ? Number(searchParams.get("maxPrice")) : undefined;
@@ -38,12 +41,14 @@ export function ProductListPage() {
 
   const { products, isLoading, error } = useProducts({
     categoryId,
+    brandId,
     frameShape,
     minPrice,
     maxPrice,
     search,
   });
   const { categories } = useCategories();
+  const { brands } = useBrands();
   const { frameShapes } = useAvailableFrameShapes();
 
   const [searchInput, setSearchInput] = useState(search ?? "");
@@ -60,6 +65,7 @@ export function ProductListPage() {
   function updateFilters(next: FilterUpdate) {
     const params = new URLSearchParams(searchParams.toString());
     const nextCategoryId = "categoryId" in next ? next.categoryId : categoryId;
+    const nextBrandId = "brandId" in next ? next.brandId : brandId;
     const nextFrameShape = "frameShape" in next ? next.frameShape : frameShape;
     const nextMinPrice = "minPrice" in next ? next.minPrice : minPrice;
     const nextMaxPrice = "maxPrice" in next ? next.maxPrice : maxPrice;
@@ -67,6 +73,9 @@ export function ProductListPage() {
 
     if (nextCategoryId) params.set("categoryId", nextCategoryId);
     else params.delete("categoryId");
+
+    if (nextBrandId) params.set("brandId", nextBrandId);
+    else params.delete("brandId");
 
     if (nextFrameShape) params.set("frameShape", nextFrameShape);
     else params.delete("frameShape");
@@ -84,7 +93,7 @@ export function ProductListPage() {
     router.push(query ? `/?${query}` : "/");
   }
 
-  // updateFilters closes over this render's categoryId/frameShape/minPrice/maxPrice/searchParams.
+  // updateFilters closes over this render's categoryId/brandId/frameShape/minPrice/maxPrice/searchParams.
   // The debounce timer below can fire well after a later render (e.g. a pill click) has moved
   // those values on — reading it through a ref kept fresh every render (instead of calling the
   // directly-closed-over updateFilters) means the timer always applies the search term on top of
@@ -154,15 +163,23 @@ export function ProductListPage() {
         </div>
 
         <ProductFilters
+          brands={brands}
           categories={categories}
           frameShapes={frameShapes}
+          brandId={brandId}
           categoryId={categoryId}
           frameShape={frameShape}
           minPrice={minPrice}
           maxPrice={maxPrice}
-          onCategoryChange={(nextCategoryId) => updateFilters({ categoryId: nextCategoryId })}
-          onFrameShapeChange={(nextFrameShape) => updateFilters({ frameShape: nextFrameShape })}
-          onPriceRangeChange={(range) => updateFilters(range)}
+          onApplyFilters={(filters) =>
+            updateFilters({
+              brandId: filters.brandId,
+              categoryId: filters.categoryId,
+              frameShape: filters.frameShape,
+              minPrice: filters.minPrice,
+              maxPrice: filters.maxPrice,
+            })
+          }
         />
         {isLoading && <LoadingState label="Đang tải sản phẩm..." />}
         {!isLoading && error && <ErrorState message={error} />}

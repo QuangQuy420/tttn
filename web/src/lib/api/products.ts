@@ -28,6 +28,7 @@ export function getProducts(
 ): Promise<PaginatedResponse<Product>> {
   const query = new URLSearchParams();
   if (params.categoryId) query.set("categoryId", params.categoryId);
+  if (params.brandId) query.set("brandId", params.brandId);
   if (params.frameShape) query.set("frameShape", params.frameShape);
   if (params.page) query.set("page", String(params.page));
   if (params.limit) query.set("limit", String(params.limit));

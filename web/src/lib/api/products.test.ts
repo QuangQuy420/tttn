@@ -20,15 +20,16 @@ describe("products api client", () => {
     expect(mockedApiFetch).toHaveBeenCalledWith("/products");
   });
 
-  it("getProducts serializes categoryId and frameShape filters into the query string", async () => {
+  it("getProducts serializes categoryId, brandId and frameShape filters into the query string", async () => {
     mockedApiFetch.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, totalPages: 0 });
 
-    await getProducts({ categoryId: "cat-1", frameShape: "AVIATOR", page: 2, limit: 10 });
+    await getProducts({ categoryId: "cat-1", brandId: "brand-1", frameShape: "AVIATOR", page: 2, limit: 10 });
 
     const calledPath = mockedApiFetch.mock.calls[0][0] as string;
     expect(calledPath.startsWith("/products?")).toBe(true);
     const query = new URLSearchParams(calledPath.split("?")[1]);
     expect(query.get("categoryId")).toBe("cat-1");
+    expect(query.get("brandId")).toBe("brand-1");
     expect(query.get("frameShape")).toBe("AVIATOR");
     expect(query.get("page")).toBe("2");
     expect(query.get("limit")).toBe("10");

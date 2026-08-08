@@ -78,6 +78,7 @@ export interface Product {
 
 export interface ProductListParams {
   categoryId?: string;
+  brandId?: string;
   frameShape?: FrameShape;
   page?: number;
   limit?: number;
