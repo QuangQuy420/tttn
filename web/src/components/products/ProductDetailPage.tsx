@@ -6,17 +6,17 @@ import { AddToCartModal } from "@/components/cart/AddToCartModal";
 import { ErrorState } from "@/components/common/ErrorState";
 import { ImageWithFallback } from "@/components/common/ImageWithFallback";
 import { LoadingState } from "@/components/common/LoadingState";
-import { useProduct } from "@/hooks/useProduct";
+import { useProductBySlug } from "@/hooks/useProduct";
 import { getColorSwatch } from "@/lib/format/color";
 import { formatPriceVnd } from "@/lib/format/price";
 import { formatFrameShapeVi, GENDER_TARGET_LABELS_VI } from "@/lib/labels";
 
 interface ProductDetailPageProps {
-  id: string;
+  slug: string;
 }
 
-export function ProductDetailPage({ id }: ProductDetailPageProps) {
-  const { product, isLoading, error } = useProduct(id);
+export function ProductDetailPage({ slug }: ProductDetailPageProps) {
+  const { product, isLoading, error } = useProductBySlug(slug);
   const [isAddToCartOpen, setIsAddToCartOpen] = useState(false);
   // FR6/AC7: which swatch the customer picked, if any — drives which image group is shown below.
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
@@ -156,7 +156,7 @@ export function ProductDetailPage({ id }: ProductDetailPageProps) {
 
           <div className="product-detail__actions">
             <Link
-              href={`/products/${product.id}/try-on`}
+              href={`/products/${product.slug}/try-on`}
               className="btn btn--primary"
               aria-label="Thử kính AR"
             >

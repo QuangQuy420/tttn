@@ -47,6 +47,10 @@ export function getProductById(id: string): Promise<Product> {
   return apiFetch<Product>(`/products/${encodeURIComponent(id)}`);
 }
 
+export function getProductBySlug(slug: string): Promise<Product> {
+  return apiFetch<Product>(`/products/slug/${encodeURIComponent(slug)}`);
+}
+
 export function getCategories(): Promise<Category[]> {
   return apiFetch<Category[]>("/categories");
 }

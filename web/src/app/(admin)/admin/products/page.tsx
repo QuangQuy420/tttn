@@ -110,9 +110,10 @@ export default function AdminProductsPage() {
         {!isLoading && error && <ErrorState message={error} />}
         {!isLoading && !error && (
           <div className="admin-table">
-            <div className="admin-table__row admin-table__row--head">
+            <div className="admin-table__row admin-table__row--products admin-table__row--head">
               <span></span>
               <span>Sản phẩm</span>
+              <span>SKU</span>
               <span>Kiểu dáng</span>
               <span>Giá</span>
               <span>Trạng thái</span>
@@ -122,7 +123,7 @@ export default function AdminProductsPage() {
               const thumbnail = product.images.find((image) => image.isThumbnail) ?? product.images[0];
               const isOnSale = product.status === "PUBLISHED";
               return (
-                <div key={product.id} className="admin-table__row admin-table__row--body">
+                <div key={product.id} className="admin-table__row admin-table__row--products admin-table__row--body">
                   {thumbnail ? (
                     <ImageWithFallback
                       src={thumbnail.imageUrl}
@@ -137,6 +138,7 @@ export default function AdminProductsPage() {
                     <div className="admin-table__name">{product.name}</div>
                     <div className="admin-table__tag">{product.brand.name}</div>
                   </div>
+                  <span className="admin-table__sku">{product.sku}</span>
                   <span className="admin-table__shape">{formatFrameShapeVi(product.frameShape)}</span>
                   <span className="admin-table__price">{formatPriceVnd(product.basePrice)}</span>
                   <span className={`admin-status-badge${isOnSale ? " admin-status-badge--active" : ""}`}>

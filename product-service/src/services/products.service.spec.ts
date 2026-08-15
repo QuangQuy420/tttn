@@ -94,6 +94,7 @@ describe('ProductsService', () => {
     productRepository = {
       findAndCount: jest.fn(),
       findByIdWithBrandAndCategory: jest.fn(),
+      findBySlugWithBrandAndCategory: jest.fn(),
       findBySku: jest.fn(),
       findBySlug: jest.fn(),
       create: jest.fn(),

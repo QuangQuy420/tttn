@@ -7,13 +7,13 @@ import { ErrorState } from "@/components/common/ErrorState";
 import { ImageWithFallback } from "@/components/common/ImageWithFallback";
 import { LoadingState } from "@/components/common/LoadingState";
 import { useFaceTracking } from "@/hooks/useFaceTracking";
-import { useProduct } from "@/hooks/useProduct";
+import { useProductBySlug } from "@/hooks/useProduct";
 import { useProducts } from "@/hooks/useProducts";
 
 interface TryOnPageProps {
   // Omitted for the camera-first landing state (nav's "Thử Kính" tab, no product chosen yet) —
   // present when arriving from a specific product's "Thử kính AR" button.
-  id?: string;
+  slug?: string;
 }
 
 // Vietnamese hint shown for each non-"tracking" status, mirroring
@@ -30,14 +30,14 @@ const SWITCHER_LIMIT = 8;
 
 // Thin page component: only wires the product fetch + camera/canvas elements together. All
 // MediaPipe/canvas frame-processing logic lives in useFaceTracking (coder.md §4).
-export function TryOnPage({ id }: TryOnPageProps) {
-  // `activeId` starts at whatever product the user arrived with (null when landing on the tab
-  // directly, with no product chosen yet). Picking a frame from the strip below only updates
-  // this local state — it never navigates, so the <video>/<canvas> below (and the camera
-  // stream/face-tracking session useFaceTracking owns) stay mounted and keep running across a
-  // pick/switch instead of re-requesting camera permission each time.
-  const [activeId, setActiveId] = useState<string | null>(id ?? null);
-  const { product, isLoading, error } = useProduct(activeId);
+export function TryOnPage({ slug }: TryOnPageProps) {
+  // `activeSlug` starts at whatever product the user arrived with (null when landing on the
+  // tab directly, with no product chosen yet). Picking a frame from the strip below only
+  // updates this local state — it never navigates, so the <video>/<canvas> below (and the
+  // camera stream/face-tracking session useFaceTracking owns) stay mounted and keep running
+  // across a pick/switch instead of re-requesting camera permission each time.
+  const [activeSlug, setActiveSlug] = useState<string | null>(slug ?? null);
+  const { product, isLoading, error } = useProductBySlug(activeSlug);
   const { products: otherProducts } = useProducts({ limit: SWITCHER_LIMIT });
   const [isAddToCartOpen, setIsAddToCartOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -66,35 +66,35 @@ export function TryOnPage({ id }: TryOnPageProps) {
   // remember "has this ever been true" — a ref can't be read/written during render
   // (react-hooks/refs), and syncing it from a useEffect instead re-triggers
   // react-hooks/set-state-in-effect. See https://react.dev/learn/you-might-not-need-an-effect.
-  const cameraReady = activeId === null || Boolean(product);
+  const cameraReady = activeSlug === null || Boolean(product);
   const [hasShownCamera, setHasShownCamera] = useState(cameraReady);
   if (cameraReady && !hasShownCamera) {
     setHasShownCamera(true);
   }
 
   if (!hasShownCamera) {
-    // Only a chosen product (activeId set, e.g. arrived via a product's "Thử kính AR" button)
-    // can fail to load — landing on the tab with no product picked at all is not an error
-    // state, so it's excluded here rather than blocking the whole camera-first page.
-    if (activeId && isLoading && !product) return <LoadingState label="Đang tải sản phẩm..." />;
-    if (activeId && error && !product) return <ErrorState message={error} />;
+    // Only a chosen product (activeSlug set, e.g. arrived via a product's "Thử kính AR"
+    // button) can fail to load — landing on the tab with no product picked at all is not an
+    // error state, so it's excluded here rather than blocking the whole camera-first page.
+    if (activeSlug && isLoading && !product) return <LoadingState label="Đang tải sản phẩm..." />;
+    if (activeSlug && error && !product) return <ErrorState message={error} />;
   }
 
   // A switch that fails after the camera is already showing shouldn't blank the page (see
   // above) — surface it as a small inline notice next to the switcher instead, keeping
   // whichever frame was showing before the failed switch.
-  const switchError = hasShownCamera && activeId && error && !product ? error : null;
+  const switchError = hasShownCamera && activeSlug && error && !product ? error : null;
 
   const hint = status === "camera-denied" || status === "unsupported" || status === "error"
     ? errorMessage
     : STATUS_HINTS[status];
 
-  const switchableProducts = otherProducts.filter((item) => item.id !== activeId);
+  const switchableProducts = otherProducts.filter((item) => item.slug !== activeSlug);
 
   return (
     <section aria-labelledby="try-on-heading" className="face-analysis">
       {product && (
-        <Link href={`/products/${product.id}`} className="product-detail__back-link">
+        <Link href={`/products/${product.slug}`} className="product-detail__back-link">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
             <path d="M19 12H5M12 19l-7-7 7-7" />
           </svg>
@@ -159,7 +159,7 @@ export function TryOnPage({ id }: TryOnPageProps) {
                   key={item.id}
                   type="button"
                   className="try-on__switcher-item"
-                  onClick={() => setActiveId(item.id)}
+                  onClick={() => setActiveSlug(item.slug)}
                   aria-label={`Thử kính ${item.name}`}
                 >
                   {itemThumbnail ? (

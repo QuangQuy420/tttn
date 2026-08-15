@@ -5,10 +5,10 @@ import { ErrorState } from "@/components/common/ErrorState";
 import { ProductDetailPage } from "@/components/products/ProductDetailPage";
 
 export default function ProductDetail() {
-  const params = useParams<{ id: string }>();
-  const id = params.id;
+  const params = useParams<{ slug: string }>();
+  const slug = params.slug;
 
-  if (!id) return <ErrorState message="Không tìm thấy sản phẩm." />;
+  if (!slug) return <ErrorState message="Không tìm thấy sản phẩm." />;
 
-  return <ProductDetailPage id={id} />;
+  return <ProductDetailPage slug={slug} />;
 }
