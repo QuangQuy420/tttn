@@ -797,6 +797,10 @@ main {
   grid-template-columns: 1.1fr 1.3fr 1.5fr 100px;
 }
 
+.admin-table__row--products {
+  grid-template-columns: 56px 2fr 1fr 1fr 1fr 0.8fr 100px;
+}
+
 .admin-table__row--orders {
   grid-template-columns: 1.2fr 1.8fr 1fr 1fr 1.3fr;
 }
@@ -909,6 +913,12 @@ main {
 
 .admin-table__tag {
   font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.admin-table__sku {
+  font-family: monospace;
+  font-size: 0.8rem;
   color: var(--color-text-muted);
 }
 

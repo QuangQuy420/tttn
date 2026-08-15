@@ -31,6 +31,7 @@ export {
   deleteVariant,
   getCategories,
   getProductById,
+  getProductBySlug,
   getProducts,
   setProductImageThumbnail,
   updateProduct,

@@ -35,6 +35,7 @@ export interface IProductRepository {
    */
   findAndCount(filter: ProductListFilter): Promise<ProductListResult>;
   findByIdWithBrandAndCategory(id: string): Promise<Product | null>;
+  findBySlugWithBrandAndCategory(slug: string): Promise<Product | null>;
   findBySku(sku: string): Promise<Product | null>;
   findBySlug(slug: string): Promise<Product | null>;
   create(data: Partial<Product>): Promise<Product>;
@@ -115,6 +116,13 @@ export class TypeOrmProductRepository implements IProductRepository {
   findByIdWithBrandAndCategory(id: string): Promise<Product | null> {
     return this.repo.findOne({
       where: { id },
+      relations: ['brand', 'category'],
+    });
+  }
+
+  findBySlugWithBrandAndCategory(slug: string): Promise<Product | null> {
+    return this.repo.findOne({
+      where: { slug },
       relations: ['brand', 'category'],
     });
   }

@@ -158,6 +158,31 @@ paths:
             Validation failure, or `categoryId`/`brandId` does not reference an
             existing row.
 
+  /products/slug/{slug}:
+    get:
+      tags: [products]
+      summary: Get a single product by slug
+      description: >
+        Slug-based lookup for the public product-detail URL
+        (`web`'s `/products/[slug]` route). Same response shape as
+        `GET /products/{id}`.
+      operationId: getProductBySlug
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Product found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductResponse"
+        "404":
+          description: Product not found
+
   /products/{id}:
     get:
       tags: [products]

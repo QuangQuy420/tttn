@@ -53,7 +53,7 @@ export function RecommendationCard({ product, onTryOnPhoto }: RecommendationCard
 
   return (
     <div className="product-card">
-      <Link href={`/products/${product.id}`} className="product-card__link">
+      <Link href={`/products/${product.slug}`} className="product-card__link">
         {thumbnail ? (
           <ImageWithFallback
             src={thumbnail.imageUrl}
@@ -90,7 +90,7 @@ export function RecommendationCard({ product, onTryOnPhoto }: RecommendationCard
             </button>
           </>
         ) : (
-          <Link href={`/products/${product.id}/try-on`} className="btn btn--primary btn--small">
+          <Link href={`/products/${product.slug}/try-on`} className="btn btn--primary btn--small">
             Thử kính AR
           </Link>
         )}

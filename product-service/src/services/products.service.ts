@@ -107,9 +107,25 @@ export class ProductsService {
       throw new NotFoundException(`Không tìm thấy sản phẩm ${id}`);
     }
 
+    return this.toDetailResponseDto(product);
+  }
+
+  async findOneBySlug(slug: string): Promise<ProductResponseDto> {
+    const product =
+      await this.productRepository.findBySlugWithBrandAndCategory(slug);
+    if (!product) {
+      throw new NotFoundException(`Không tìm thấy sản phẩm ${slug}`);
+    }
+
+    return this.toDetailResponseDto(product);
+  }
+
+  private async toDetailResponseDto(
+    product: Product,
+  ): Promise<ProductResponseDto> {
     const [variants, images] = await Promise.all([
-      this.variantRepository.findByProductIds([id]),
-      this.imageRepository.findByProductIds([id]),
+      this.variantRepository.findByProductIds([product.id]),
+      this.imageRepository.findByProductIds([product.id]),
     ]);
 
     // stock (FR7) is only sourced here — order-service's single call point for pricing

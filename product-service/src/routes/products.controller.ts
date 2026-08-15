@@ -45,6 +45,13 @@ export class ProductsController {
     return this.productsService.findAll(query);
   }
 
+  // Declared before `:id` — a two-segment path never matches `:id`, but keeping the
+  // literal route first makes the precedence explicit.
+  @Get('slug/:slug')
+  findOneBySlug(@Param('slug') slug: string): Promise<ProductResponseDto> {
+    return this.productsService.findOneBySlug(slug);
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string): Promise<ProductResponseDto> {
     return this.productsService.findOne(id);

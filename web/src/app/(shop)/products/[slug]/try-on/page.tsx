@@ -5,10 +5,10 @@ import { ErrorState } from "@/components/common/ErrorState";
 import { TryOnPage } from "@/components/tryon/TryOnPage";
 
 export default function ProductTryOn() {
-  const params = useParams<{ id: string }>();
-  const id = params.id;
+  const params = useParams<{ slug: string }>();
+  const slug = params.slug;
 
-  if (!id) return <ErrorState message="Không tìm thấy sản phẩm." />;
+  if (!slug) return <ErrorState message="Không tìm thấy sản phẩm." />;
 
-  return <TryOnPage id={id} />;
+  return <TryOnPage slug={slug} />;
 }

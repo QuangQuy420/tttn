@@ -35,6 +35,12 @@ export class ProductsController {
     return this.productsProxyService.getProducts(query);
   }
 
+  // Declared before `:id` so the literal route's precedence is explicit.
+  @Get('slug/:slug')
+  findOneBySlug(@Param('slug') slug: string): Promise<unknown> {
+    return this.productsProxyService.getProductBySlug(slug);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string): Promise<unknown> {
     return this.productsProxyService.getProductById(id);

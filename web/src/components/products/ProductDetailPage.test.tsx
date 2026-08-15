@@ -1,12 +1,12 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { useProduct } from "@/hooks/useProduct";
+import { useProductBySlug } from "@/hooks/useProduct";
 import { formatPriceVnd } from "@/lib/format/price";
 import type { Product } from "@/types/product";
 import { ProductDetailPage } from "./ProductDetailPage";
 
-jest.mock("@/hooks/useProduct", () => ({ useProduct: jest.fn() }));
+jest.mock("@/hooks/useProduct", () => ({ useProductBySlug: jest.fn() }));
 
-const mockedUseProduct = useProduct as jest.Mock;
+const mockedUseProduct = useProductBySlug as jest.Mock;
 
 const sampleProduct: Product = {
   id: "p1",
@@ -35,7 +35,7 @@ describe("ProductDetailPage", () => {
   it("shows a loading indicator while the product is being fetched", () => {
     mockedUseProduct.mockReturnValue({ product: null, isLoading: true, error: null });
 
-    render(<ProductDetailPage id="p1" />);
+    render(<ProductDetailPage slug="p1" />);
 
     expect(screen.getByRole("status")).toHaveTextContent(/đang tải/i);
   });
@@ -47,7 +47,7 @@ describe("ProductDetailPage", () => {
       error: "Product not found",
     });
 
-    render(<ProductDetailPage id="missing" />);
+    render(<ProductDetailPage slug="missing" />);
 
     expect(screen.getByRole("alert")).toHaveTextContent("Product not found");
   });
@@ -55,7 +55,7 @@ describe("ProductDetailPage", () => {
   it("renders the product's name, price, a color swatch and its main image once loaded", () => {
     mockedUseProduct.mockReturnValue({ product: sampleProduct, isLoading: false, error: null });
 
-    render(<ProductDetailPage id="p1" />);
+    render(<ProductDetailPage slug="p1" />);
 
     expect(screen.getByRole("heading", { name: "Aviator Classic" })).toBeInTheDocument();
     // Compare raw textContent directly (bypassing RTL's whitespace-normalizing string matcher)
@@ -74,7 +74,7 @@ describe("ProductDetailPage", () => {
       error: null,
     });
 
-    render(<ProductDetailPage id="p1" />);
+    render(<ProductDetailPage slug="p1" />);
 
     expect(screen.getByText("Chưa có hình ảnh nào.")).toBeInTheDocument();
     expect(screen.getByText("Chưa có phiên bản màu nào.")).toBeInTheDocument();
@@ -100,7 +100,7 @@ describe("ProductDetailPage", () => {
       error: null,
     });
 
-    render(<ProductDetailPage id="p1" />);
+    render(<ProductDetailPage slug="p1" />);
 
     // Two variants share the "Gold" color, so only one swatch renders for it (deduplicated).
     expect(screen.getAllByRole("button", { name: "Gold" })).toHaveLength(1);
@@ -124,7 +124,7 @@ describe("ProductDetailPage", () => {
       error: null,
     });
 
-    render(<ProductDetailPage id="p1" />);
+    render(<ProductDetailPage slug="p1" />);
 
     const images = screen.getAllByRole("img", { name: "Aviator Classic" });
     expect(images).toHaveLength(3);
@@ -147,7 +147,7 @@ describe("ProductDetailPage", () => {
       error: null,
     });
 
-    render(<ProductDetailPage id="p1" />);
+    render(<ProductDetailPage slug="p1" />);
 
     const [mainImage, thumbnailImage] = screen.getAllByRole("img", { name: "Aviator Classic" });
     fireEvent.error(mainImage);
