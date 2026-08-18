@@ -3,12 +3,14 @@ import { ProductImagesService } from './product-images.service';
 import { IProductVariantRepository } from '../repositories/product-variant.repository';
 import { IProductImageRepository } from '../repositories/product-image.repository';
 import { IImageStorageRepository } from '../repositories/image-storage.repository';
+import { IProductEventPublisher } from '../repositories/product-event-publisher.repository';
 import { ProductVariant } from '../db/entities/product-variant.entity';
 
 describe('ProductImagesService', () => {
   let variantRepository: jest.Mocked<IProductVariantRepository>;
   let imageRepository: jest.Mocked<IProductImageRepository>;
   let imageStorageRepository: jest.Mocked<IImageStorageRepository>;
+  let eventPublisher: jest.Mocked<IProductEventPublisher>;
   let service: ProductImagesService;
 
   beforeEach(() => {
@@ -33,10 +35,14 @@ describe('ProductImagesService', () => {
       upload: jest.fn(),
       deleteByUrl: jest.fn(),
     };
+    eventPublisher = {
+      publish: jest.fn(),
+    };
     service = new ProductImagesService(
       variantRepository,
       imageRepository,
       imageStorageRepository,
+      eventPublisher,
     );
   });
 

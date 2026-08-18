@@ -8,10 +8,12 @@ import {
 import { IProductVariantRepository } from '../repositories/product-variant.repository';
 import { IProductImageRepository } from '../repositories/product-image.repository';
 import { IImageStorageRepository } from '../repositories/image-storage.repository';
+import { IProductEventPublisher } from '../repositories/product-event-publisher.repository';
 import {
   PRODUCT_VARIANT_REPOSITORY,
   PRODUCT_IMAGE_REPOSITORY,
   IMAGE_STORAGE_REPOSITORY,
+  PRODUCT_EVENT_PUBLISHER,
 } from '../repositories/tokens';
 import { ProductImage } from '../db/entities/product-image.entity';
 
@@ -43,6 +45,8 @@ export class ProductImagesService {
     private readonly imageRepository: IProductImageRepository,
     @Inject(IMAGE_STORAGE_REPOSITORY)
     private readonly imageStorageRepository: IImageStorageRepository,
+    @Inject(PRODUCT_EVENT_PUBLISHER)
+    private readonly eventPublisher: IProductEventPublisher,
   ) {}
 
   async create(input: CreateProductImageInput): Promise<ProductImage> {
@@ -53,13 +57,20 @@ export class ProductImagesService {
       );
     }
 
-    return this.imageRepository.create({
+    const image = await this.imageRepository.create({
       productId: input.productId,
       variantId: input.variantId ?? null,
       imageUrl: input.imageUrl,
       isThumbnail: input.isThumbnail ?? false,
       sortOrder: input.sortOrder ?? 0,
     });
+
+    await this.eventPublisher.publish({
+      type: 'product.updated',
+      productId: input.productId,
+    });
+
+    return image;
   }
 
   /**
@@ -99,6 +110,8 @@ export class ProductImagesService {
       contentType: file.mimetype,
     });
 
+    // `create` publishes `product.updated` after saving the row, so this path is covered
+    // without a second (duplicate) publish here.
     return this.create({
       productId,
       variantId,
@@ -131,7 +144,13 @@ export class ProductImagesService {
       await this.imageRepository.update(candidate.id, { isThumbnail: false });
     }
 
-    return this.imageRepository.update(imageId, { isThumbnail: true });
+    const updated = await this.imageRepository.update(imageId, {
+      isThumbnail: true,
+    });
+
+    await this.eventPublisher.publish({ type: 'product.updated', productId });
+
+    return updated;
   }
 
   /**
@@ -151,6 +170,8 @@ export class ProductImagesService {
         `Failed to delete storage object for image ${imageId} (${image.imageUrl}): ${error instanceof Error ? error.message : error}`,
       );
     }
+
+    await this.eventPublisher.publish({ type: 'product.updated', productId });
   }
 
   private async findOwnedImage(

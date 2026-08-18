@@ -15,7 +15,9 @@ import com.tttn.orderservice.model.cart.Cart;
 import com.tttn.orderservice.model.cart.CartItem;
 import com.tttn.orderservice.service.CartService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -23,6 +25,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -243,6 +246,127 @@ public class CartServiceImpl implements CartService {
     }
 
     @Override
+    public void refreshProductInCarts(
+            ProductResponse product
+    ) {
+        if (product == null
+                || product.id() == null) {
+            return;
+        }
+
+        try (Cursor<String> cartKeys = scanCartKeys()) {
+            while (cartKeys.hasNext()) {
+                String cartKey = cartKeys.next();
+
+                Cart cart =
+                        cartRedisTemplate
+                                .opsForValue()
+                                .get(cartKey);
+
+                if (cart == null) {
+                    continue;
+                }
+
+                initializeCartItems(cart);
+
+                boolean changed = false;
+
+                Iterator<CartItem> items =
+                        cart.getItems().iterator();
+
+                while (items.hasNext()) {
+                    CartItem item = items.next();
+
+                    if (!Objects.equals(
+                            item.getProductId(),
+                            product.id()
+                    )) {
+                        continue;
+                    }
+
+                    ProductVariantResponse variant =
+                            findVariantOrNull(
+                                    product,
+                                    item.getVariantId()
+                            );
+
+                    if (variant == null) {
+                        // Variant no longer exists on the product (soft-deleted) — there is
+                        // nothing left to snapshot, so the item leaves the cart.
+                        items.remove();
+                        changed = true;
+                        continue;
+                    }
+
+                    refreshItemSnapshot(
+                            item,
+                            product,
+                            variant
+                    );
+
+                    changed = true;
+                }
+
+                if (!changed) {
+                    continue;
+                }
+
+                if (cart.getItems().isEmpty()) {
+                    cartRedisTemplate.delete(cartKey);
+                    continue;
+                }
+
+                saveCartPreservingTtl(cart);
+            }
+        }
+    }
+
+    @Override
+    public void removeProductFromCarts(
+            UUID productId
+    ) {
+        if (productId == null) {
+            return;
+        }
+
+        try (Cursor<String> cartKeys = scanCartKeys()) {
+            while (cartKeys.hasNext()) {
+                String cartKey = cartKeys.next();
+
+                Cart cart =
+                        cartRedisTemplate
+                                .opsForValue()
+                                .get(cartKey);
+
+                if (cart == null) {
+                    continue;
+                }
+
+                initializeCartItems(cart);
+
+                boolean removed = cart.getItems()
+                        .removeIf(item ->
+                                Objects.equals(
+                                        item.getProductId(),
+                                        productId
+                                )
+                        );
+
+                if (!removed) {
+                    continue;
+                }
+
+                if (cart.getItems().isEmpty()) {
+                    cartRedisTemplate.delete(cartKey);
+                    continue;
+                }
+
+                saveCartPreservingTtl(cart);
+            }
+        }
+    }
+
+    @Override
     public Cart getCartEntity(UUID userId) {
         return getExistingCart(userId);
     }
@@ -390,6 +514,47 @@ public class CartServiceImpl implements CartService {
                 );
     }
 
+    private Cursor<String> scanCartKeys() {
+        // Non-blocking SCAN (never KEYS) — O(total carts) per event is acceptable at local
+        // scale; a product->carts reverse index is documented future work.
+        return cartRedisTemplate.scan(
+                ScanOptions.scanOptions()
+                        .match(CART_KEY_PREFIX + "*")
+                        .count(100)
+                        .build()
+        );
+    }
+
+    private void saveCartPreservingTtl(Cart cart) {
+        String cartKey =
+                buildCartKey(cart.getUserId());
+
+        Long remainingTtlSeconds =
+                cartRedisTemplate.getExpire(cartKey);
+
+        if (remainingTtlSeconds == null
+                || remainingTtlSeconds <= 0) {
+            // Key expired (or vanished) mid-sweep — a background sync must never resurrect
+            // a cart with a fresh TTL, so skip the write. Unlike saveCart, the remaining
+            // TTL is re-applied as-is so the sync never extends a cart's 7-day lifetime.
+            return;
+        }
+
+        cart.setUpdatedAt(
+                LocalDateTime.now()
+        );
+
+        cartRedisTemplate
+                .opsForValue()
+                .set(
+                        cartKey,
+                        cart,
+                        Duration.ofSeconds(
+                                remainingTtlSeconds
+                        )
+                );
+    }
+
     private CartItem findCartItem(
             Cart cart,
             UUID variantId
@@ -441,6 +606,27 @@ public class CartServiceImpl implements CartService {
                                 "Không tìm thấy biến thể sản phẩm"
                         )
                 );
+    }
+
+    private ProductVariantResponse findVariantOrNull(
+            ProductResponse product,
+            UUID variantId
+    ) {
+        if (product.variants() == null
+                || product.variants().isEmpty()) {
+            return null;
+        }
+
+        return product.variants()
+                .stream()
+                .filter(variant ->
+                        Objects.equals(
+                                variant.id(),
+                                variantId
+                        )
+                )
+                .findFirst()
+                .orElse(null);
     }
 
     private void validateProduct(

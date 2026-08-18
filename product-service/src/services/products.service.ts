@@ -193,12 +193,12 @@ export class ProductsService {
 
     if (Object.keys(updateData).length > 0) {
       await this.productRepository.update(id, updateData);
-    }
 
-    await this.eventPublisher.publish({
-      type: 'product.updated',
-      productId: id,
-    });
+      await this.eventPublisher.publish({
+        type: 'product.updated',
+        productId: id,
+      });
+    }
 
     return this.findOne(id);
   }

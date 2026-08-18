@@ -1,6 +1,7 @@
 package com.tttn.orderservice.config;
 
 import com.tttn.orderservice.messaging.OrderSagaRoutingKeys;
+import com.tttn.orderservice.messaging.ProductEventRoutingKeys;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.FanoutExchange;
@@ -26,6 +27,15 @@ import org.springframework.context.annotation.Configuration;
  * message nacked without requeue (malformed payload) or redelivered past the limit is routed by
  * the broker to {@code order-saga-events.dlq} instead of being dropped or requeued forever — see
  * {@link com.tttn.orderservice.messaging.DeadLetterListener}.
+ *
+ * <p>Also declares the catalog {@code product-events} topic exchange product-service publishes
+ * {@code product.updated} / {@code product.deleted} into (raw amqplib
+ * {@code assertExchange('product-events', 'topic', { durable: true })} — type/durability MUST
+ * match or whichever service connects second gets a channel error), plus the durable queue this
+ * service consumes them from to keep Redis cart snapshots in sync, with its own DLX/DLQ so
+ * poison catalog messages never land in the saga DLQ handler — see
+ * {@link com.tttn.orderservice.messaging.ProductEventListener} and
+ * {@link com.tttn.orderservice.messaging.ProductEventsDeadLetterListener}.
  */
 @Configuration
 public class RabbitMqConfig {
@@ -33,6 +43,10 @@ public class RabbitMqConfig {
     public static final String ORDER_SERVICE_QUEUE = "order-saga-events.order-service";
     public static final String ORDER_SAGA_EVENTS_DLX = "order-saga-events.dlx";
     public static final String ORDER_SAGA_EVENTS_DLQ = "order-saga-events.dlq";
+
+    public static final String PRODUCT_EVENTS_QUEUE = "product-events.order-service";
+    public static final String PRODUCT_EVENTS_DLX = "product-events.dlx";
+    public static final String PRODUCT_EVENTS_DLQ = "product-events.dlq";
 
     @Bean
     public TopicExchange orderSagaEventsExchange() {
@@ -113,6 +127,65 @@ public class RabbitMqConfig {
                 .bind(orderSagaEventsQueue)
                 .to(orderSagaEventsExchange)
                 .with(OrderSagaRoutingKeys.PAYMENT_FAILED);
+    }
+
+    @Bean
+    public TopicExchange productEventsExchange() {
+        return new TopicExchange(ProductEventRoutingKeys.EXCHANGE, true, false);
+    }
+
+    @Bean
+    public Queue productEventsQueue(
+            @Value("${app.product-events.delivery-limit}")
+            int deliveryLimit
+    ) {
+        return QueueBuilder.durable(PRODUCT_EVENTS_QUEUE)
+                .quorum()
+                .deadLetterExchange(PRODUCT_EVENTS_DLX)
+                .deliveryLimit(deliveryLimit)
+                .build();
+    }
+
+    @Bean
+    public FanoutExchange productEventsDlx() {
+        return new FanoutExchange(PRODUCT_EVENTS_DLX, true, false);
+    }
+
+    @Bean
+    public Queue productEventsDlq() {
+        return new Queue(PRODUCT_EVENTS_DLQ, true);
+    }
+
+    @Bean
+    public Binding productEventsDlqBinding(
+            Queue productEventsDlq,
+            FanoutExchange productEventsDlx
+    ) {
+        return BindingBuilder
+                .bind(productEventsDlq)
+                .to(productEventsDlx);
+    }
+
+    @Bean
+    public Binding productUpdatedBinding(
+            Queue productEventsQueue,
+            TopicExchange productEventsExchange
+    ) {
+        return BindingBuilder
+                .bind(productEventsQueue)
+                .to(productEventsExchange)
+                .with(ProductEventRoutingKeys.PRODUCT_UPDATED);
+    }
+
+    @Bean
+    public Binding productDeletedBinding(
+            Queue productEventsQueue,
+            TopicExchange productEventsExchange
+    ) {
+        return BindingBuilder
+                .bind(productEventsQueue)
+                .to(productEventsExchange)
+                .with(ProductEventRoutingKeys.PRODUCT_DELETED);
     }
 
     @Bean

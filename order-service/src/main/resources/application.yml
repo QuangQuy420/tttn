@@ -70,3 +70,5 @@ app:
   saga:
     delivery-limit: ${SAGA_QUEUE_DELIVERY_LIMIT:10}
     chaos-mode: ${SAGA_CHAOS_MODE:NONE}
+  product-events:
+    delivery-limit: ${PRODUCT_EVENTS_DELIVERY_LIMIT:10}
