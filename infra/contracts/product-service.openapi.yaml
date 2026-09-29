@@ -9,7 +9,9 @@ info:
     /products, POST /products/:id/images, full CRUD for /categories and /brands, and GET /health
     (admin product management pass, see .planning/2026-07-11-admin-product-management.md).
     Face shapes are stored as a product enum array; variant stock is stored on the variant.
-  version: "0.2.0"
+    0.3.0 adds material type, frame measurements (mm), image `kind` (TRY_ON) and the
+    brandIds/materialType/color/sort list filters (.planning/2026-09-29-01-catalog-enrichment-seed.md).
+  version: "0.3.0"
 servers:
   - url: http://localhost:3002
     description: product-service, direct (local dev only)
@@ -59,9 +61,32 @@ paths:
             format: uuid
         - name: brandId
           in: query
+          description: Legacy single-brand filter, kept for backward compatibility — prefer `brandIds`.
           schema:
             type: string
             format: uuid
+        - name: brandIds
+          in: query
+          description: >
+            Comma-separated brand ids (`?brandIds=a,b`); matches products of any of them.
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              type: string
+              format: uuid
+        - name: materialType
+          in: query
+          schema:
+            $ref: "#/components/schemas/MaterialType"
+        - name: color
+          in: query
+          description: >
+            Matches products having at least one variant of this color (case-insensitive,
+            exact name, e.g. `Đen`).
+          schema:
+            type: string
         - name: frameShape
           in: query
           schema:
@@ -108,6 +133,15 @@ paths:
           in: query
           schema:
             type: string
+        - name: sort
+          in: query
+          description: >
+            `newest` = `createdAt` DESC; `price_asc`/`price_desc` order by `basePrice`,
+            then `createdAt` DESC as a tiebreak.
+          schema:
+            type: string
+            enum: [newest, price_asc, price_desc]
+            default: newest
         - name: page
           in: query
           schema:
@@ -270,6 +304,9 @@ paths:
         attaches it to that variant instead (max 5 images), and the variant must belong
         to this product. A newly uploaded image never starts as the thumbnail — the
         admin sets it explicitly via `PATCH .../images/{imageId}`.
+        `kind=TRY_ON` marks the image as the try-on overlay: it must be a PNG (checked by
+        MIME type and magic bytes), and the product's previous TRY_ON image, if any, is
+        demoted to `GALLERY` in the same transaction (at most one TRY_ON per product).
         Rejects anything that isn't `image/jpeg`, `image/png`, or `image/webp`, or is
         over 5 MB, with a 400 (server-side check, not just a client-side hint).
       operationId: uploadProductImage
@@ -294,6 +331,8 @@ paths:
                   type: string
                   format: uuid
                   description: Omit to attach the image to the base product.
+                kind:
+                  $ref: "#/components/schemas/ImageKind"
               required: [file]
       responses:
         "201":
@@ -304,7 +343,8 @@ paths:
                 $ref: "#/components/schemas/ProductImageResponse"
         "400":
           description: >
-            Missing file, disallowed content type, file over 5 MB, `variantId` not
+            Missing file, disallowed content type, file over 5 MB, `kind=TRY_ON` with a
+            non-PNG file, `variantId` not
             belonging to this product, or the group's image count limit (8 for the
             product, 5 for a variant) already reached.
         "404":
@@ -625,6 +665,19 @@ components:
       type: string
       enum: [DRAFT, PUBLISHED, ARCHIVED]
 
+    MaterialType:
+      type: string
+      description: >
+        Normalized frame material. The free-text `material` field stays as the display label.
+      enum: [ACETATE, METAL, TITANIUM, TR90, PLASTIC, MIXED]
+
+    ImageKind:
+      type: string
+      description: >
+        `TRY_ON` = transparent PNG used as the try-on overlay (at most one per product);
+        `GALLERY` = any other image.
+      enum: [GALLERY, TRY_ON]
+
     FaceShape:
       type: string
       description: >
@@ -781,7 +834,9 @@ components:
           type: boolean
         sortOrder:
           type: integer
-      required: [id, variantId, imageUrl, isThumbnail, sortOrder]
+        kind:
+          $ref: "#/components/schemas/ImageKind"
+      required: [id, variantId, imageUrl, isThumbnail, sortOrder, kind]
 
     ProductResponse:
       type: object
@@ -808,6 +863,22 @@ components:
           $ref: "#/components/schemas/GenderTarget"
         material:
           type: string
+          nullable: true
+        materialType:
+          allOf:
+            - $ref: "#/components/schemas/MaterialType"
+          nullable: true
+        lensWidthMm:
+          type: integer
+          nullable: true
+        bridgeWidthMm:
+          type: integer
+          nullable: true
+        templeLengthMm:
+          type: integer
+          nullable: true
+        frameWidthMm:
+          type: integer
           nullable: true
         basePrice:
           type: number
@@ -845,6 +916,11 @@ components:
         - frameShape
         - genderTarget
         - material
+        - materialType
+        - lensWidthMm
+        - bridgeWidthMm
+        - templeLengthMm
+        - frameWidthMm
         - basePrice
         - status
         - brand
@@ -876,6 +952,30 @@ components:
           $ref: "#/components/schemas/GenderTarget"
         material:
           type: string
+          nullable: true
+        materialType:
+          allOf:
+            - $ref: "#/components/schemas/MaterialType"
+          nullable: true
+        lensWidthMm:
+          type: integer
+          minimum: 40
+          maximum: 65
+          nullable: true
+        bridgeWidthMm:
+          type: integer
+          minimum: 12
+          maximum: 26
+          nullable: true
+        templeLengthMm:
+          type: integer
+          minimum: 120
+          maximum: 160
+          nullable: true
+        frameWidthMm:
+          type: integer
+          minimum: 110
+          maximum: 160
           nullable: true
         basePrice:
           type: number
@@ -920,6 +1020,30 @@ components:
           $ref: "#/components/schemas/GenderTarget"
         material:
           type: string
+          nullable: true
+        materialType:
+          allOf:
+            - $ref: "#/components/schemas/MaterialType"
+          nullable: true
+        lensWidthMm:
+          type: integer
+          minimum: 40
+          maximum: 65
+          nullable: true
+        bridgeWidthMm:
+          type: integer
+          minimum: 12
+          maximum: 26
+          nullable: true
+        templeLengthMm:
+          type: integer
+          minimum: 120
+          maximum: 160
+          nullable: true
+        frameWidthMm:
+          type: integer
+          minimum: 110
+          maximum: 160
           nullable: true
         basePrice:
           type: number

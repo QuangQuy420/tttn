@@ -26,13 +26,28 @@ import {
 } from '../repositories/tokens';
 import { ListProductsQueryDto } from '../routes/dto/list-products-query.dto';
 import { PaginatedResponseDto } from '../routes/dto/paginated-response.dto';
-import { ProductResponseDto } from '../routes/dto/product-response.dto';
+import {
+  ProductImageResponseDto,
+  ProductResponseDto,
+} from '../routes/dto/product-response.dto';
 import { CreateProductDto } from '../routes/dto/create-product.dto';
 import { UpdateProductDto } from '../routes/dto/update-product.dto';
 import { Product } from '../db/entities/product.entity';
 import { ProductVariant } from '../db/entities/product-variant.entity';
 import { ProductImage } from '../db/entities/product-image.entity';
 import { ProductStatus } from '../db/enums/product-status.enum';
+
+/** Single image → response mapping, shared by the product DTO and the image endpoints. */
+export function toImageResponse(image: ProductImage): ProductImageResponseDto {
+  return {
+    id: image.id,
+    variantId: image.variantId,
+    imageUrl: image.imageUrl,
+    isThumbnail: image.isThumbnail,
+    sortOrder: image.sortOrder,
+    kind: image.kind,
+  };
+}
 
 @Injectable()
 export class ProductsService {
@@ -59,6 +74,9 @@ export class ProductsService {
     const filter: ProductListFilter = {
       categoryId: query.categoryId,
       brandId: query.brandId,
+      brandIds: query.brandIds,
+      materialType: query.materialType,
+      color: query.color,
       frameShape: query.frameShape,
       genderTarget: query.genderTarget,
       faceShape: query.faceShape,
@@ -67,6 +85,7 @@ export class ProductsService {
       minPrice: query.minPrice,
       maxPrice: query.maxPrice,
       search: query.search,
+      sort: query.sort,
       page: query.page,
       limit: query.limit,
     };
@@ -156,6 +175,11 @@ export class ProductsService {
       frameShape: dto.frameShape,
       genderTarget: dto.genderTarget,
       material: dto.material ?? null,
+      materialType: dto.materialType ?? null,
+      lensWidthMm: dto.lensWidthMm ?? null,
+      bridgeWidthMm: dto.bridgeWidthMm ?? null,
+      templeLengthMm: dto.templeLengthMm ?? null,
+      frameWidthMm: dto.frameWidthMm ?? null,
       basePrice: dto.basePrice,
       status: dto.status ?? ProductStatus.PUBLISHED,
     });
@@ -185,6 +209,15 @@ export class ProductsService {
     if (dto.genderTarget !== undefined)
       updateData.genderTarget = dto.genderTarget;
     if (dto.material !== undefined) updateData.material = dto.material;
+    if (dto.materialType !== undefined)
+      updateData.materialType = dto.materialType;
+    if (dto.lensWidthMm !== undefined) updateData.lensWidthMm = dto.lensWidthMm;
+    if (dto.bridgeWidthMm !== undefined)
+      updateData.bridgeWidthMm = dto.bridgeWidthMm;
+    if (dto.templeLengthMm !== undefined)
+      updateData.templeLengthMm = dto.templeLengthMm;
+    if (dto.frameWidthMm !== undefined)
+      updateData.frameWidthMm = dto.frameWidthMm;
     if (dto.basePrice !== undefined) updateData.basePrice = dto.basePrice;
     if (dto.description !== undefined) updateData.description = dto.description;
     if (dto.faceFitNote !== undefined) updateData.faceFitNote = dto.faceFitNote;
@@ -285,6 +318,11 @@ export class ProductsService {
     dto.frameShape = product.frameShape;
     dto.genderTarget = product.genderTarget;
     dto.material = product.material;
+    dto.materialType = product.materialType;
+    dto.lensWidthMm = product.lensWidthMm;
+    dto.bridgeWidthMm = product.bridgeWidthMm;
+    dto.templeLengthMm = product.templeLengthMm;
+    dto.frameWidthMm = product.frameWidthMm;
     dto.basePrice = product.basePrice;
     dto.status = product.status;
     dto.brand = {
@@ -314,13 +352,7 @@ export class ProductsService {
       }));
     dto.images = allImages
       .filter((image) => image.productId === product.id)
-      .map((image) => ({
-        id: image.id,
-        variantId: image.variantId,
-        imageUrl: image.imageUrl,
-        isThumbnail: image.isThumbnail,
-        sortOrder: image.sortOrder,
-      }));
+      .map(toImageResponse);
     dto.faceShapes = product.faceShapes;
     dto.createdAt = product.createdAt;
     dto.updatedAt = product.updatedAt;

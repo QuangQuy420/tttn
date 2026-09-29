@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { ProductImage } from '../db/entities/product-image.entity';
+import { ImageKind } from '../db/enums/image-kind.enum';
 
 export interface IProductImageRepository {
   findById(id: string): Promise<ProductImage | null>;
@@ -15,6 +16,12 @@ export interface IProductImageRepository {
     sortOrder: number,
   ): Promise<ProductImage | null>;
   create(data: Partial<ProductImage>): Promise<ProductImage>;
+  /**
+   * Inserts `data` as the product's TRY_ON image and, in the same transaction, demotes the
+   * product's current TRY_ON image (if any) to GALLERY — keeps "one TRY_ON per product"
+   * (partial unique index `UQ_ps_product_images_try_on`) without a window where it breaks.
+   */
+  createDemotingTryOn(data: Partial<ProductImage>): Promise<ProductImage>;
   update(id: string, data: Partial<ProductImage>): Promise<ProductImage>;
   deleteById(id: string): Promise<void>;
 }
@@ -24,6 +31,8 @@ export class TypeOrmProductImageRepository implements IProductImageRepository {
   constructor(
     @InjectRepository(ProductImage)
     private readonly repo: Repository<ProductImage>,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
   ) {}
 
   findById(id: string): Promise<ProductImage | null> {
@@ -55,6 +64,20 @@ export class TypeOrmProductImageRepository implements IProductImageRepository {
 
   create(data: Partial<ProductImage>): Promise<ProductImage> {
     return this.repo.save(this.repo.create(data));
+  }
+
+  createDemotingTryOn(data: Partial<ProductImage>): Promise<ProductImage> {
+    return this.dataSource.transaction(async (manager) => {
+      await manager.update(
+        ProductImage,
+        { productId: data.productId, kind: ImageKind.TRY_ON },
+        { kind: ImageKind.GALLERY },
+      );
+      return manager.save(
+        ProductImage,
+        manager.create(ProductImage, { ...data, kind: ImageKind.TRY_ON }),
+      );
+    });
   }
 
   async update(id: string, data: Partial<ProductImage>): Promise<ProductImage> {

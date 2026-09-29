@@ -17,6 +17,15 @@ export type GenderTarget = "MALE" | "FEMALE" | "UNISEX";
 
 export type ProductStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
 
+// Mirrors product-service's MaterialType enum (src/db/enums/material-type.enum.ts).
+export type MaterialType = "ACETATE" | "METAL" | "TITANIUM" | "TR90" | "PLASTIC" | "MIXED";
+
+// Mirrors product-service's ImageKind enum (src/db/enums/image-kind.enum.ts). TRY_ON = the
+// transparent PNG used as the try-on overlay (at most one per product).
+export type ImageKind = "GALLERY" | "TRY_ON";
+
+export type ProductSort = "newest" | "price_asc" | "price_desc";
+
 // Face shape taxonomy (khuôn mặt shapes) — used only by Product.faceShapes (which face shapes a
 // product suits). A different taxonomy from FrameShape above — do not conflate the two, mirrors
 // product-service's FaceShape enum (src/db/enums/face-shape.enum.ts).
@@ -55,6 +64,7 @@ export interface ProductImage {
   isThumbnail: boolean;
   sortOrder: number;
   variantId: string | null;
+  kind: ImageKind;
 }
 
 export interface Product {
@@ -67,6 +77,12 @@ export interface Product {
   frameShape: FrameShape;
   genderTarget: GenderTarget;
   material: string | null;
+  materialType?: MaterialType | null;
+  // Frame measurements in mm (integers) — null when not entered.
+  lensWidthMm?: number | null;
+  bridgeWidthMm?: number | null;
+  templeLengthMm?: number | null;
+  frameWidthMm?: number | null;
   basePrice: number;
   status: ProductStatus;
   brand: Brand;
@@ -79,7 +95,13 @@ export interface Product {
 export interface ProductListParams {
   categoryId?: string;
   brandId?: string;
+  // Comma-joined into `brandIds` on the wire.
+  brandIds?: string[];
   frameShape?: FrameShape;
+  materialType?: MaterialType;
+  color?: string;
+  genderTarget?: GenderTarget;
+  sort?: ProductSort;
   page?: number;
   limit?: number;
   search?: string;
@@ -96,6 +118,11 @@ export interface CreateProductPayload {
   frameShape: FrameShape;
   genderTarget: GenderTarget;
   material?: string | null;
+  materialType?: MaterialType | null;
+  lensWidthMm?: number | null;
+  bridgeWidthMm?: number | null;
+  templeLengthMm?: number | null;
+  frameWidthMm?: number | null;
   basePrice: number;
   description?: string | null;
   faceFitNote?: string | null;

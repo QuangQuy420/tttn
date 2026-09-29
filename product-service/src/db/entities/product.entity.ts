@@ -17,6 +17,7 @@ import { ProductImage } from './product-image.entity';
 import { FaceShape } from '../enums/face-shape.enum';
 import { FrameShape } from '../enums/frame-shape.enum';
 import { GenderTarget } from '../enums/gender-target.enum';
+import { MaterialType } from '../enums/material-type.enum';
 import { ProductStatus } from '../enums/product-status.enum';
 import { numericTransformer } from '../transformers/numeric.transformer';
 
@@ -31,6 +32,7 @@ import { numericTransformer } from '../transformers/numeric.transformer';
 @Index(['frameShape'])
 @Index(['status'])
 @Index(['genderTarget'])
+@Index(['materialType'])
 export class Product {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -94,6 +96,28 @@ export class Product {
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   material: string | null;
+
+  @Column({
+    name: 'material_type',
+    type: 'enum',
+    enum: MaterialType,
+    enumName: 'ps_material_type_enum',
+    nullable: true,
+  })
+  materialType: MaterialType | null;
+
+  /** Frame measurements in mm (e.g. "52-18-145" = lens-bridge-temple). */
+  @Column({ name: 'lens_width_mm', type: 'smallint', nullable: true })
+  lensWidthMm: number | null;
+
+  @Column({ name: 'bridge_width_mm', type: 'smallint', nullable: true })
+  bridgeWidthMm: number | null;
+
+  @Column({ name: 'temple_length_mm', type: 'smallint', nullable: true })
+  templeLengthMm: number | null;
+
+  @Column({ name: 'frame_width_mm', type: 'smallint', nullable: true })
+  frameWidthMm: number | null;
 
   @Column({
     name: 'base_price',

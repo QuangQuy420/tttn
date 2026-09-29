@@ -6,10 +6,17 @@ import { FrameShape } from '../db/enums/frame-shape.enum';
 import { GenderTarget } from '../db/enums/gender-target.enum';
 import { ProductStatus } from '../db/enums/product-status.enum';
 import { FaceShape } from '../db/enums/face-shape.enum';
+import { MaterialType } from '../db/enums/material-type.enum';
+
+export type ProductSort = 'newest' | 'price_asc' | 'price_desc';
 
 export interface ProductListFilter {
   categoryId?: string;
   brandId?: string;
+  brandIds?: string[];
+  materialType?: MaterialType;
+  /** Any non-deleted variant with this color, case-insensitive. */
+  color?: string;
   frameShape?: FrameShape;
   genderTarget?: GenderTarget;
   faceShape?: FaceShape;
@@ -18,6 +25,8 @@ export interface ProductListFilter {
   minPrice?: number;
   maxPrice?: number;
   search?: string;
+  /** Defaults to `newest`. */
+  sort?: ProductSort;
   page: number;
   limit: number;
 }
@@ -66,6 +75,22 @@ export class TypeOrmProductRepository implements IProductRepository {
     if (filter.brandId) {
       qb.andWhere('product.brand_id = :brandId', { brandId: filter.brandId });
     }
+    if (filter.brandIds && filter.brandIds.length > 0) {
+      qb.andWhere('product.brand_id IN (:...brandIds)', {
+        brandIds: filter.brandIds,
+      });
+    }
+    if (filter.materialType) {
+      qb.andWhere('product.material_type = :materialType', {
+        materialType: filter.materialType,
+      });
+    }
+    if (filter.color) {
+      qb.andWhere(
+        'EXISTS (SELECT 1 FROM ps_product_variants v WHERE v.product_id = product.id AND v.deleted_at IS NULL AND lower(v.color) = lower(:color))',
+        { color: filter.color },
+      );
+    }
     if (filter.frameShape) {
       qb.andWhere('product.frame_shape = :frameShape', {
         frameShape: filter.frameShape,
@@ -105,9 +130,24 @@ export class TypeOrmProductRepository implements IProductRepository {
       });
     }
 
-    qb.orderBy('product.createdAt', 'DESC')
-      .skip((filter.page - 1) * filter.limit)
-      .take(filter.limit);
+    switch (filter.sort) {
+      case 'price_asc':
+        qb.orderBy('product.basePrice', 'ASC').addOrderBy(
+          'product.createdAt',
+          'DESC',
+        );
+        break;
+      case 'price_desc':
+        qb.orderBy('product.basePrice', 'DESC').addOrderBy(
+          'product.createdAt',
+          'DESC',
+        );
+        break;
+      default:
+        qb.orderBy('product.createdAt', 'DESC');
+    }
+
+    qb.skip((filter.page - 1) * filter.limit).take(filter.limit);
 
     const [items, total] = await qb.getManyAndCount();
     return { items, total };

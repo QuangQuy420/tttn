@@ -8,6 +8,7 @@ import type {
   CreateProductPayload,
   CreateVariantPayload,
   FaceShapeTag,
+  ImageKind,
   Product,
   ProductImage,
   ProductListParams,
@@ -29,7 +30,14 @@ export function getProducts(
   const query = new URLSearchParams();
   if (params.categoryId) query.set("categoryId", params.categoryId);
   if (params.brandId) query.set("brandId", params.brandId);
+  if (params.brandIds && params.brandIds.length > 0) {
+    query.set("brandIds", params.brandIds.join(","));
+  }
   if (params.frameShape) query.set("frameShape", params.frameShape);
+  if (params.materialType) query.set("materialType", params.materialType);
+  if (params.color) query.set("color", params.color);
+  if (params.genderTarget) query.set("genderTarget", params.genderTarget);
+  if (params.sort) query.set("sort", params.sort);
   if (params.page) query.set("page", String(params.page));
   if (params.limit) query.set("limit", String(params.limit));
   if (params.search) query.set("search", params.search);
@@ -162,14 +170,18 @@ export function deleteVariant(
 // Returns the newly-created image (append, not replace) — mirrors product-service's
 // ProductImageResponseDto returned by POST /products/:id/images. `variantId` attaches the image
 // to a specific variant's own image group; omitted (or undefined) attaches it to the base product.
+// `kind` "TRY_ON" marks the image as the product's try-on PNG (the previous one is demoted to
+// GALLERY by product-service); omitted defaults to GALLERY server-side.
 export function uploadProductImage(
   id: string,
   file: File,
   token: string,
   variantId?: string,
+  kind?: ImageKind,
 ): Promise<ProductImage> {
   const form = new FormData();
   if (variantId) form.append("variantId", variantId);
+  if (kind) form.append("kind", kind);
   form.append("file", file);
   return apiFetch<ProductImage>(`/products/${encodeURIComponent(id)}/images`, {
     method: "POST",

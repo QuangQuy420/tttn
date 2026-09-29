@@ -9,7 +9,11 @@ import { LoadingState } from "@/components/common/LoadingState";
 import { useProductBySlug } from "@/hooks/useProduct";
 import { getColorSwatch } from "@/lib/format/color";
 import { formatPriceVnd } from "@/lib/format/price";
-import { formatFrameShapeVi, GENDER_TARGET_LABELS_VI } from "@/lib/labels";
+import {
+  formatFrameShapeVi,
+  GENDER_TARGET_LABELS_VI,
+  MATERIAL_TYPE_LABELS_VI,
+} from "@/lib/labels";
 
 interface ProductDetailPageProps {
   slug: string;
@@ -119,12 +123,26 @@ export function ProductDetailPage({ slug }: ProductDetailPageProps) {
             <dd>{product.category.name}</dd>
             <dt>Giới tính</dt>
             <dd>{GENDER_TARGET_LABELS_VI[product.genderTarget]}</dd>
-            {product.material && (
+            {/* Free-text `material` stays the display value; the enum label is the fallback. */}
+            {(product.material || product.materialType) && (
               <>
                 <dt>Chất liệu</dt>
-                <dd>{product.material}</dd>
+                <dd>
+                  {product.material ||
+                    (product.materialType && MATERIAL_TYPE_LABELS_VI[product.materialType])}
+                </dd>
               </>
             )}
+            {product.lensWidthMm != null &&
+              product.bridgeWidthMm != null &&
+              product.templeLengthMm != null && (
+                <>
+                  <dt>Kích thước gọng</dt>
+                  <dd>
+                    {product.lensWidthMm}-{product.bridgeWidthMm}-{product.templeLengthMm}
+                  </dd>
+                </>
+              )}
           </dl>
 
           <section aria-label="Màu sắc có sẵn">

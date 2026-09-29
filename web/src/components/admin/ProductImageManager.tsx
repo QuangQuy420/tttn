@@ -38,6 +38,10 @@ export function ProductImageManager({
   const [isUploading, setIsUploading] = useState(false);
   const [busyImageId, setBusyImageId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Next upload is the product's try-on PNG (kind=TRY_ON). Only offered for the base product's
+  // group — the try-on image is product-level (at most one per product, see product-service).
+  const [isTryOnUpload, setIsTryOnUpload] = useState(false);
+  const canUploadTryOn = variantId === null;
 
   const isFull = imageList.length >= maxCount;
 
@@ -62,14 +66,29 @@ export function ProductImageManager({
           blocked = true;
           break;
         }
-        const uploaded = await uploadProductImage(productId, file, token, variantId ?? undefined);
+        const kind = isTryOnUpload ? "TRY_ON" : undefined;
+        const uploaded = await uploadProductImage(
+          productId,
+          file,
+          token,
+          variantId ?? undefined,
+          kind,
+        );
         count += 1;
         setImageList((current) => {
-          const next = [...current, uploaded];
+          // Mirror the backend: a new TRY_ON image demotes the previous one to GALLERY.
+          const demoted =
+            uploaded.kind === "TRY_ON"
+              ? current.map((image) =>
+                  image.kind === "TRY_ON" ? { ...image, kind: "GALLERY" as const } : image,
+                )
+              : current;
+          const next = [...demoted, uploaded];
           onChange(next);
           return next;
         });
       }
+      setIsTryOnUpload(false);
       if (blocked) {
         setError(`Đã đạt số lượng ảnh tối đa (${maxCount} ảnh) cho mục này, không thể tải thêm.`);
       }
@@ -143,6 +162,11 @@ export function ProductImageManager({
               {image.isThumbnail && (
                 <span className="product-image-manager__badge">Ảnh đại diện</span>
               )}
+              {image.kind === "TRY_ON" && (
+                <span className="product-image-manager__badge product-image-manager__badge--try-on">
+                  Thử kính
+                </span>
+              )}
               <div className="product-image-manager__actions">
                 <button
                   type="button"
@@ -166,6 +190,18 @@ export function ProductImageManager({
         </ul>
       )}
 
+      {canUploadTryOn && (
+        <label className="product-image-manager__try-on">
+          <input
+            type="checkbox"
+            checked={isTryOnUpload}
+            disabled={!productId || isUploading || isFull}
+            onChange={(event) => setIsTryOnUpload(event.target.checked)}
+          />
+          Ảnh thử kính (PNG nền trong suốt)
+        </label>
+      )}
+
       <label
         className={`product-image-manager__upload${
           !productId || isUploading || isFull ? " product-image-manager__upload--disabled" : ""
@@ -174,8 +210,8 @@ export function ProductImageManager({
         <span>{isUploading ? "Đang tải lên…" : "Tải ảnh lên"}</span>
         <input
           type="file"
-          accept="image/jpeg,image/png,image/webp"
-          multiple
+          accept={isTryOnUpload ? "image/png" : "image/jpeg,image/png,image/webp"}
+          multiple={!isTryOnUpload}
           disabled={!productId || isUploading || isFull}
           onChange={handleFileChange}
           aria-label="Tải ảnh lên"

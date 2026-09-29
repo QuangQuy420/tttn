@@ -17,7 +17,7 @@ function buildProduct(overrides: Partial<Product> = {}): Product {
     brand: { id: "b1", name: "RayShade", logoUrl: null },
     category: { id: "c1", name: "Sunglasses", slug: "sunglasses", parentId: null },
     variants: [],
-    images: [{ id: "img1", imageUrl: "/img.jpg", isThumbnail: true, sortOrder: 0, variantId: null }],
+    images: [{ id: "img1", imageUrl: "/img.jpg", isThumbnail: true, sortOrder: 0, variantId: null, kind: "GALLERY" }],
     ...overrides,
   };
 }

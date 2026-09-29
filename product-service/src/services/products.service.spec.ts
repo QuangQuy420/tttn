@@ -1,4 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
+import { Brand } from '../db/entities/brand.entity';
+import { Category } from '../db/entities/category.entity';
 import { ProductsService } from './products.service';
 import { IProductRepository } from '../repositories/product.repository';
 import { IProductVariantRepository } from '../repositories/product-variant.repository';
@@ -13,7 +15,10 @@ import { ProductImage } from '../db/entities/product-image.entity';
 import { FrameShape } from '../db/enums/frame-shape.enum';
 import { GenderTarget } from '../db/enums/gender-target.enum';
 import { ProductStatus } from '../db/enums/product-status.enum';
+import { MaterialType } from '../db/enums/material-type.enum';
+import { ImageKind } from '../db/enums/image-kind.enum';
 import { ListProductsQueryDto } from '../routes/dto/list-products-query.dto';
+import { CreateProductDto } from '../routes/dto/create-product.dto';
 
 function makeProduct(overrides: Partial<Product> = {}): Product {
   return {
@@ -29,6 +34,11 @@ function makeProduct(overrides: Partial<Product> = {}): Product {
     frameShape: FrameShape.ROUND,
     genderTarget: GenderTarget.UNISEX,
     material: 'Metal',
+    materialType: MaterialType.METAL,
+    lensWidthMm: 52,
+    bridgeWidthMm: 18,
+    templeLengthMm: 145,
+    frameWidthMm: 138,
     basePrice: 100,
     status: ProductStatus.PUBLISHED,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -74,6 +84,7 @@ function makeImage(overrides: Partial<ProductImage> = {}): ProductImage {
     imageUrl: 'https://example.test/image.jpg',
     isThumbnail: true,
     sortOrder: 0,
+    kind: ImageKind.GALLERY,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -116,6 +127,7 @@ describe('ProductsService', () => {
       findByProductAndUrl: jest.fn(),
       findByProductAndSortOrder: jest.fn(),
       create: jest.fn(),
+      createDemotingTryOn: jest.fn(),
       update: jest.fn(),
       deleteById: jest.fn(),
     };
@@ -198,6 +210,10 @@ describe('ProductsService', () => {
         minPrice: 10,
         maxPrice: 200,
         search: 'wayfarer',
+        brandIds: ['brand-a', 'brand-b'],
+        materialType: MaterialType.ACETATE,
+        color: 'Đen',
+        sort: 'price_asc',
         page: 2,
         limit: 5,
       });
@@ -214,6 +230,10 @@ describe('ProductsService', () => {
         minPrice: 10,
         maxPrice: 200,
         search: 'wayfarer',
+        brandIds: ['brand-a', 'brand-b'],
+        materialType: MaterialType.ACETATE,
+        color: 'Đen',
+        sort: 'price_asc',
         page: 2,
         limit: 5,
       });
@@ -285,6 +305,27 @@ describe('ProductsService', () => {
       expect(result.images).toHaveLength(1);
     });
 
+    it('exposes materialType, frame measurements and image kind (AC1, AC2)', async () => {
+      productRepository.findByIdWithBrandAndCategory.mockResolvedValue(
+        makeProduct(),
+      );
+      variantRepository.findByProductIds.mockResolvedValue([]);
+      imageRepository.findByProductIds.mockResolvedValue([
+        makeImage({ kind: ImageKind.TRY_ON }),
+      ]);
+
+      const result = await service.findOne('product-1');
+
+      expect(result).toMatchObject({
+        materialType: MaterialType.METAL,
+        lensWidthMm: 52,
+        bridgeWidthMm: 18,
+        templeLengthMm: 145,
+        frameWidthMm: 138,
+      });
+      expect(result.images[0].kind).toBe(ImageKind.TRY_ON);
+    });
+
     it('throws NotFoundException when the product does not exist', async () => {
       productRepository.findByIdWithBrandAndCategory.mockResolvedValue(null);
 
@@ -292,6 +333,68 @@ describe('ProductsService', () => {
         NotFoundException,
       );
       expect(variantRepository.findByProductIds).not.toHaveBeenCalled();
+    });
+  });
+  describe('create / update (new catalog fields)', () => {
+    function stubFindOne() {
+      productRepository.findByIdWithBrandAndCategory.mockResolvedValue(
+        makeProduct(),
+      );
+      variantRepository.findByProductIds.mockResolvedValue([]);
+      imageRepository.findByProductIds.mockResolvedValue([]);
+    }
+
+    it('create() passes materialType and measurements to the repository (AC7)', async () => {
+      categoryRepository.findById.mockResolvedValue({
+        id: 'category-1',
+      } as Category);
+      brandRepository.findById.mockResolvedValue({ id: 'brand-1' } as Brand);
+      productRepository.findBySlug.mockResolvedValue(null);
+      productRepository.findBySku.mockResolvedValue(null);
+      productRepository.create.mockResolvedValue(makeProduct());
+      stubFindOne();
+
+      const dto: CreateProductDto = {
+        name: 'Gọng Mới',
+        categoryId: 'category-1',
+        brandId: 'brand-1',
+        frameShape: FrameShape.ROUND,
+        genderTarget: GenderTarget.UNISEX,
+        basePrice: 500000,
+        materialType: MaterialType.TITANIUM,
+        lensWidthMm: 50,
+        bridgeWidthMm: 20,
+        templeLengthMm: 140,
+        frameWidthMm: 135,
+      };
+
+      await service.create(dto);
+
+      expect(productRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          materialType: MaterialType.TITANIUM,
+          lensWidthMm: 50,
+          bridgeWidthMm: 20,
+          templeLengthMm: 140,
+          frameWidthMm: 135,
+        }),
+      );
+    });
+
+    it('update() writes only the new fields that were provided (AC7)', async () => {
+      stubFindOne();
+
+      await service.update('product-1', {
+        materialType: MaterialType.TR90,
+        lensWidthMm: 54,
+        frameWidthMm: null,
+      });
+
+      expect(productRepository.update).toHaveBeenCalledWith('product-1', {
+        materialType: MaterialType.TR90,
+        lensWidthMm: 54,
+        frameWidthMm: null,
+      });
     });
   });
 });

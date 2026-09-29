@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
@@ -9,6 +10,7 @@ import {
 } from 'typeorm';
 import { Product } from './product.entity';
 import { ProductVariant } from './product-variant.entity';
+import { ImageKind } from '../enums/image-kind.enum';
 
 /**
  * `ps_product_images` — see plan's Data model table.
@@ -19,6 +21,10 @@ import { ProductVariant } from './product-variant.entity';
  * layer (see `ProductImagesService`), per Q11.
  */
 @Entity('ps_product_images')
+@Index('UQ_ps_product_images_try_on', ['productId'], {
+  unique: true,
+  where: `"kind" = 'TRY_ON'`,
+})
 export class ProductImage {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -47,6 +53,19 @@ export class ProductImage {
 
   @Column({ name: 'sort_order', type: 'int', default: 0 })
   sortOrder: number;
+
+  /**
+   * `TRY_ON` = transparent PNG for the virtual try-on overlay. At most one per product —
+   * enforced by the partial unique index `UQ_ps_product_images_try_on`; uploads demote the
+   * previous TRY_ON image first (`ProductImagesService.uploadAndAttach`).
+   */
+  @Column({
+    type: 'enum',
+    enum: ImageKind,
+    enumName: 'ps_image_kind_enum',
+    default: ImageKind.GALLERY,
+  })
+  kind: ImageKind;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

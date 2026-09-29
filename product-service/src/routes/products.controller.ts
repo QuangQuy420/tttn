@@ -15,7 +15,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ProductsService } from '../services/products.service';
+import { ProductsService, toImageResponse } from '../services/products.service';
 import { ProductImagesService } from '../services/product-images.service';
 import { ListProductsQueryDto } from './dto/list-products-query.dto';
 import { PaginatedResponseDto } from './dto/paginated-response.dto';
@@ -27,6 +27,7 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { UploadProductImageDto } from './dto/upload-product-image.dto';
 import { SetImageThumbnailDto } from './dto/set-image-thumbnail.dto';
+import { ImageKind } from '../db/enums/image-kind.enum';
 
 const ALLOWED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
@@ -105,15 +106,10 @@ export class ProductsController {
       id,
       body.variantId ?? null,
       file,
+      body.kind ?? ImageKind.GALLERY,
     );
 
-    return {
-      id: image.id,
-      variantId: image.variantId,
-      imageUrl: image.imageUrl,
-      isThumbnail: image.isThumbnail,
-      sortOrder: image.sortOrder,
-    };
+    return toImageResponse(image);
   }
 
   @Patch(':id/images/:imageId')
@@ -127,13 +123,7 @@ export class ProductsController {
     }
     const image = await this.productImagesService.setThumbnail(id, imageId);
 
-    return {
-      id: image.id,
-      variantId: image.variantId,
-      imageUrl: image.imageUrl,
-      isThumbnail: image.isThumbnail,
-      sortOrder: image.sortOrder,
-    };
+    return toImageResponse(image);
   }
 
   @Delete(':id/images/:imageId')

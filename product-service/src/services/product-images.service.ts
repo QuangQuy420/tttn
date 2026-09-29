@@ -14,6 +14,7 @@ import {
   IMAGE_STORAGE_REPOSITORY,
 } from '../repositories/tokens';
 import { ProductImage } from '../db/entities/product-image.entity';
+import { ImageKind } from '../db/enums/image-kind.enum';
 
 export interface CreateProductImageInput {
   productId: string;
@@ -21,7 +22,12 @@ export interface CreateProductImageInput {
   imageUrl: string;
   isThumbnail?: boolean;
   sortOrder?: number;
+  /** Defaults to GALLERY. TRY_ON demotes the product's previous TRY_ON image. */
+  kind?: ImageKind;
 }
+
+/** First 4 bytes of every PNG file (`\x89PNG`). */
+const PNG_MAGIC_BYTES = [0x89, 0x50, 0x4e, 0x47];
 
 const MAX_PRODUCT_IMAGES = 8;
 const MAX_VARIANT_IMAGES = 5;
@@ -53,13 +59,17 @@ export class ProductImagesService {
       );
     }
 
-    return this.imageRepository.create({
+    const data = {
       productId: input.productId,
       variantId: input.variantId ?? null,
       imageUrl: input.imageUrl,
       isThumbnail: input.isThumbnail ?? false,
       sortOrder: input.sortOrder ?? 0,
-    });
+    };
+    if (input.kind === ImageKind.TRY_ON) {
+      return this.imageRepository.createDemotingTryOn(data);
+    }
+    return this.imageRepository.create({ ...data, kind: ImageKind.GALLERY });
   }
 
   /**
@@ -68,12 +78,20 @@ export class ProductImagesService {
    * replaces an existing image; `sortOrder` is the current max within the group + 1. The
    * admin picks the thumbnail explicitly afterwards (`setThumbnail`), so a newly uploaded
    * image never starts as the thumbnail.
+   *
+   * `kind=TRY_ON` must be a PNG (transparent overlay for the try-on) and replaces the
+   * product's current TRY_ON image, which is demoted to GALLERY.
    */
   async uploadAndAttach(
     productId: string,
     variantId: string | null,
     file: Express.Multer.File,
+    kind: ImageKind = ImageKind.GALLERY,
   ): Promise<ProductImage> {
+    if (kind === ImageKind.TRY_ON && !this.isPng(file)) {
+      throw new BadRequestException('Ảnh thử kính phải là PNG nền trong suốt');
+    }
+
     const groupImages = (
       await this.imageRepository.findByProductIds([productId])
     ).filter((image) => image.variantId === variantId);
@@ -105,6 +123,7 @@ export class ProductImagesService {
       imageUrl,
       isThumbnail: false,
       sortOrder,
+      kind,
     });
   }
 
@@ -164,6 +183,15 @@ export class ProductImagesService {
       );
     }
     return image;
+  }
+
+  /** Checks both the declared MIME type and the PNG magic bytes of the content. */
+  private isPng(file: Express.Multer.File): boolean {
+    return (
+      file.mimetype === 'image/png' &&
+      file.buffer.length >= PNG_MAGIC_BYTES.length &&
+      PNG_MAGIC_BYTES.every((byte, index) => file.buffer[index] === byte)
+    );
   }
 
   private extensionFor(mimeType: string): string {

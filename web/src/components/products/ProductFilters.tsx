@@ -1,7 +1,21 @@
 import { useState } from "react";
-import { formatFrameShapeVi } from "@/lib/labels";
+import {
+  formatFrameShapeVi,
+  GENDER_TARGET_LABELS_VI,
+  GENDER_TARGETS,
+  MATERIAL_TYPE_LABELS_VI,
+  MATERIAL_TYPES,
+  PRODUCT_SORT_LABELS_VI,
+  PRODUCT_SORTS,
+} from "@/lib/labels";
 import type { Category } from "@/types/category";
-import type { Brand, FrameShape } from "@/types/product";
+import type {
+  Brand,
+  FrameShape,
+  GenderTarget,
+  MaterialType,
+  ProductSort,
+} from "@/types/product";
 
 interface PriceRange {
   label: string;
@@ -28,18 +42,26 @@ interface ProductFiltersProps {
   brands: Brand[];
   categories: Category[];
   frameShapes: FrameShape[];
-  brandId: string | undefined;
+  brandIds: string[];
   categoryId: string | undefined;
   frameShape: FrameShape | undefined;
+  materialType: MaterialType | undefined;
+  color: string | undefined;
+  genderTarget: GenderTarget | undefined;
+  sort: ProductSort | undefined;
   minPrice: number | undefined;
   maxPrice: number | undefined;
   onApplyFilters: (filters: ProductFilterValues) => void;
 }
 
 interface ProductFilterValues {
-  brandId: string | undefined;
+  brandIds: string[];
   categoryId: string | undefined;
   frameShape: FrameShape | undefined;
+  materialType: MaterialType | undefined;
+  color: string | undefined;
+  genderTarget: GenderTarget | undefined;
+  sort: ProductSort | undefined;
   minPrice: number | undefined;
   maxPrice: number | undefined;
 }
@@ -48,35 +70,66 @@ export function ProductFilters({
   brands,
   categories,
   frameShapes,
-  brandId,
+  brandIds,
   categoryId,
   frameShape,
+  materialType,
+  color,
+  genderTarget,
+  sort,
   minPrice,
   maxPrice,
   onApplyFilters,
 }: ProductFiltersProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [draftFilters, setDraftFilters] = useState<ProductFilterValues>({
-    brandId,
+    brandIds,
     categoryId,
     frameShape,
+    materialType,
+    color,
+    genderTarget,
+    sort,
     minPrice,
     maxPrice,
   });
 
   function openFilters() {
-    setDraftFilters({ brandId, categoryId, frameShape, minPrice, maxPrice });
+    setDraftFilters({
+      brandIds,
+      categoryId,
+      frameShape,
+      materialType,
+      color,
+      genderTarget,
+      sort,
+      minPrice,
+      maxPrice,
+    });
     setIsOpen(true);
   }
 
   function clearFilters() {
     setDraftFilters({
-      brandId: undefined,
+      brandIds: [],
       categoryId: undefined,
       frameShape: undefined,
+      materialType: undefined,
+      color: undefined,
+      genderTarget: undefined,
+      sort: undefined,
       minPrice: undefined,
       maxPrice: undefined,
     });
+  }
+
+  function toggleBrand(id: string, checked: boolean) {
+    setDraftFilters((current) => ({
+      ...current,
+      brandIds: checked
+        ? [...current.brandIds, id]
+        : current.brandIds.filter((brandId) => brandId !== id),
+    }));
   }
 
   function applyFilters() {
@@ -128,24 +181,21 @@ export function ProductFilters({
             </button>
           </div>
 
-          <label className="product-filters__field" htmlFor="filter-brand">
-              <span>Thương hiệu</span>
-              <select
-                id="filter-brand"
-                value={draftFilters.brandId ?? ""}
-                onChange={(event) =>
-                  setDraftFilters((current) => ({
-                    ...current,
-                    brandId: event.target.value || undefined,
-                  }))
-                }
-              >
-                <option value="">Tất cả thương hiệu</option>
+          <fieldset className="product-filters__field product-filters__brands">
+              <legend>Thương hiệu</legend>
+              <div className="product-filters__checkboxes">
                 {brands.map((brand) => (
-                  <option key={brand.id} value={brand.id}>{brand.name}</option>
+                  <label key={brand.id} className="product-filters__checkbox">
+                    <input
+                      type="checkbox"
+                      checked={draftFilters.brandIds.includes(brand.id)}
+                      onChange={(event) => toggleBrand(brand.id, event.target.checked)}
+                    />
+                    {brand.name}
+                  </label>
                 ))}
-              </select>
-          </label>
+              </div>
+          </fieldset>
 
           <label className="product-filters__field" htmlFor="filter-category">
               <span>Danh mục</span>
@@ -185,6 +235,60 @@ export function ProductFilters({
               </select>
           </label>
 
+          <label className="product-filters__field" htmlFor="filter-material">
+              <span>Chất liệu</span>
+              <select
+                id="filter-material"
+                value={draftFilters.materialType ?? ""}
+                onChange={(event) =>
+                  setDraftFilters((current) => ({
+                    ...current,
+                    materialType: (event.target.value as MaterialType) || undefined,
+                  }))
+                }
+              >
+                <option value="">Tất cả chất liệu</option>
+                {MATERIAL_TYPES.map((type) => (
+                  <option key={type} value={type}>{MATERIAL_TYPE_LABELS_VI[type]}</option>
+                ))}
+              </select>
+          </label>
+
+          <label className="product-filters__field" htmlFor="filter-color">
+              <span>Màu sắc</span>
+              <input
+                id="filter-color"
+                type="text"
+                placeholder="VD: Đen"
+                value={draftFilters.color ?? ""}
+                onChange={(event) =>
+                  setDraftFilters((current) => ({
+                    ...current,
+                    color: event.target.value || undefined,
+                  }))
+                }
+              />
+          </label>
+
+          <label className="product-filters__field" htmlFor="filter-gender">
+              <span>Giới tính</span>
+              <select
+                id="filter-gender"
+                value={draftFilters.genderTarget ?? ""}
+                onChange={(event) =>
+                  setDraftFilters((current) => ({
+                    ...current,
+                    genderTarget: (event.target.value as GenderTarget) || undefined,
+                  }))
+                }
+              >
+                <option value="">Tất cả</option>
+                {GENDER_TARGETS.map((gender) => (
+                  <option key={gender} value={gender}>{GENDER_TARGET_LABELS_VI[gender]}</option>
+                ))}
+              </select>
+          </label>
+
           <label className="product-filters__field" htmlFor="filter-price">
               <span>Giá tiền</span>
               <select
@@ -204,6 +308,24 @@ export function ProductFilters({
                 <option value="-1">Tất cả mức giá</option>
                 {PRICE_RANGES.map((range, index) => (
                   <option key={range.label} value={index}>{range.label}</option>
+                ))}
+              </select>
+          </label>
+
+          <label className="product-filters__field" htmlFor="filter-sort">
+              <span>Sắp xếp</span>
+              <select
+                id="filter-sort"
+                value={draftFilters.sort ?? "newest"}
+                onChange={(event) =>
+                  setDraftFilters((current) => ({
+                    ...current,
+                    sort: event.target.value as ProductSort,
+                  }))
+                }
+              >
+                {PRODUCT_SORTS.map((option) => (
+                  <option key={option} value={option}>{PRODUCT_SORT_LABELS_VI[option]}</option>
                 ))}
               </select>
           </label>

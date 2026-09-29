@@ -9,6 +9,8 @@ import { Brand } from '../db/entities/brand.entity';
 import { Category } from '../db/entities/category.entity';
 import { Product } from '../db/entities/product.entity';
 import { ProductVariant } from '../db/entities/product-variant.entity';
+import { MaterialType } from '../db/enums/material-type.enum';
+import { ImageKind } from '../db/enums/image-kind.enum';
 
 jest.mock('fs', () => ({ readFileSync: jest.fn() }));
 
@@ -193,5 +195,62 @@ describe('SeedService', () => {
     // Unknown brand is a per-product failure, not a fatal error for the whole run.
     expect(summary.productsFailed).toBe(1);
     expect(summary.productsCreated).toBe(19);
+  });
+  it('passes material_type, measurements and image kind through to create (AC8, AC10)', async () => {
+    const seedFile = buildValidSeedFile(10);
+    seedFile.products[0] = buildProduct(0, {
+      material_type: 'ACETATE',
+      lens_width_mm: 52,
+      bridge_width_mm: 18,
+      temple_length_mm: 145,
+      frame_width_mm: 138,
+      images: [
+        { image_url: 'https://example.test/0.jpg', is_thumbnail: true },
+        { image_url: 'https://example.test/0-try-on.png', kind: 'TRY_ON' },
+      ],
+    });
+    mockedReadFileSync.mockReturnValue(JSON.stringify(seedFile));
+
+    const summary = await service.run('seed.json');
+
+    expect(summary.productsFailed).toBe(0);
+    expect(productRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sku: 'SKU-0',
+        materialType: MaterialType.ACETATE,
+        lensWidthMm: 52,
+        bridgeWidthMm: 18,
+        templeLengthMm: 145,
+        frameWidthMm: 138,
+      }),
+    );
+    expect(productImagesService.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        productId: 'product-SKU-0',
+        imageUrl: 'https://example.test/0.jpg',
+        kind: ImageKind.GALLERY,
+      }),
+    );
+    expect(productImagesService.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        productId: 'product-SKU-0',
+        imageUrl: 'https://example.test/0-try-on.png',
+        kind: ImageKind.TRY_ON,
+      }),
+    );
+  });
+
+  it('fails only the product whose material_type is invalid (AC8)', async () => {
+    const seedFile = buildValidSeedFile(10);
+    seedFile.products[0] = buildProduct(0, { material_type: 'WOOD' });
+    mockedReadFileSync.mockReturnValue(JSON.stringify(seedFile));
+
+    const summary = await service.run('seed.json');
+
+    expect(summary.productsFailed).toBe(1);
+    expect(summary.productsCreated).toBe(9);
+    expect(productRepository.create).not.toHaveBeenCalledWith(
+      expect.objectContaining({ sku: 'SKU-0' }),
+    );
   });
 });
