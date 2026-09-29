@@ -169,11 +169,15 @@ export class ProductsProxyService {
     id: string,
     file: Express.Multer.File,
     variantId?: string,
+    kind?: string,
   ): Promise<unknown> {
     const path = `/products/${id}/images`;
     const form = new FormData();
     if (variantId) {
       form.append('variantId', variantId);
+    }
+    if (kind) {
+      form.append('kind', kind);
     }
     form.append('file', file.buffer, {
       filename: file.originalname,

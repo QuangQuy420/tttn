@@ -18,8 +18,24 @@ export function useProducts(params: ProductListParams): UseProductsResult {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { categoryId, brandId, frameShape, page, limit, search, minPrice, maxPrice, includeAllStatuses } =
-    params;
+  const {
+    categoryId,
+    brandId,
+    frameShape,
+    materialType,
+    color,
+    genderTarget,
+    sort,
+    page,
+    limit,
+    search,
+    minPrice,
+    maxPrice,
+    includeAllStatuses,
+  } = params;
+  // Joined to a primitive so the effect dependency is stable across renders (a new array each
+  // render would refetch forever); split back before the call.
+  const brandIdsKey = params.brandIds?.join(",") ?? "";
 
   async function run() {
     setIsLoading(true);
@@ -28,7 +44,12 @@ export function useProducts(params: ProductListParams): UseProductsResult {
       const response = await getProducts({
         categoryId,
         brandId,
+        brandIds: brandIdsKey ? brandIdsKey.split(",") : undefined,
         frameShape,
+        materialType,
+        color,
+        genderTarget,
+        sort,
         page,
         limit,
         search,
@@ -54,7 +75,12 @@ export function useProducts(params: ProductListParams): UseProductsResult {
         const response = await getProducts({
           categoryId,
           brandId,
+          brandIds: brandIdsKey ? brandIdsKey.split(",") : undefined,
           frameShape,
+          materialType,
+          color,
+          genderTarget,
+          sort,
           page,
           limit,
           search,
@@ -77,7 +103,22 @@ export function useProducts(params: ProductListParams): UseProductsResult {
     return () => {
       cancelled = true;
     };
-  }, [categoryId, brandId, frameShape, page, limit, search, minPrice, maxPrice, includeAllStatuses]);
+  }, [
+    categoryId,
+    brandId,
+    brandIdsKey,
+    frameShape,
+    materialType,
+    color,
+    genderTarget,
+    sort,
+    page,
+    limit,
+    search,
+    minPrice,
+    maxPrice,
+    includeAllStatuses,
+  ]);
 
   return { products, isLoading, error, refetch: run };
 }

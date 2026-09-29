@@ -24,7 +24,7 @@ const sampleProduct: Product = {
   variants: [
     { id: "v1", color: "Gold", size: "M", extraPrice: 0, skuVariant: "SKU-1-GOLD-M" },
   ],
-  images: [{ id: "img1", imageUrl: "/img.jpg", isThumbnail: true, sortOrder: 0, variantId: null }],
+  images: [{ id: "img1", imageUrl: "/img.jpg", isThumbnail: true, sortOrder: 0, variantId: null, kind: "GALLERY" }],
 };
 
 describe("ProductDetailPage", () => {
@@ -115,9 +115,9 @@ describe("ProductDetailPage", () => {
       product: {
         ...sampleProduct,
         images: [
-          { id: "img1", imageUrl: "/img-1.jpg", isThumbnail: true, sortOrder: 0, variantId: null },
-          { id: "img2", imageUrl: "/img-2.jpg", isThumbnail: false, sortOrder: 1, variantId: null },
-          { id: "img3", imageUrl: "/img-3.jpg", isThumbnail: false, sortOrder: 2, variantId: null },
+          { id: "img1", imageUrl: "/img-1.jpg", isThumbnail: true, sortOrder: 0, variantId: null, kind: "GALLERY" },
+          { id: "img2", imageUrl: "/img-2.jpg", isThumbnail: false, sortOrder: 1, variantId: null, kind: "GALLERY" },
+          { id: "img3", imageUrl: "/img-3.jpg", isThumbnail: false, sortOrder: 2, variantId: null, kind: "GALLERY" },
         ],
       },
       isLoading: false,
@@ -139,8 +139,8 @@ describe("ProductDetailPage", () => {
       product: {
         ...sampleProduct,
         images: [
-          { id: "img1", imageUrl: "/img-1.jpg", isThumbnail: true, sortOrder: 0, variantId: null },
-          { id: "img2", imageUrl: "/img-2.jpg", isThumbnail: false, sortOrder: 1, variantId: null },
+          { id: "img1", imageUrl: "/img-1.jpg", isThumbnail: true, sortOrder: 0, variantId: null, kind: "GALLERY" },
+          { id: "img2", imageUrl: "/img-2.jpg", isThumbnail: false, sortOrder: 1, variantId: null, kind: "GALLERY" },
         ],
       },
       isLoading: false,

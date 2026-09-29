@@ -1,4 +1,10 @@
-import type { FaceShapeTag, FrameShape, GenderTarget } from "@/types/product";
+import type {
+  FaceShapeTag,
+  FrameShape,
+  GenderTarget,
+  MaterialType,
+  ProductSort,
+} from "@/types/product";
 import type { OrderStatus } from "@/types/order";
 import type { SagaLogLevel, SagaLogService, SagaLogStage } from "@/types/saga-log";
 
@@ -71,6 +77,40 @@ export const GENDER_TARGET_LABELS_VI: Record<GenderTarget, string> = {
 };
 
 export const GENDER_TARGETS: GenderTarget[] = ["UNISEX", "MALE", "FEMALE"];
+
+// Material type labels — mirrors product-service's MaterialType enum. Same wording as the seed's
+// free-text `material` for each type (plan T16).
+export const MATERIAL_TYPE_LABELS_VI: Record<MaterialType, string> = {
+  ACETATE: "Nhựa Acetate",
+  METAL: "Kim loại",
+  TITANIUM: "Titan",
+  TR90: "Nhựa dẻo TR90",
+  PLASTIC: "Nhựa",
+  MIXED: "Kết hợp kim loại & nhựa",
+};
+
+export function formatMaterialTypeVi(type: MaterialType): string {
+  return MATERIAL_TYPE_LABELS_VI[type];
+}
+
+// Fixed display order for the material-type selects (admin form + storefront filter).
+export const MATERIAL_TYPES: MaterialType[] = [
+  "ACETATE",
+  "METAL",
+  "TITANIUM",
+  "TR90",
+  "PLASTIC",
+  "MIXED",
+];
+
+// Storefront sort options — mirrors product-service's `sort` query param.
+export const PRODUCT_SORT_LABELS_VI: Record<ProductSort, string> = {
+  newest: "Mới nhất",
+  price_asc: "Giá thấp đến cao",
+  price_desc: "Giá cao đến thấp",
+};
+
+export const PRODUCT_SORTS: ProductSort[] = ["newest", "price_asc", "price_desc"];
 
 // Order status labels — mirrors order-service's OrderStatus enum (see @/types/order).
 export const ORDER_STATUS_LABELS_VI: Record<OrderStatus, string> = {

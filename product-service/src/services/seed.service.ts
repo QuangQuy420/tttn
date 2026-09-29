@@ -15,6 +15,8 @@ import { FrameShape } from '../db/enums/frame-shape.enum';
 import { GenderTarget } from '../db/enums/gender-target.enum';
 import { ProductStatus } from '../db/enums/product-status.enum';
 import { FaceShape } from '../db/enums/face-shape.enum';
+import { MaterialType } from '../db/enums/material-type.enum';
+import { ImageKind } from '../db/enums/image-kind.enum';
 
 interface SeedBrandInput {
   name: string;
@@ -42,6 +44,8 @@ interface SeedImageInput {
   sort_order?: number;
   /** `sku_variant` of a variant on the same product to attach this image to instead of the base product. */
   variant_sku?: string;
+  /** `GALLERY` (default) or `TRY_ON` (transparent PNG, at most one per product). */
+  kind?: string;
 }
 
 interface SeedProductInput {
@@ -55,6 +59,11 @@ interface SeedProductInput {
   face_shapes?: string[];
   gender_target: string;
   material?: string | null;
+  material_type?: string | null;
+  lens_width_mm?: number | null;
+  bridge_width_mm?: number | null;
+  temple_length_mm?: number | null;
+  frame_width_mm?: number | null;
   base_price: number;
   status?: string;
   variants: SeedVariantInput[];
@@ -257,6 +266,13 @@ export class SeedService {
           `product ${productInput.sku} status`,
         )
       : ProductStatus.DRAFT;
+    const materialType = productInput.material_type
+      ? this.parseEnum(
+          MaterialType,
+          productInput.material_type,
+          `product ${productInput.sku} material_type`,
+        )
+      : null;
     const faceShapes = (productInput.face_shapes ?? []).map((faceShape) =>
       this.parseEnum(
         FaceShape,
@@ -276,6 +292,11 @@ export class SeedService {
       frameShape,
       genderTarget,
       material: productInput.material ?? null,
+      materialType,
+      lensWidthMm: productInput.lens_width_mm ?? null,
+      bridgeWidthMm: productInput.bridge_width_mm ?? null,
+      templeLengthMm: productInput.temple_length_mm ?? null,
+      frameWidthMm: productInput.frame_width_mm ?? null,
       basePrice: productInput.base_price,
       status,
     });
@@ -315,12 +336,20 @@ export class SeedService {
             );
           }
         }
+        const kind = imageInput.kind
+          ? this.parseEnum(
+              ImageKind,
+              imageInput.kind,
+              `product ${productInput.sku} image kind`,
+            )
+          : ImageKind.GALLERY;
         await this.productImagesService.create({
           productId: product.id,
           variantId,
           imageUrl: imageInput.image_url,
           isThumbnail: imageInput.is_thumbnail ?? false,
           sortOrder: imageInput.sort_order ?? 0,
+          kind,
         });
         imagesCreated += 1;
       }

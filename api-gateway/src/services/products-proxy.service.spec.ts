@@ -2,18 +2,19 @@ import { HttpService } from '@nestjs/axios';
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AxiosError, AxiosResponse } from 'axios';
+import * as FormData from 'form-data';
 import { of, throwError } from 'rxjs';
 import { ProductsProxyService } from './products-proxy.service';
 
 describe('ProductsProxyService', () => {
   let service: ProductsProxyService;
-  let httpService: { get: jest.Mock };
+  let httpService: { get: jest.Mock; post: jest.Mock };
   let configService: { get: jest.Mock };
 
   const PRODUCT_SERVICE_URL = 'http://product-service:3002';
 
   beforeEach(() => {
-    httpService = { get: jest.fn() };
+    httpService = { get: jest.fn(), post: jest.fn() };
     configService = {
       get: jest.fn().mockReturnValue({
         productServiceUrl: PRODUCT_SERVICE_URL,
@@ -96,6 +97,42 @@ describe('ProductsProxyService', () => {
         { params: {} },
       );
       expect(result).toEqual(body);
+    });
+  });
+
+  describe('uploadProductImage', () => {
+    const file = {
+      buffer: Buffer.from('png-bytes'),
+      originalname: 'try-on.png',
+      mimetype: 'image/png',
+    } as Express.Multer.File;
+
+    function sentFormBody(): string {
+      const form = httpService.post.mock.calls[0][1] as FormData;
+      return form.getBuffer().toString();
+    }
+
+    it('appends kind to the multipart form when given and forwards to POST /products/:id/images', async () => {
+      const body = { id: 'img-1', kind: 'TRY_ON' };
+      httpService.post.mockReturnValue(of(axiosResponse(body)));
+
+      const result = await service.uploadProductImage('p1', file, undefined, 'TRY_ON');
+
+      expect(httpService.post).toHaveBeenCalledWith(
+        `${PRODUCT_SERVICE_URL}/products/p1/images`,
+        expect.any(FormData),
+        expect.objectContaining({ headers: expect.any(Object) }),
+      );
+      expect(sentFormBody()).toMatch(/name="kind"\r\n\r\nTRY_ON\r\n/);
+      expect(result).toEqual(body);
+    });
+
+    it('does not append kind when it is not given', async () => {
+      httpService.post.mockReturnValue(of(axiosResponse({ id: 'img-1' })));
+
+      await service.uploadProductImage('p1', file);
+
+      expect(sentFormBody()).not.toContain('name="kind"');
     });
   });
 

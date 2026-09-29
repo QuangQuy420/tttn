@@ -9,7 +9,7 @@ import { useAvailableFrameShapes } from "@/hooks/useAvailableFrameShapes";
 import { useBrands } from "@/hooks/useBrands";
 import { useCategories } from "@/hooks/useCategories";
 import { useProducts } from "@/hooks/useProducts";
-import type { FrameShape } from "@/types/product";
+import type { FrameShape, GenderTarget, MaterialType, ProductSort } from "@/types/product";
 import { HeroCarousel } from "./HeroCarousel";
 import { ProductFilters } from "./ProductFilters";
 import { ProductGrid } from "./ProductGrid";
@@ -19,8 +19,12 @@ const SEARCH_DEBOUNCE_MS = 300;
 
 interface FilterUpdate {
   categoryId?: string;
-  brandId?: string;
+  brandIds?: string[];
   frameShape?: FrameShape;
+  materialType?: MaterialType;
+  color?: string;
+  genderTarget?: GenderTarget;
+  sort?: ProductSort;
   minPrice?: number;
   maxPrice?: number;
   search?: string;
@@ -33,16 +37,29 @@ export function ProductListPage() {
   const searchParams = useSearchParams();
 
   const categoryId = searchParams.get("categoryId") ?? undefined;
-  const brandId = searchParams.get("brandId") ?? undefined;
+  // `brandIds` is comma-separated; a legacy single `brandId` link is merged in so old
+  // bookmarks keep working (it is rewritten as `brandIds` on the next filter change).
+  const brandIds = [
+    ...(searchParams.get("brandIds")?.split(",") ?? []),
+    ...(searchParams.get("brandId") ? [searchParams.get("brandId") as string] : []),
+  ].filter((id, index, all) => id && all.indexOf(id) === index);
   const frameShape = (searchParams.get("frameShape") as FrameShape | null) ?? undefined;
+  const materialType = (searchParams.get("materialType") as MaterialType | null) ?? undefined;
+  const color = searchParams.get("color") ?? undefined;
+  const genderTarget = (searchParams.get("genderTarget") as GenderTarget | null) ?? undefined;
+  const sort = (searchParams.get("sort") as ProductSort | null) ?? undefined;
   const minPrice = searchParams.has("minPrice") ? Number(searchParams.get("minPrice")) : undefined;
   const maxPrice = searchParams.has("maxPrice") ? Number(searchParams.get("maxPrice")) : undefined;
   const search = searchParams.get("search") ?? undefined;
 
   const { products, isLoading, error } = useProducts({
     categoryId,
-    brandId,
+    brandIds,
     frameShape,
+    materialType,
+    color,
+    genderTarget,
+    sort,
     minPrice,
     maxPrice,
     search,
@@ -65,8 +82,12 @@ export function ProductListPage() {
   function updateFilters(next: FilterUpdate) {
     const params = new URLSearchParams(searchParams.toString());
     const nextCategoryId = "categoryId" in next ? next.categoryId : categoryId;
-    const nextBrandId = "brandId" in next ? next.brandId : brandId;
+    const nextBrandIds = "brandIds" in next ? next.brandIds : brandIds;
     const nextFrameShape = "frameShape" in next ? next.frameShape : frameShape;
+    const nextMaterialType = "materialType" in next ? next.materialType : materialType;
+    const nextColor = "color" in next ? next.color : color;
+    const nextGenderTarget = "genderTarget" in next ? next.genderTarget : genderTarget;
+    const nextSort = "sort" in next ? next.sort : sort;
     const nextMinPrice = "minPrice" in next ? next.minPrice : minPrice;
     const nextMaxPrice = "maxPrice" in next ? next.maxPrice : maxPrice;
     const nextSearch = "search" in next ? next.search : search;
@@ -74,11 +95,25 @@ export function ProductListPage() {
     if (nextCategoryId) params.set("categoryId", nextCategoryId);
     else params.delete("categoryId");
 
-    if (nextBrandId) params.set("brandId", nextBrandId);
-    else params.delete("brandId");
+    params.delete("brandId");
+    if (nextBrandIds && nextBrandIds.length > 0) params.set("brandIds", nextBrandIds.join(","));
+    else params.delete("brandIds");
 
     if (nextFrameShape) params.set("frameShape", nextFrameShape);
     else params.delete("frameShape");
+
+    if (nextMaterialType) params.set("materialType", nextMaterialType);
+    else params.delete("materialType");
+
+    if (nextColor) params.set("color", nextColor);
+    else params.delete("color");
+
+    if (nextGenderTarget) params.set("genderTarget", nextGenderTarget);
+    else params.delete("genderTarget");
+
+    // "newest" is the backend default — keep it out of the URL.
+    if (nextSort && nextSort !== "newest") params.set("sort", nextSort);
+    else params.delete("sort");
 
     if (nextMinPrice !== undefined) params.set("minPrice", String(nextMinPrice));
     else params.delete("minPrice");
@@ -93,7 +128,7 @@ export function ProductListPage() {
     router.push(query ? `/?${query}` : "/");
   }
 
-  // updateFilters closes over this render's categoryId/brandId/frameShape/minPrice/maxPrice/searchParams.
+  // updateFilters closes over this render's categoryId/brandIds/frameShape/minPrice/maxPrice/searchParams.
   // The debounce timer below can fire well after a later render (e.g. a pill click) has moved
   // those values on — reading it through a ref kept fresh every render (instead of calling the
   // directly-closed-over updateFilters) means the timer always applies the search term on top of
@@ -166,16 +201,24 @@ export function ProductListPage() {
           brands={brands}
           categories={categories}
           frameShapes={frameShapes}
-          brandId={brandId}
+          brandIds={brandIds}
           categoryId={categoryId}
           frameShape={frameShape}
+          materialType={materialType}
+          color={color}
+          genderTarget={genderTarget}
+          sort={sort}
           minPrice={minPrice}
           maxPrice={maxPrice}
           onApplyFilters={(filters) =>
             updateFilters({
-              brandId: filters.brandId,
+              brandIds: filters.brandIds,
               categoryId: filters.categoryId,
               frameShape: filters.frameShape,
+              materialType: filters.materialType,
+              color: filters.color?.trim() || undefined,
+              genderTarget: filters.genderTarget,
+              sort: filters.sort,
               minPrice: filters.minPrice,
               maxPrice: filters.maxPrice,
             })

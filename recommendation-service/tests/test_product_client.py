@@ -101,3 +101,28 @@ def test_list_products_raises_unavailable_error_when_unreachable(
 
     with pytest.raises(ProductServiceUnavailableError):
         asyncio.run(client.list_products(face_shape="ROUND"))
+
+
+def test_list_products_parses_image_kind_and_defaults_to_gallery(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    base_image = {"variantId": None, "isThumbnail": False, "sortOrder": 0}
+    item = {
+        **_PRODUCT_ITEM,
+        "images": [
+            {**base_image, "id": "i1", "imageUrl": "http://img/try-on.png", "kind": "TRY_ON"},
+            {**base_image, "id": "i2", "imageUrl": "http://img/legacy.png"},  # no `kind`
+        ],
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"items": [item]})
+
+    _install_mock_transport(monkeypatch, httpx.MockTransport(handler))
+    client = HttpxProductServiceClient(_SETTINGS)
+
+    products = asyncio.run(client.list_products(face_shape="ROUND"))
+
+    images = products[0].images
+    assert images[0].kind == "TRY_ON"
+    assert images[1].kind == "GALLERY"

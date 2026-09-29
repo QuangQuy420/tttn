@@ -9,6 +9,7 @@ import { LoadingState } from "@/components/common/LoadingState";
 import { useFaceTracking } from "@/hooks/useFaceTracking";
 import { useProductBySlug } from "@/hooks/useProduct";
 import { useProducts } from "@/hooks/useProducts";
+import { pickTryOnImage } from "@/lib/productImages";
 
 interface TryOnPageProps {
   // Omitted for the camera-first landing state (nav's "Thử Kính" tab, no product chosen yet) —
@@ -43,7 +44,7 @@ export function TryOnPage({ slug }: TryOnPageProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const thumbnail = product?.images.find((image) => image.isThumbnail) ?? product?.images[0];
+  const thumbnail = product ? pickTryOnImage(product) : undefined;
 
   const { status, errorMessage } = useFaceTracking({
     videoRef,
@@ -152,8 +153,7 @@ export function TryOnPage({ slug }: TryOnPageProps) {
           )}
           <div className="try-on__switcher">
             {switchableProducts.map((item) => {
-              const itemThumbnail =
-                item.images.find((image) => image.isThumbnail) ?? item.images[0];
+              const itemThumbnail = pickTryOnImage(item);
               return (
                 <button
                   key={item.id}

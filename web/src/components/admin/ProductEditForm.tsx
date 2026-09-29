@@ -15,6 +15,8 @@ import {
   GENDER_TARGETS,
   formatFrameShapeVi,
   GENDER_TARGET_LABELS_VI,
+  MATERIAL_TYPE_LABELS_VI,
+  MATERIAL_TYPES,
 } from "@/lib/labels";
 import type { Brand } from "@/types/product";
 import type { Category } from "@/types/category";
@@ -22,6 +24,7 @@ import type {
   FaceShapeTag,
   FrameShape,
   GenderTarget,
+  MaterialType,
   Product,
   ProductStatus,
 } from "@/types/product";
@@ -34,6 +37,27 @@ interface ProductEditFormProps {
   product: Product | null;
 }
 
+type MeasurementKey = "lensWidthMm" | "bridgeWidthMm" | "templeLengthMm" | "frameWidthMm";
+
+interface MeasurementField {
+  key: MeasurementKey;
+  label: string;
+  min: number;
+  max: number;
+}
+
+// Frame measurements in mm (integers) — ranges mirror product-service's CreateProductDto.
+const MEASUREMENT_FIELDS: MeasurementField[] = [
+  { key: "lensWidthMm", label: "Rộng tròng", min: 40, max: 65 },
+  { key: "bridgeWidthMm", label: "Cầu mũi", min: 12, max: 26 },
+  { key: "templeLengthMm", label: "Chiều dài càng", min: 120, max: 160 },
+  { key: "frameWidthMm", label: "Tổng chiều ngang", min: 110, max: 160 },
+];
+
+function toMeasurementInput(value: number | null | undefined): string {
+  return value == null ? "" : String(value);
+}
+
 interface FormState {
   name: string;
   categoryId: string;
@@ -41,6 +65,11 @@ interface FormState {
   frameShape: FrameShape;
   genderTarget: GenderTarget;
   material: string;
+  materialType: MaterialType | "";
+  lensWidthMm: string;
+  bridgeWidthMm: string;
+  templeLengthMm: string;
+  frameWidthMm: string;
   basePrice: string;
   description: string;
   faceFitNote: string;
@@ -56,6 +85,11 @@ function blankForm(): FormState {
     frameShape: "ROUND",
     genderTarget: "UNISEX",
     material: "",
+    materialType: "",
+    lensWidthMm: "",
+    bridgeWidthMm: "",
+    templeLengthMm: "",
+    frameWidthMm: "",
     basePrice: "",
     description: "",
     faceFitNote: "",
@@ -73,6 +107,11 @@ function formFromProduct(product: Product): FormState {
     frameShape: product.frameShape,
     genderTarget: product.genderTarget,
     material: product.material ?? "",
+    materialType: product.materialType ?? "",
+    lensWidthMm: toMeasurementInput(product.lensWidthMm),
+    bridgeWidthMm: toMeasurementInput(product.bridgeWidthMm),
+    templeLengthMm: toMeasurementInput(product.templeLengthMm),
+    frameWidthMm: toMeasurementInput(product.frameWidthMm),
     basePrice: String(product.basePrice),
     description: product.description ?? "",
     faceFitNote: product.faceFitNote ?? "",
@@ -154,6 +193,24 @@ export function ProductEditForm({ product }: ProductEditFormProps) {
       return;
     }
 
+    // Empty = not entered (null); otherwise a whole number within the field's range.
+    const measurements = {} as Record<MeasurementKey, number | null>;
+    for (const field of MEASUREMENT_FIELDS) {
+      const raw = form[field.key].trim();
+      if (!raw) {
+        measurements[field.key] = null;
+        continue;
+      }
+      const value = Number(raw);
+      if (!Number.isInteger(value) || value < field.min || value > field.max) {
+        setError(
+          `${field.label} phải là số nguyên từ ${field.min} đến ${field.max} mm.`,
+        );
+        return;
+      }
+      measurements[field.key] = value;
+    }
+
     const payload = {
       name: form.name.trim(),
       categoryId: form.categoryId,
@@ -161,6 +218,8 @@ export function ProductEditForm({ product }: ProductEditFormProps) {
       frameShape: form.frameShape,
       genderTarget: form.genderTarget,
       material: form.material.trim() || null,
+      materialType: form.materialType || null,
+      ...measurements,
       basePrice,
       description: form.description.trim() || null,
       faceFitNote: form.faceFitNote.trim() || null,
@@ -359,6 +418,30 @@ export function ProductEditForm({ product }: ProductEditFormProps) {
                 </div>
               </div>
 
+              <div className="admin-form-row">
+                <div>
+                  <label className="admin-form-field" htmlFor="product-material-type">
+                    Loại chất liệu
+                  </label>
+                  <select
+                    id="product-material-type"
+                    className="admin-form-select"
+                    value={form.materialType}
+                    onChange={(event) =>
+                      updateField("materialType", event.target.value as MaterialType | "")
+                    }
+                  >
+                    <option value="">Chưa chọn</option>
+                    {MATERIAL_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {MATERIAL_TYPE_LABELS_VI[type]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div />
+              </div>
+
               <label className="admin-form-field" htmlFor="product-description">
                 Mô tả sản phẩm
               </label>
@@ -379,6 +462,29 @@ export function ProductEditForm({ product }: ProductEditFormProps) {
                 value={form.faceFitNote}
                 onChange={(event) => updateField("faceFitNote", event.target.value)}
               />
+            </div>
+
+            <div className="admin-form-card">
+              <div className="admin-form-card__title">Kích thước gọng (mm)</div>
+              <div className="admin-form-row admin-form-row--wrap">
+                {MEASUREMENT_FIELDS.map((field) => (
+                  <div key={field.key}>
+                    <label className="admin-form-field" htmlFor={`product-${field.key}`}>
+                      {field.label} ({field.min}–{field.max})
+                    </label>
+                    <input
+                      id={`product-${field.key}`}
+                      type="number"
+                      min={field.min}
+                      max={field.max}
+                      step="1"
+                      className="admin-form-input"
+                      value={form[field.key]}
+                      onChange={(event) => updateField(field.key, event.target.value)}
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="admin-form-card">

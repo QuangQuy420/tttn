@@ -59,6 +59,7 @@ class ProductImageDto(BaseModel):
     imageUrl: str
     isThumbnail: bool
     sortOrder: int
+    kind: str = "GALLERY"
 
 
 class BrandSummaryDto(BaseModel):

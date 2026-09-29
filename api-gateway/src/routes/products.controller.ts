@@ -110,9 +110,15 @@ export class ProductsController {
   uploadImage(
     @Param('id') id: string,
     @Body('variantId') variantId: string | undefined,
+    @Body('kind') kind: string | undefined,
     @UploadedFile() file: Express.Multer.File,
   ): Promise<unknown> {
-    return this.productsProxyService.uploadProductImage(id, file, variantId);
+    return this.productsProxyService.uploadProductImage(
+      id,
+      file,
+      variantId,
+      kind,
+    );
   }
 
   @Patch(':id/images/:imageId')

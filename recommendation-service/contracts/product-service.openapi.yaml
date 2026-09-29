@@ -6,18 +6,20 @@ info:
     Code-first contract (see infra/docs/adr/0001-contract-sharing-mechanism.md and the
     Sprint 1 plan's Q7): written from the real NestJS implementation in
     `product-service/src`, not the other way around. Documents GET/POST/PATCH/DELETE
-    /products, POST /products/:id/images, GET /categories, GET /brands, GET /health
+    /products, POST /products/:id/images, full CRUD for /categories and /brands, and GET /health
     (admin product management pass, see .planning/2026-07-11-admin-product-management.md).
     Face shapes are stored as a product enum array; variant stock is stored on the variant.
-  version: "0.2.0"
+    0.3.0 adds material type, frame measurements (mm), image `kind` (TRY_ON) and the
+    brandIds/materialType/color/sort list filters (.planning/2026-09-29-01-catalog-enrichment-seed.md).
+  version: "0.3.0"
 servers:
   - url: http://localhost:3002
     description: product-service, direct (local dev only)
   - url: http://localhost:8080/api
     description: via api-gateway (same shapes, `/api` prefix — see api-gateway proxy)
 
-# No auth on any endpoint today — edge JWT verification is deferred (see the Sprint 1
-# plan's Q3); these routes are proxied/served unauthenticated for now.
+# Read endpoints are public. Brand/category write endpoints require `catalog:manage`
+# when requested through api-gateway; product-service trusts that edge enforcement.
 security: []
 
 tags:
@@ -59,9 +61,32 @@ paths:
             format: uuid
         - name: brandId
           in: query
+          description: Legacy single-brand filter, kept for backward compatibility — prefer `brandIds`.
           schema:
             type: string
             format: uuid
+        - name: brandIds
+          in: query
+          description: >
+            Comma-separated brand ids (`?brandIds=a,b`); matches products of any of them.
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              type: string
+              format: uuid
+        - name: materialType
+          in: query
+          schema:
+            $ref: "#/components/schemas/MaterialType"
+        - name: color
+          in: query
+          description: >
+            Matches products having at least one variant of this color (case-insensitive,
+            exact name, e.g. `Đen`).
+          schema:
+            type: string
         - name: frameShape
           in: query
           schema:
@@ -108,6 +133,15 @@ paths:
           in: query
           schema:
             type: string
+        - name: sort
+          in: query
+          description: >
+            `newest` = `createdAt` DESC; `price_asc`/`price_desc` order by `basePrice`,
+            then `createdAt` DESC as a tiebreak.
+          schema:
+            type: string
+            enum: [newest, price_asc, price_desc]
+            default: newest
         - name: page
           in: query
           schema:
@@ -157,6 +191,31 @@ paths:
           description: >
             Validation failure, or `categoryId`/`brandId` does not reference an
             existing row.
+
+  /products/slug/{slug}:
+    get:
+      tags: [products]
+      summary: Get a single product by slug
+      description: >
+        Slug-based lookup for the public product-detail URL
+        (`web`'s `/products/[slug]` route). Same response shape as
+        `GET /products/{id}`.
+      operationId: getProductBySlug
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Product found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductResponse"
+        "404":
+          description: Product not found
 
   /products/{id}:
     get:
@@ -245,6 +304,9 @@ paths:
         attaches it to that variant instead (max 5 images), and the variant must belong
         to this product. A newly uploaded image never starts as the thumbnail — the
         admin sets it explicitly via `PATCH .../images/{imageId}`.
+        `kind=TRY_ON` marks the image as the try-on overlay: it must be a PNG (checked by
+        MIME type and magic bytes), and the product's previous TRY_ON image, if any, is
+        demoted to `GALLERY` in the same transaction (at most one TRY_ON per product).
         Rejects anything that isn't `image/jpeg`, `image/png`, or `image/webp`, or is
         over 5 MB, with a 400 (server-side check, not just a client-side hint).
       operationId: uploadProductImage
@@ -269,6 +331,8 @@ paths:
                   type: string
                   format: uuid
                   description: Omit to attach the image to the base product.
+                kind:
+                  $ref: "#/components/schemas/ImageKind"
               required: [file]
       responses:
         "201":
@@ -279,7 +343,8 @@ paths:
                 $ref: "#/components/schemas/ProductImageResponse"
         "400":
           description: >
-            Missing file, disallowed content type, file over 5 MB, `variantId` not
+            Missing file, disallowed content type, file over 5 MB, `kind=TRY_ON` with a
+            non-PNG file, `variantId` not
             belonging to this product, or the group's image count limit (8 for the
             product, 5 for a variant) already reached.
         "404":
@@ -358,13 +423,109 @@ paths:
       operationId: listCategories
       responses:
         "200":
-          description: Flat list of categories (self-referential via parentId)
+          description: Public flat list of one-level categories. This remains an array, not a pagination envelope.
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: "#/components/schemas/CategoryResponse"
+
+    post:
+      tags: [categories]
+      summary: Create a category (catalog manager)
+      description: >
+        Through api-gateway, requires a bearer token with `catalog:manage`.
+        The server creates a unique slug from the name.
+      operationId: createCategory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCategoryRequest"
+      responses:
+        "201":
+          description: Category created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+
+  /categories/{id}:
+    get:
+      tags: [categories]
+      summary: Get a category by id
+      operationId: getCategoryById
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Category found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+
+    patch:
+      tags: [categories]
+      summary: Update a category (catalog manager)
+      description: >
+        Through api-gateway, requires a bearer token with `catalog:manage`. Changing
+        the name regenerates the unique slug.
+      operationId: updateCategory
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCategoryRequest"
+      responses:
+        "200":
+          description: Category updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+
+    delete:
+      tags: [categories]
+      summary: Delete a category (catalog manager)
+      description: >
+        Through api-gateway, requires a bearer token with `catalog:manage`. A category
+        referenced by a product cannot be deleted until its products are moved or deleted.
+      operationId: deleteCategory
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "204":
+          description: Category deleted
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          $ref: "#/components/responses/CategoryInUseError"
 
   /brands:
     get:
@@ -373,7 +534,7 @@ paths:
       operationId: listBrands
       responses:
         "200":
-          description: Flat list of brands
+          description: Public flat list of brands. This remains an array, not a pagination envelope.
           content:
             application/json:
               schema:
@@ -381,8 +542,117 @@ paths:
                 items:
                   $ref: "#/components/schemas/BrandResponse"
 
+    post:
+      tags: [brands]
+      summary: Create a brand (catalog manager)
+      description: >
+        Through api-gateway, requires a bearer token with `catalog:manage`. Brand names
+        are unique after trimming whitespace and case normalization.
+      operationId: createBrand
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBrandRequest"
+      responses:
+        "201":
+          description: Brand created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrandResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "409":
+          $ref: "#/components/responses/BrandNameConflictError"
+
+  /brands/{id}:
+    get:
+      tags: [brands]
+      summary: Get a brand by id
+      operationId: getBrandById
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Brand found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrandResponse"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+
+    patch:
+      tags: [brands]
+      summary: Update a brand (catalog manager)
+      description: Through api-gateway, requires a bearer token with `catalog:manage`.
+      operationId: updateBrand
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBrandRequest"
+      responses:
+        "200":
+          description: Brand updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrandResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          $ref: "#/components/responses/BrandNameConflictError"
+
+    delete:
+      tags: [brands]
+      summary: Delete a brand (catalog manager)
+      description: >
+        Through api-gateway, requires a bearer token with `catalog:manage`. A brand
+        referenced by a product cannot be deleted until its products are moved or deleted.
+      operationId: deleteBrand
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "204":
+          description: Brand deleted
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          $ref: "#/components/responses/ForbiddenError"
+        "404":
+          $ref: "#/components/responses/NotFoundError"
+        "409":
+          $ref: "#/components/responses/BrandInUseError"
+
 components:
   schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+        message:
+          type: string
+        error:
+          type: string
+      required: [statusCode, message]
+
     FrameShape:
       type: string
       enum: [ROUND, SQUARE, OVAL, CAT_EYE, AVIATOR, RECTANGLE, WAYFARER, RIMLESS]
@@ -394,6 +664,19 @@ components:
     ProductStatus:
       type: string
       enum: [DRAFT, PUBLISHED, ARCHIVED]
+
+    MaterialType:
+      type: string
+      description: >
+        Normalized frame material. The free-text `material` field stays as the display label.
+      enum: [ACETATE, METAL, TITANIUM, TR90, PLASTIC, MIXED]
+
+    ImageKind:
+      type: string
+      description: >
+        `TRY_ON` = transparent PNG used as the try-on overlay (at most one per product);
+        `GALLERY` = any other image.
+      enum: [GALLERY, TRY_ON]
 
     FaceShape:
       type: string
@@ -416,6 +699,7 @@ components:
 
     BrandResponse:
       type: object
+      description: Public and management representation of a brand.
       properties:
         id:
           type: string
@@ -425,7 +709,44 @@ components:
         logoUrl:
           type: string
           nullable: true
-      required: [id, name, logoUrl]
+        description:
+          type: string
+          nullable: true
+      required: [id, name, logoUrl, description]
+
+    CreateBrandRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        logoUrl:
+          type: string
+          format: uri
+          maxLength: 512
+          nullable: true
+        description:
+          type: string
+          nullable: true
+      required: [name]
+
+    UpdateBrandRequest:
+      type: object
+      description: Partial update — every field from CreateBrandRequest is optional.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        logoUrl:
+          type: string
+          format: uri
+          maxLength: 512
+          nullable: true
+        description:
+          type: string
+          nullable: true
 
     CategorySummary:
       type: object
@@ -441,6 +762,7 @@ components:
 
     CategoryResponse:
       type: object
+      description: Public and management representation of a one-level category.
       properties:
         id:
           type: string
@@ -449,11 +771,25 @@ components:
           type: string
         slug:
           type: string
-        parentId:
+      required: [id, name, slug]
+
+    CreateCategoryRequest:
+      type: object
+      properties:
+        name:
           type: string
-          format: uuid
-          nullable: true
-      required: [id, name, slug, parentId]
+          minLength: 1
+          maxLength: 255
+      required: [name]
+
+    UpdateCategoryRequest:
+      type: object
+      description: Partial update — the server regenerates slug when name changes.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
 
     ProductVariantResponse:
       type: object
@@ -498,7 +834,9 @@ components:
           type: boolean
         sortOrder:
           type: integer
-      required: [id, variantId, imageUrl, isThumbnail, sortOrder]
+        kind:
+          $ref: "#/components/schemas/ImageKind"
+      required: [id, variantId, imageUrl, isThumbnail, sortOrder, kind]
 
     ProductResponse:
       type: object
@@ -525,6 +863,22 @@ components:
           $ref: "#/components/schemas/GenderTarget"
         material:
           type: string
+          nullable: true
+        materialType:
+          allOf:
+            - $ref: "#/components/schemas/MaterialType"
+          nullable: true
+        lensWidthMm:
+          type: integer
+          nullable: true
+        bridgeWidthMm:
+          type: integer
+          nullable: true
+        templeLengthMm:
+          type: integer
+          nullable: true
+        frameWidthMm:
+          type: integer
           nullable: true
         basePrice:
           type: number
@@ -562,6 +916,11 @@ components:
         - frameShape
         - genderTarget
         - material
+        - materialType
+        - lensWidthMm
+        - bridgeWidthMm
+        - templeLengthMm
+        - frameWidthMm
         - basePrice
         - status
         - brand
@@ -593,6 +952,30 @@ components:
           $ref: "#/components/schemas/GenderTarget"
         material:
           type: string
+          nullable: true
+        materialType:
+          allOf:
+            - $ref: "#/components/schemas/MaterialType"
+          nullable: true
+        lensWidthMm:
+          type: integer
+          minimum: 40
+          maximum: 65
+          nullable: true
+        bridgeWidthMm:
+          type: integer
+          minimum: 12
+          maximum: 26
+          nullable: true
+        templeLengthMm:
+          type: integer
+          minimum: 120
+          maximum: 160
+          nullable: true
+        frameWidthMm:
+          type: integer
+          minimum: 110
+          maximum: 160
           nullable: true
         basePrice:
           type: number
@@ -638,6 +1021,30 @@ components:
         material:
           type: string
           nullable: true
+        materialType:
+          allOf:
+            - $ref: "#/components/schemas/MaterialType"
+          nullable: true
+        lensWidthMm:
+          type: integer
+          minimum: 40
+          maximum: 65
+          nullable: true
+        bridgeWidthMm:
+          type: integer
+          minimum: 12
+          maximum: 26
+          nullable: true
+        templeLengthMm:
+          type: integer
+          minimum: 120
+          maximum: 160
+          nullable: true
+        frameWidthMm:
+          type: integer
+          minimum: 110
+          maximum: 160
+          nullable: true
         basePrice:
           type: number
           exclusiveMinimum: true
@@ -674,3 +1081,56 @@ components:
         totalPages:
           type: integer
       required: [items, total, page, limit, totalPages]
+
+  parameters:
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    ValidationError:
+      description: Dữ liệu gửi lên không hợp lệ.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    UnauthorizedError:
+      description: Cần đăng nhập để thực hiện thao tác này.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ForbiddenError:
+      description: Bạn không có quyền quản lý danh mục.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFoundError:
+      description: Không tìm thấy thương hiệu hoặc danh mục.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    BrandNameConflictError:
+      description: Tên thương hiệu đã tồn tại.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    BrandInUseError:
+      description: Không thể xoá thương hiệu vì vẫn còn sản phẩm đang sử dụng. Vui lòng chuyển hoặc xoá sản phẩm trước.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    CategoryInUseError:
+      description: Không thể xoá danh mục vì vẫn còn sản phẩm đang sử dụng. Vui lòng chuyển hoặc xoá sản phẩm trước.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"

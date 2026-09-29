@@ -47,7 +47,8 @@ services:
       retries: 5
 
   minio:
-    image: minio/minio
+    # Community build of MinIO — the official minio/minio image is no longer pullable.
+    image: pgsty/minio
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}

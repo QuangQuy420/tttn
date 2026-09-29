@@ -133,18 +133,18 @@ describe("ProductListPage", () => {
     expect(push).toHaveBeenCalledWith("/?maxPrice=1500000");
   });
 
-  it("pushes the brandId filter onto the URL when selected in the filter panel", async () => {
+  it("pushes the brandIds filter onto the URL when a brand is checked in the filter panel", async () => {
     mockedUseProducts.mockReturnValue({ products: [sampleProduct], isLoading: false, error: null });
     const user = userEvent.setup();
 
     render(<ProductListPage />);
 
     await user.click(screen.getByRole("button", { name: /^filter$/i }));
-    await user.selectOptions(screen.getByLabelText("Thương hiệu"), "brand-1");
+    await user.click(screen.getByRole("checkbox", { name: "RayShade" }));
     expect(push).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Xong" }));
 
-    expect(push).toHaveBeenCalledWith("/?brandId=brand-1");
+    expect(push).toHaveBeenCalledWith("/?brandIds=brand-1");
   });
 
   it("pushes a debounced search filter to the URL after the user stops typing", async () => {

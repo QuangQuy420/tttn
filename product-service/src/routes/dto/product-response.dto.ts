@@ -2,6 +2,8 @@ import { FrameShape } from '../../db/enums/frame-shape.enum';
 import { GenderTarget } from '../../db/enums/gender-target.enum';
 import { ProductStatus } from '../../db/enums/product-status.enum';
 import { FaceShape } from '../../db/enums/face-shape.enum';
+import { MaterialType } from '../../db/enums/material-type.enum';
+import { ImageKind } from '../../db/enums/image-kind.enum';
 
 export class BrandSummaryDto {
   id: string;
@@ -37,6 +39,7 @@ export class ProductImageResponseDto {
   imageUrl: string;
   isThumbnail: boolean;
   sortOrder: number;
+  kind: ImageKind;
 }
 
 export class ProductResponseDto {
@@ -49,6 +52,11 @@ export class ProductResponseDto {
   frameShape: FrameShape;
   genderTarget: GenderTarget;
   material: string | null;
+  materialType: MaterialType | null;
+  lensWidthMm: number | null;
+  bridgeWidthMm: number | null;
+  templeLengthMm: number | null;
+  frameWidthMm: number | null;
   basePrice: number;
   status: ProductStatus;
   brand: BrandSummaryDto;

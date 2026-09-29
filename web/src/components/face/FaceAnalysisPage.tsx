@@ -11,6 +11,7 @@ import { useFaceAnalysis } from "@/hooks/useFaceAnalysis";
 import { useStaticFaceOverlay } from "@/hooks/useStaticFaceOverlay";
 import { getAccessToken } from "@/lib/auth/session";
 import { formatFaceShapeVi } from "@/lib/labels";
+import { pickTryOnImage } from "@/lib/productImages";
 import { FaceCameraCapture } from "./FaceCameraCapture";
 import { RecommendationPreview } from "./RecommendationPreview";
 import type { FaceAnalysisResult, FaceMeasurements } from "@/types/face";
@@ -122,9 +123,7 @@ export function FaceAnalysisPage() {
   }
 
   const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
-  const overlayThumbnail = selectedFrame
-    ? selectedFrame.images.find((image) => image.isThumbnail) ?? selectedFrame.images[0]
-    : null;
+  const overlayThumbnail = selectedFrame ? pickTryOnImage(selectedFrame) : null;
   const { status: overlayStatus, errorMessage: overlayErrorMessage } = useStaticFaceOverlay({
     photoUrl: selectedFrame ? (activeResult?.imageUrl ?? null) : null,
     overlayImageUrl: overlayThumbnail?.imageUrl ?? null,
