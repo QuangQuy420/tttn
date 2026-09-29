@@ -106,3 +106,7 @@ services:
           path: ../recommendation-service/app
         - action: rebuild
           path: ../recommendation-service/requirements.txt
+        - action: rebuild
+          path: ../recommendation-service/alembic
+        - action: rebuild
+          path: ../recommendation-service/entrypoint.sh

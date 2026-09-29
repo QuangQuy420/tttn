@@ -19,6 +19,16 @@ docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-co
 This syncs source changes for `api-gateway`, `product-service`, `web`, and
 `face-processing-service` straight into their running dev containers.
 
+## Postgres databases
+
+One Postgres server, one database per service (`POSTGRES_MULTIPLE_DATABASES` in `.env`).
+`scripts/init-multiple-dbs.sh` creates them only on the **first** boot of the `pgdata` volume.
+If your volume already exists, create a newly added database by hand, e.g.:
+
+```bash
+docker compose exec postgres createdb -U app recommendation_db
+```
+
 ## Seed data
 
 Loads `seed/products.json` into `product_db` (`product-service` only).

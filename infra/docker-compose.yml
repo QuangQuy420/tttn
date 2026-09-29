@@ -7,8 +7,8 @@
 # <service>/.env.example -> <service>/.env.
 #
 # ⚠️ api-gateway, product-service, web, face-processing-service, user-service,
-#    recommendation-service, order-service, and payment-service are real, building services
-#    (recommendation-service has no healthcheck yet, unlike the others). payment-service is a
+#    recommendation-service, order-service, and payment-service are real, building services,
+#    each with a healthcheck. payment-service is a
 #    NestJS app (message-driven: consumes `payment.create.requested` off RabbitMQ, no longer
 #    gated behind the `not-ready` Compose profile) — a bare `docker compose up --build` (no
 #    profile) now builds/starts everything, payment-service included.
@@ -207,7 +207,18 @@ services:
     build: ../recommendation-service
     env_file: ../recommendation-service/.env
     depends_on:
-      - product-service
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      product-service:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   web:
     build:
