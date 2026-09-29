@@ -6,6 +6,7 @@ import com.tttn.orderservice.dto.response.CartChangedItemResponse;
 import com.tttn.orderservice.dto.response.CheckoutResponse;
 import com.tttn.orderservice.dto.response.ProductResponse;
 import com.tttn.orderservice.dto.response.ProductVariantResponse;
+import com.tttn.orderservice.entity.CheckoutIdempotencyKey;
 import com.tttn.orderservice.entity.Order;
 import com.tttn.orderservice.entity.OrderItem;
 import com.tttn.orderservice.enums.CartItemUnavailableReason;
@@ -14,12 +15,12 @@ import com.tttn.orderservice.enums.PaymentStatus;
 import com.tttn.orderservice.enums.ProductStatus;
 import com.tttn.orderservice.exception.BadRequestException;
 import com.tttn.orderservice.exception.CartChangedException;
-import com.tttn.orderservice.exception.ExternalServiceException;
 import com.tttn.orderservice.exception.ResourceNotFoundException;
 import com.tttn.orderservice.mapper.OrderMapper;
 import com.tttn.orderservice.messaging.OrderSagaEventPublisher;
 import com.tttn.orderservice.model.cart.Cart;
 import com.tttn.orderservice.model.cart.CartItem;
+import com.tttn.orderservice.repository.CheckoutIdempotencyKeyRepository;
 import com.tttn.orderservice.repository.OrderItemRepository;
 import com.tttn.orderservice.repository.OrderRepository;
 import com.tttn.orderservice.service.CartService;
@@ -32,12 +33,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import tools.jackson.databind.json.JsonMapper;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -68,6 +71,9 @@ class OrderServiceCheckoutTest {
     @Mock
     private OrderSagaLogService orderSagaLogService;
 
+    @Mock
+    private CheckoutIdempotencyKeyRepository checkoutIdempotencyKeyRepository;
+
     private OrderServiceImpl orderService;
 
     private UUID userId;
@@ -85,7 +91,9 @@ class OrderServiceCheckoutTest {
                 productClient,
                 orderSagaEventPublisher,
                 orderMapper,
-                orderSagaLogService
+                orderSagaLogService,
+                checkoutIdempotencyKeyRepository,
+                JsonMapper.builder().build()
         );
 
         userId = UUID.randomUUID();
@@ -915,10 +923,81 @@ class OrderServiceCheckoutTest {
 
             verifyNoInteractions(orderSagaEventPublisher);
         }
+    }
+
+    @Nested
+    @DisplayName("Checkout với Idempotency-Key")
+    class CheckoutIdempotencyKeyTests {
 
         @Test
-        @DisplayName("Ném ngoại lệ khi gửi sự kiện giữ hàng thất bại")
-        void checkout_WhenStockReserveRequestPublishFails_ShouldPropagateException() {
+        @DisplayName("Lưu Idempotency-Key cùng đơn hàng khi có key")
+        void checkout_WithIdempotencyKey_ShouldSaveKeyWithResponseSnapshot() {
+            UUID orderId = UUID.randomUUID();
+            stubSuccessfulCheckout(orderId);
+
+            CheckoutResponse response = orderService.checkout(
+                    userId,
+                    checkoutRequest,
+                    "key-123",
+                    "hash-abc"
+            );
+
+            ArgumentCaptor<CheckoutIdempotencyKey> keyCaptor =
+                    ArgumentCaptor.forClass(CheckoutIdempotencyKey.class);
+
+            verify(checkoutIdempotencyKeyRepository)
+                    .saveAndFlush(keyCaptor.capture());
+
+            CheckoutIdempotencyKey savedKey = keyCaptor.getValue();
+
+            assertEquals(userId, savedKey.getUserId());
+            assertEquals("key-123", savedKey.getIdempotencyKey());
+            assertEquals("hash-abc", savedKey.getRequestHash());
+            assertEquals(orderId, savedKey.getOrderId());
+            assertEquals(orderId, response.orderId());
+            assertTrue(savedKey.getResponseBody().contains(orderId.toString()));
+            assertEquals(
+                    savedKey.getCreatedAt().plusHours(24),
+                    savedKey.getExpiresAt()
+            );
+
+            // The stock reserve event is still produced (now via the outbox) in the same call.
+            verify(orderSagaEventPublisher)
+                    .publishStockReserveRequested(eq(orderId), anyList());
+        }
+
+        @Test
+        @DisplayName("Không lưu Idempotency-Key khi không có key")
+        void checkout_WithoutIdempotencyKey_ShouldNotSaveKey() {
+            stubSuccessfulCheckout(UUID.randomUUID());
+
+            orderService.checkout(userId, checkoutRequest);
+
+            verifyNoInteractions(checkoutIdempotencyKeyRepository);
+        }
+
+        @Test
+        @DisplayName("Ném DataIntegrityViolationException khi key bị request đồng thời lưu trước")
+        void checkout_WhenKeyAlreadySavedConcurrently_ShouldPropagateException() {
+            stubSuccessfulCheckout(UUID.randomUUID());
+
+            when(checkoutIdempotencyKeyRepository
+                    .saveAndFlush(any(CheckoutIdempotencyKey.class)))
+                    .thenThrow(new DataIntegrityViolationException("duplicate key"));
+
+            // Propagating lets @Transactional roll back this order + its outbox rows.
+            assertThrows(
+                    DataIntegrityViolationException.class,
+                    () -> orderService.checkout(
+                            userId,
+                            checkoutRequest,
+                            "key-123",
+                            "hash-abc"
+                    )
+            );
+        }
+
+        private void stubSuccessfulCheckout(UUID orderId) {
             Cart cart = createCart(
                     createCartItem(
                             productId,
@@ -947,34 +1026,11 @@ class OrderServiceCheckoutTest {
                     .thenReturn(product);
 
             when(orderRepository.save(any(Order.class)))
-                    .thenAnswer(invocation -> invocation.getArgument(0));
-
-            doThrow(
-                    new ExternalServiceException(
-                            "Không thể gửi yêu cầu giữ hàng"
-                    )
-            ).when(orderSagaEventPublisher)
-                    .publishStockReserveRequested(any(), anyList());
-
-            ExternalServiceException exception =
-                    assertThrows(
-                            ExternalServiceException.class,
-                            () -> orderService.checkout(
-                                    userId,
-                                    checkoutRequest
-                            )
-                    );
-
-            assertEquals(
-                    "Không thể gửi yêu cầu giữ hàng",
-                    exception.getMessage()
-            );
-
-            verify(orderRepository, times(1))
-                    .save(any(Order.class));
-
-            verify(cartService, never())
-                    .clearCart(any(UUID.class));
+                    .thenAnswer(invocation -> {
+                        Order order = invocation.getArgument(0);
+                        order.setId(orderId);
+                        return order;
+                    });
         }
     }
 

@@ -21,6 +21,13 @@ spring:
         jdbc:
           time_zone: UTC
 
+  # OutboxRelay ticks every second; extra threads keep a slow relay tick from delaying the
+  # reconciliation and idempotency-key cleanup jobs.
+  task:
+    scheduling:
+      pool:
+        size: 3
+
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -38,6 +45,14 @@ spring:
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USER:guest}
     password: ${RABBITMQ_PASSWORD:guest}
+    # Fail fast when the broker is down so OutboxRelay reschedules instead of blocking.
+    connection-timeout: 3s
+    # OutboxRelay waits for a broker ack per message and treats unroutable (returned) messages
+    # as failures.
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
 
 
 management:
@@ -70,6 +85,11 @@ app:
   saga:
     delivery-limit: ${SAGA_QUEUE_DELIVERY_LIMIT:10}
     chaos-mode: ${SAGA_CHAOS_MODE:NONE}
+  outbox:
+    poll-interval-ms: ${OUTBOX_POLL_INTERVAL_MS:1000}
+    batch-size: ${OUTBOX_BATCH_SIZE:50}
+    max-attempts: ${OUTBOX_MAX_ATTEMPTS:20}
+    confirm-timeout-ms: ${OUTBOX_CONFIRM_TIMEOUT_MS:5000}
 
 internal:
   api-key: ${INTERNAL_API_KEY:change-me-in-.env}

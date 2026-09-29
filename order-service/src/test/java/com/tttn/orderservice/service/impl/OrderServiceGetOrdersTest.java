@@ -8,6 +8,7 @@ import com.tttn.orderservice.enums.PaymentStatus;
 import com.tttn.orderservice.exception.BadRequestException;
 import com.tttn.orderservice.mapper.OrderMapper;
 import com.tttn.orderservice.messaging.OrderSagaEventPublisher;
+import com.tttn.orderservice.repository.CheckoutIdempotencyKeyRepository;
 import com.tttn.orderservice.repository.OrderItemRepository;
 import com.tttn.orderservice.repository.OrderRepository;
 import com.tttn.orderservice.service.CartService;
@@ -29,6 +30,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import tools.jackson.databind.json.JsonMapper;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -60,6 +62,9 @@ class OrderServiceGetOrdersTest {
     @Mock
     private OrderSagaLogService orderSagaLogService;
 
+    @Mock
+    private CheckoutIdempotencyKeyRepository checkoutIdempotencyKeyRepository;
+
     private OrderServiceImpl orderService;
 
     private UUID userId;
@@ -73,7 +78,9 @@ class OrderServiceGetOrdersTest {
                 productClient,
                 orderSagaEventPublisher,
                 orderMapper,
-                orderSagaLogService
+                orderSagaLogService,
+                checkoutIdempotencyKeyRepository,
+                JsonMapper.builder().build()
         );
 
         userId = UUID.randomUUID();

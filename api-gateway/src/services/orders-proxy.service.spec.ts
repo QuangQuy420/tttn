@@ -39,4 +39,38 @@ describe('OrdersProxyService', () => {
       expect(result).toEqual(body);
     });
   });
+  describe('checkout', () => {
+    const CHECKOUT_URL = `${ORDER_SERVICE_URL}/api/v1/users/user-1/checkout`;
+    const body = { shippingAddress: 'HN', paymentMethod: 'COD' };
+
+    it('forwards Idempotency-Key and maps idempotent-replayed to replayed: true', async () => {
+      const upstream = { success: true, data: { orderId: 'o1' } };
+      httpService.post.mockReturnValue(
+        of({
+          data: upstream,
+          status: 201,
+          headers: { 'idempotent-replayed': 'true' },
+        } as unknown as AxiosResponse),
+      );
+
+      const result = await service.checkout('user-1', body, 'key-123');
+
+      expect(httpService.post).toHaveBeenCalledWith(CHECKOUT_URL, body, {
+        headers: { 'Idempotency-Key': 'key-123' },
+      });
+      expect(result).toEqual({ data: upstream, replayed: true });
+    });
+
+    it('sends no headers config when no Idempotency-Key is given', async () => {
+      const upstream = { success: true, data: { orderId: 'o2' } };
+      httpService.post.mockReturnValue(
+        of({ data: upstream, status: 201, headers: {} } as AxiosResponse),
+      );
+
+      const result = await service.checkout('user-1', body);
+
+      expect(httpService.post).toHaveBeenCalledWith(CHECKOUT_URL, body, undefined);
+      expect(result).toEqual({ data: upstream, replayed: false });
+    });
+  });
 });

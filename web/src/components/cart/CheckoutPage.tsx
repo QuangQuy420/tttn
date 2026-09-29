@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AddressBook } from "@/components/account/AddressBook";
 import { ErrorState } from "@/components/common/ErrorState";
 import { ImageWithFallback } from "@/components/common/ImageWithFallback";
@@ -12,7 +12,9 @@ import { dispatchCartChange, useCart } from "@/hooks/useCart";
 import { ApiError, checkout, refreshCart } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth/session";
 import { formatPriceVnd } from "@/lib/format/price";
+import { randomUuid } from "@/lib/uuid";
 import type { CartRefreshResult } from "@/types/cart";
+import type { CheckoutPayload } from "@/types/order";
 
 // CheckoutRequest.paymentMethod (order-service) is a free-form @NotBlank String, not an enum —
 // so any non-empty string works. This is the only payment method payment-service supports.
@@ -77,6 +79,10 @@ export function CheckoutPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(true);
   const [cartChanged, setCartChanged] = useState(false);
+  // Idempotency-Key of the last unfinished checkout and the payload it was sent with (AC12): a
+  // retry with the same payload reuses the key; any change (items, address, note, payment,
+  // prices) gets a new one, so the server never sees one key with two different bodies (AC3).
+  const pendingCheckoutRef = useRef<{ key: string; payload: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -152,7 +158,7 @@ export function CheckoutPage() {
         return;
       }
 
-      const result = await checkout(token, {
+      const payload: CheckoutPayload = {
         receiverName: selectedAddress.receiverName,
         receiverPhone: selectedAddress.receiverPhone,
         shippingAddress: selectedAddress.address,
@@ -160,7 +166,14 @@ export function CheckoutPage() {
         paymentMethod,
         variantIds: selectedVariantIds,
         expectedUnitPrices,
-      });
+      };
+      const serializedPayload = JSON.stringify(payload);
+      if (pendingCheckoutRef.current?.payload !== serializedPayload) {
+        pendingCheckoutRef.current = { key: randomUuid(), payload: serializedPayload };
+      }
+
+      const result = await checkout(token, payload, pendingCheckoutRef.current.key);
+      pendingCheckoutRef.current = null;
       dispatchCartChange();
       router.push(`/orders/${result.orderId}`);
     } catch (err) {

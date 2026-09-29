@@ -1,14 +1,14 @@
 package com.tttn.orderservice.messaging;
 
 import com.tttn.orderservice.entity.OrderItem;
+import com.tttn.orderservice.entity.OutboxEvent;
 import com.tttn.orderservice.enums.SagaChaosMode;
-import com.tttn.orderservice.exception.ExternalServiceException;
 import com.tttn.orderservice.messaging.event.OrderSagaItem;
 import com.tttn.orderservice.messaging.event.PaymentCreateRequestedEvent;
 import com.tttn.orderservice.messaging.event.StockItemsEvent;
+import com.tttn.orderservice.service.OutboxService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -18,12 +18,13 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Publishes checkout-saga events to the {@code order-saga-events} topic exchange via Spring
- * AMQP's {@link RabbitTemplate}. Every publish here is best-effort (caught, logged, never
- * thrown) EXCEPT {@link #publishStockReserveRequested}, the saga's first step — without it
- * succeeding the order can never move at all, so it throws {@link ExternalServiceException}
- * instead, letting {@code checkout()}'s {@code @Transactional} roll back the order it just
- * saved (NFR3/AC11).
+ * Produces checkout-saga events for the {@code order-saga-events} topic exchange through the
+ * transactional outbox: every method only inserts an {@code outbox_events} row via
+ * {@link OutboxService#enqueue} inside the caller's {@code @Transactional}, and
+ * {@link OutboxRelay} publishes it to RabbitMQ afterwards (publisher confirms + retry with
+ * backoff). So an event goes out if and only if the business change that produced it commits,
+ * and a RabbitMQ outage no longer fails checkout — the saga simply resumes once the broker is
+ * back (eventual consistency). Payloads and routing keys are unchanged.
  *
  * <p>{@code chaosMode} ({@code SAGA_CHAOS_MODE} env var, see {@link SagaChaosMode}) is a
  * dev/test-only knob, off by default — when set it makes the matching publish step silently
@@ -35,7 +36,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class OrderSagaEventPublisher {
 
-    private final RabbitTemplate rabbitTemplate;
+    private final OutboxService outboxService;
 
     @Value("${app.saga.chaos-mode}")
     private SagaChaosMode chaosMode;
@@ -59,19 +60,11 @@ public class OrderSagaEventPublisher {
                 toSagaItems(items)
         );
 
-        try {
-            rabbitTemplate.convertAndSend(
-                    OrderSagaRoutingKeys.EXCHANGE,
-                    OrderSagaRoutingKeys.STOCK_RESERVE_REQUESTED,
-                    event
-            );
-        } catch (Exception exception) {
-            throw new ExternalServiceException(
-                    "Không thể gửi yêu cầu giữ hàng: "
-                            + exception.getMessage(),
-                    exception
-            );
-        }
+        enqueue(
+                orderId,
+                OrderSagaRoutingKeys.STOCK_RESERVE_REQUESTED,
+                event
+        );
     }
 
     public void publishPaymentCreateRequested(
@@ -99,17 +92,19 @@ public class OrderSagaEventPublisher {
                 paymentMethod
         );
 
-        publishBestEffort(
+        enqueue(
+                orderId,
                 OrderSagaRoutingKeys.PAYMENT_CREATE_REQUESTED,
                 event
         );
     }
 
     /**
-     * @return {@code true} if the local publish call did not throw (best-effort — no publisher
-     * confirms, see plan's Risks & dependencies), {@code false} if it was caught and logged.
-     * Callers use this to drive {@code Order.stockReleasePending} (FR7): set the flag
-     * {@code true} before calling, then {@code false} only when this returns {@code true}.
+     * @return {@code true} once the event is durably queued in the outbox (the relay delivers it
+     * with retries). Callers use this to drive {@code Order.stockReleasePending} (FR7): set the
+     * flag {@code true} before calling, then {@code false} only when this returns {@code true}.
+     * An enqueue failure throws and rolls back the caller's transaction instead of returning
+     * {@code false}.
      */
     public boolean publishStockReleaseRequested(
             UUID orderId,
@@ -121,34 +116,27 @@ public class OrderSagaEventPublisher {
                 toSagaItems(items)
         );
 
-        return publishBestEffort(
+        enqueue(
+                orderId,
                 OrderSagaRoutingKeys.STOCK_RELEASE_REQUESTED,
                 event
         );
+
+        return true;
     }
 
-    private boolean publishBestEffort(
+    private void enqueue(
+            UUID orderId,
             String routingKey,
             Object event
     ) {
-        try {
-            rabbitTemplate.convertAndSend(
-                    OrderSagaRoutingKeys.EXCHANGE,
-                    routingKey,
-                    event
-            );
-
-            return true;
-        } catch (Exception exception) {
-            log.error(
-                    "Không thể gửi sự kiện saga '{}': {}",
-                    routingKey,
-                    exception.getMessage(),
-                    exception
-            );
-
-            return false;
-        }
+        outboxService.enqueue(
+                OrderSagaRoutingKeys.EXCHANGE,
+                routingKey,
+                OutboxEvent.AGGREGATE_ORDER,
+                orderId,
+                event
+        );
     }
 
     private List<OrderSagaItem> toSagaItems(List<OrderItem> items) {

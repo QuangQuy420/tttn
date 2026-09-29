@@ -2,6 +2,7 @@ package com.tttn.orderservice.config;
 
 import com.tttn.orderservice.messaging.OrderSagaRoutingKeys;
 import com.tttn.orderservice.messaging.ProductEventRoutingKeys;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.FanoutExchange;
@@ -12,6 +13,7 @@ import org.springframework.amqp.support.converter.JacksonJavaTypeMapper;
 import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.amqp.autoconfigure.RabbitTemplateCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -32,6 +34,7 @@ import org.springframework.context.annotation.Configuration;
  * own quorum queue and its own dead-letter exchange/queue, so product events never mix with
  * saga messages — see {@link com.tttn.orderservice.messaging.ProductEventListener}.
  */
+@Slf4j
 @Configuration
 public class RabbitMqConfig {
 
@@ -182,6 +185,23 @@ public class RabbitMqConfig {
                 .bind(productEventsQueue)
                 .to(productEventsExchange)
                 .with(ProductEventRoutingKeys.PRODUCT_DELETED);
+    }
+
+    // With publisher-returns + template.mandatory (application.yml), an unroutable message comes
+    // back as a basic.return. A ReturnsCallback must be set for RabbitTemplate to handle returns;
+    // it also stores the returned message on the CorrelationData, which OutboxRelay checks to
+    // count an "acked but unroutable" publish as a failure. Logging only here.
+    @Bean
+    public RabbitTemplateCustomizer returnsLoggingRabbitTemplateCustomizer() {
+        return rabbitTemplate -> rabbitTemplate.setReturnsCallback(returned ->
+                log.warn(
+                        "RabbitMQ trả lại message không định tuyến được (exchange={}, routingKey={}): {} {}",
+                        returned.getExchange(),
+                        returned.getRoutingKey(),
+                        returned.getReplyCode(),
+                        returned.getReplyText()
+                )
+        );
     }
 
     @Bean

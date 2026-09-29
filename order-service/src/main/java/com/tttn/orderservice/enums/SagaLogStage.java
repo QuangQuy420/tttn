@@ -28,5 +28,7 @@ public enum SagaLogStage {
 
     RECONCILIATION_EXHAUSTED,
 
-    DEAD_LETTERED
+    DEAD_LETTERED,
+
+    OUTBOX_FAILED
 }

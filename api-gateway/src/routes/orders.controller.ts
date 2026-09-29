@@ -3,17 +3,19 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   Param,
   Patch,
   Post,
   Put,
   Query,
   Req,
+  Res,
   UseGuards,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { AuthenticatedUser, JwtGuard } from '../auth/jwt.guard';
 import { RequirePermission } from '../auth/permissions.decorator';
 import { PermissionsGuard } from '../auth/permissions.guard';
@@ -91,11 +93,21 @@ export class OrdersController {
 
   @Post('checkout')
   @UseGuards(JwtGuard)
-  checkout(
+  async checkout(
     @Body() body: Record<string, unknown>,
     @Req() request: Request & { user: AuthenticatedUser },
+    @Res({ passthrough: true }) response: Response,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ): Promise<unknown> {
-    return this.ordersProxyService.checkout(request.user.userId, body);
+    const { data, replayed } = await this.ordersProxyService.checkout(
+      request.user.userId,
+      body,
+      idempotencyKey,
+    );
+    if (replayed) {
+      response.setHeader('Idempotent-Replayed', 'true');
+    }
+    return data;
   }
 
   @Get()

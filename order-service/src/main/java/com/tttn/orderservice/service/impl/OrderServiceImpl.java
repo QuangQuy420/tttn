@@ -5,6 +5,7 @@ import com.tttn.orderservice.dto.request.CancelOrderRequest;
 import com.tttn.orderservice.dto.request.CheckoutRequest;
 import com.tttn.orderservice.dto.request.UpdateOrderStatusRequest;
 import com.tttn.orderservice.dto.response.*;
+import com.tttn.orderservice.entity.CheckoutIdempotencyKey;
 import com.tttn.orderservice.entity.Order;
 import com.tttn.orderservice.entity.OrderItem;
 import com.tttn.orderservice.entity.OrderStatusHistory;
@@ -21,6 +22,7 @@ import com.tttn.orderservice.mapper.OrderMapper;
 import com.tttn.orderservice.messaging.OrderSagaEventPublisher;
 import com.tttn.orderservice.model.cart.Cart;
 import com.tttn.orderservice.model.cart.CartItem;
+import com.tttn.orderservice.repository.CheckoutIdempotencyKeyRepository;
 import com.tttn.orderservice.repository.OrderItemRepository;
 import com.tttn.orderservice.repository.OrderRepository;
 import com.tttn.orderservice.service.CartService;
@@ -34,6 +36,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -62,6 +65,9 @@ public class OrderServiceImpl implements OrderService {
             OrderStatus.COMPLETED
     );
 
+    // Idempotency keys are replayable for 24h (AC4).
+    private static final long IDEMPOTENCY_KEY_TTL_HOURS = 24;
+
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final CartService cartService;
@@ -69,12 +75,27 @@ public class OrderServiceImpl implements OrderService {
     private final OrderSagaEventPublisher orderSagaEventPublisher;
     private final OrderMapper orderMapper;
     private final OrderSagaLogService orderSagaLogService;
+    private final CheckoutIdempotencyKeyRepository checkoutIdempotencyKeyRepository;
+    private final JsonMapper jsonMapper;
 
+    // @Transactional here too: the call below is a self-invocation, so it would not start a
+    // transaction on its own.
     @Override
     @Transactional
     public CheckoutResponse checkout(
             UUID userId,
             CheckoutRequest request
+    ) {
+        return checkout(userId, request, null, null);
+    }
+
+    @Override
+    @Transactional
+    public CheckoutResponse checkout(
+            UUID userId,
+            CheckoutRequest request,
+            String idempotencyKey,
+            String requestHash
     ) {
         Cart cart = cartService.getCartEntity(userId);
 
@@ -258,7 +279,7 @@ public class OrderServiceImpl implements OrderService {
                 null
         );
 
-        return new CheckoutResponse(
+        CheckoutResponse response = new CheckoutResponse(
                 savedOrder.getId(),
                 savedOrder.getOrderCode(),
                 savedOrder.getTotalAmount(),
@@ -267,6 +288,36 @@ public class OrderServiceImpl implements OrderService {
                 savedOrder.getPaymentStatus(),
                 null
         );
+
+        if (idempotencyKey != null) {
+            saveIdempotencyKey(userId, idempotencyKey, requestHash, response);
+        }
+
+        return response;
+    }
+
+    // saveAndFlush (not save) so a concurrent request with the same key hits the UNIQUE
+    // (user_id, idempotency_key) index here — Postgres blocks it until the winner commits, then
+    // fails it — and the loser's order + outbox rows roll back with this transaction.
+    private void saveIdempotencyKey(
+            UUID userId,
+            String idempotencyKey,
+            String requestHash,
+            CheckoutResponse response
+    ) {
+        LocalDateTime now = LocalDateTime.now();
+
+        CheckoutIdempotencyKey key = CheckoutIdempotencyKey.builder()
+                .userId(userId)
+                .idempotencyKey(idempotencyKey)
+                .requestHash(requestHash)
+                .orderId(response.orderId())
+                .responseBody(jsonMapper.writeValueAsString(response))
+                .createdAt(now)
+                .expiresAt(now.plusHours(IDEMPOTENCY_KEY_TTL_HOURS))
+                .build();
+
+        checkoutIdempotencyKeyRepository.saveAndFlush(key);
     }
 
     @Override
