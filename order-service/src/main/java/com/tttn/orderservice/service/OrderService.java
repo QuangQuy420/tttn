@@ -20,6 +20,18 @@ public interface OrderService {
     );
 
     /**
+     * Same as {@link #checkout(UUID, CheckoutRequest)}; when {@code idempotencyKey} is not null it
+     * also saves the key (with {@code requestHash} and the response) in the same transaction as
+     * the order, so a concurrent duplicate fails on the UNIQUE index and rolls back.
+     */
+    CheckoutResponse checkout(
+            UUID userId,
+            CheckoutRequest request,
+            String idempotencyKey,
+            String requestHash
+    );
+
+    /**
      * @param page  1-based page number
      * @param limit page size, 1..100
      */

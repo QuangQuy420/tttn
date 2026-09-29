@@ -111,16 +111,31 @@ export class OrdersProxyService {
     }
   }
 
+  /**
+   * Forwards the optional `Idempotency-Key` header (only when the client sent
+   * one) and reports whether order-service replayed a stored response
+   * (`Idempotent-Replayed: true`) so the controller can pass that on.
+   */
   async checkout(
     userId: string,
     body: Record<string, unknown>,
-  ): Promise<unknown> {
+    idempotencyKey?: string,
+  ): Promise<{ data: unknown; replayed: boolean }> {
     const path = `/api/v1/users/${userId}/checkout`;
     try {
       const response = await firstValueFrom(
-        this.httpService.post(`${this.baseUrl}${path}`, body),
+        this.httpService.post(
+          `${this.baseUrl}${path}`,
+          body,
+          idempotencyKey !== undefined
+            ? { headers: { 'Idempotency-Key': idempotencyKey } }
+            : undefined,
+        ),
       );
-      return response.data;
+      return {
+        data: response.data,
+        replayed: response.headers['idempotent-replayed'] === 'true',
+      };
     } catch (error) {
       throw this.toGatewayError(error as AxiosError, path);
     }

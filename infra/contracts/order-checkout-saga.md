@@ -168,10 +168,49 @@ is fanned out to the separate order-service and product-service queues.
 - **A broker outage must never crash a publisher or consumer.** Every publish/consume failure is
   caught, logged, and retried in the background — mirroring
   `product-service/src/repositories/product-event-publisher.repository.ts`'s connect-with-retry /
-  reconnect style — with one deliberate exception: order-service's very first publish of a saga
-  (`stock.reserve.requested`, from inside `checkout()`) throws instead, so checkout fails cleanly
-  and its local transaction rolls back the order it already saved, rather than leaving an order
-  stuck in `PENDING` forever with no reservation ever attempted.
+  reconnect style. On order-service's side the retry is the transactional outbox below: a publish
+  that fails stays in the outbox and is retried with backoff, it never fails the business call.
+- **order-service produces every saga event through a transactional outbox.**
+  `stock.reserve.requested`, `payment.create.requested` and `stock.release.requested` are first
+  inserted into order-service's `outbox_events` table **in the same DB transaction** as the order
+  change that produced them, then a background relay (`OutboxRelay`, polls every ~1s, batches of
+  50, `FOR UPDATE SKIP LOCKED`) publishes them with publisher confirms. So:
+  - an event is published if and only if its order change committed (a rolled-back checkout
+    publishes nothing);
+  - a row is marked `SENT` only after the broker acks it; a nack, confirm timeout, unroutable
+    (returned) message or connection error retries with backoff 1s, 2s, 4s… capped at 60s, and
+    after 20 attempts the row becomes `FAILED` and a WARN `OUTBOX_FAILED` saga log is written;
+  - **checkout no longer fails when RabbitMQ is down** — it returns 201 with the order `PENDING`,
+    and the saga continues once the broker is back (eventual consistency). Events can reach
+    consumers ~1s (one relay poll) after the order change, or later during an outage;
+  - every message carries AMQP `messageId` = the outbox row id (same id on every retry of that
+    row), `contentType: application/json` and a `timestamp`. The JSON body and routing key are
+    exactly the payloads documented above — consumers keep reading only the body.
+  - Delivery stays **at-least-once**: a message acked by the broker whose `SENT` update then fails
+    to commit is sent again. `SagaReconciliationJob` also re-enqueues a new row (new `messageId`)
+    for an order still stuck after its threshold, so duplicates with different `messageId`s are
+    possible — consumers must stay idempotent on `orderId` + current status as described above.
+    Reconciliation skips orders that still have a `PENDING` outbox row, so a long broker outage
+    does not make it auto-cancel orders the outbox is still going to deliver.
+
+## Checkout idempotency (order-service HTTP API)
+
+`POST /api/v1/users/{userId}/checkout` (via the gateway: `POST /api/orders/checkout`) accepts an
+optional `Idempotency-Key` request header (the web client sends a UUID per checkout attempt and
+reuses it when the user retries the same content):
+
+- Same key + same request body within **24 hours** → no new order; the response is the stored
+  response of the first request (same `orderId`, status 201) plus the response header
+  `Idempotent-Replayed: true`. The replayed body is a snapshot from the first request, so
+  `orderStatus`/`paymentStatus` in it may be older than the live order — read the order to get its
+  current state.
+- Two concurrent requests with the same key → still one order; the loser gets the winner's
+  response (replayed).
+- Same key + a different body (any field: items, receiver, address, note, payment method,
+  expected prices) → **409** `"Idempotency-Key đã được dùng cho một yêu cầu khác"`.
+- Key longer than 100 characters → **400**.
+- No header → checkout runs as before (not idempotent; a warning is logged).
+- Keys are scoped per user and expire after 24h; expired keys are deleted by an hourly job.
 
 ## Queues (for reference — each service owns/declares its own)
 

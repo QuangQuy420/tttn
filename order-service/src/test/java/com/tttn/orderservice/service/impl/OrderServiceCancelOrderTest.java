@@ -11,6 +11,7 @@ import com.tttn.orderservice.exception.BadRequestException;
 import com.tttn.orderservice.exception.ResourceNotFoundException;
 import com.tttn.orderservice.mapper.OrderMapper;
 import com.tttn.orderservice.messaging.OrderSagaEventPublisher;
+import com.tttn.orderservice.repository.CheckoutIdempotencyKeyRepository;
 import com.tttn.orderservice.repository.OrderItemRepository;
 import com.tttn.orderservice.repository.OrderRepository;
 import com.tttn.orderservice.service.CartService;
@@ -27,6 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
+import tools.jackson.databind.json.JsonMapper;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -58,6 +60,9 @@ class OrderServiceCancelOrderTest {
     private OrderSagaLogService orderSagaLogService;
 
     @Mock
+    private CheckoutIdempotencyKeyRepository checkoutIdempotencyKeyRepository;
+
+    @Mock
     private CancelOrderRequest cancelOrderRequest;
 
     private OrderServiceImpl orderService;
@@ -74,7 +79,9 @@ class OrderServiceCancelOrderTest {
                 productClient,
                 orderSagaEventPublisher,
                 orderMapper,
-                orderSagaLogService
+                orderSagaLogService,
+                checkoutIdempotencyKeyRepository,
+                JsonMapper.builder().build()
         );
 
         userId = UUID.randomUUID();

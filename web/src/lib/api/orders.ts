@@ -20,10 +20,16 @@ function authHeaders(token: string): HeadersInit {
   };
 }
 
-export function checkout(token: string, payload: CheckoutPayload): Promise<CheckoutResult> {
+// idempotencyKey: api-gateway forwards the Idempotency-Key header to order-service, which
+// returns the original order (instead of placing a second one) when the same key is retried.
+export function checkout(
+  token: string,
+  payload: CheckoutPayload,
+  idempotencyKey: string,
+): Promise<CheckoutResult> {
   return apiFetchData<CheckoutResult>("/orders/checkout", {
     method: "POST",
-    headers: authHeaders(token),
+    headers: { ...authHeaders(token), "Idempotency-Key": idempotencyKey },
     body: JSON.stringify(payload),
   });
 }

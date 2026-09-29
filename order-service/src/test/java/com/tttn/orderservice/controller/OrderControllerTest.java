@@ -6,6 +6,7 @@ import com.tttn.orderservice.dto.request.CancelOrderRequest;
 import com.tttn.orderservice.dto.request.CheckoutRequest;
 import com.tttn.orderservice.dto.request.UpdateOrderStatusRequest;
 import com.tttn.orderservice.dto.response.CheckoutResponse;
+import com.tttn.orderservice.dto.response.IdempotentCheckoutResult;
 import com.tttn.orderservice.dto.response.OrderResponse;
 import com.tttn.orderservice.dto.response.OrderSummaryResponse;
 import com.tttn.orderservice.enums.OrderStatus;
@@ -15,6 +16,7 @@ import com.tttn.orderservice.exception.ConflictException;
 import com.tttn.orderservice.exception.ExternalServiceException;
 import com.tttn.orderservice.exception.GlobalExceptionHandler;
 import com.tttn.orderservice.exception.ResourceNotFoundException;
+import com.tttn.orderservice.service.CheckoutIdempotencyService;
 import com.tttn.orderservice.service.OrderService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -37,6 +39,7 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -54,6 +57,9 @@ class OrderControllerTest {
 
     @MockitoBean
     private OrderService orderService;
+
+    @MockitoBean
+    private CheckoutIdempotencyService checkoutIdempotencyService;
 
     private UUID userId;
     private UUID orderId;
@@ -80,8 +86,8 @@ class OrderControllerTest {
                     "https://payment.example.com/pay"
             );
 
-            when(orderService.checkout(eq(userId), any(CheckoutRequest.class)))
-                    .thenReturn(response);
+            when(checkoutIdempotencyService.checkout(eq(userId), any(), any(CheckoutRequest.class)))
+                    .thenReturn(new IdempotentCheckoutResult(response, false));
 
             mockMvc.perform(post("/api/v1/users/{userId}/checkout", userId)
                             .contentType(MediaType.APPLICATION_JSON)
@@ -92,7 +98,50 @@ class OrderControllerTest {
                     .andExpect(jsonPath("$.data.totalAmount").value(2400000))
                     .andExpect(jsonPath("$.data.orderStatus").value("PENDING"))
                     .andExpect(jsonPath("$.data.paymentId").value(paymentId.toString()))
-                    .andExpect(jsonPath("$.data.paymentStatus").value("PENDING"));
+                    .andExpect(jsonPath("$.data.paymentStatus").value("PENDING"))
+                    .andExpect(header().doesNotExist("Idempotent-Replayed"));
+
+            // No Idempotency-Key header → service gets a null key (backward compatible, AC5).
+            verify(checkoutIdempotencyService)
+                    .checkout(eq(userId), isNull(), any(CheckoutRequest.class));
+        }
+
+        @Test
+        void checkout_WhenReplayed_ShouldReturnCreatedWithReplayedHeader() throws Exception {
+            CheckoutResponse response = new CheckoutResponse(
+                    orderId, "ORD-20260720-001", new BigDecimal("2400000"),
+                    OrderStatus.PENDING, null, PaymentStatus.UNPAID, null
+            );
+
+            when(checkoutIdempotencyService.checkout(
+                    eq(userId), eq("key-123"), any(CheckoutRequest.class)))
+                    .thenReturn(new IdempotentCheckoutResult(response, true));
+
+            mockMvc.perform(post("/api/v1/users/{userId}/checkout", userId)
+                            .header("Idempotency-Key", "key-123")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(jsonMapper.writeValueAsString(validCheckoutRequest())))
+                    .andExpect(status().isCreated())
+                    .andExpect(header().string("Idempotent-Replayed", "true"))
+                    .andExpect(jsonPath("$.data.orderId").value(orderId.toString()));
+
+            verifyNoInteractions(orderService);
+        }
+
+        @Test
+        void checkout_WhenKeyReusedForDifferentRequest_ShouldReturnConflict() throws Exception {
+            when(checkoutIdempotencyService.checkout(
+                    eq(userId), eq("key-123"), any(CheckoutRequest.class)))
+                    .thenThrow(new ConflictException(
+                            "Idempotency-Key đã được dùng cho một yêu cầu khác"));
+
+            mockMvc.perform(post("/api/v1/users/{userId}/checkout", userId)
+                            .header("Idempotency-Key", "key-123")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(jsonMapper.writeValueAsString(validCheckoutRequest())))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.message")
+                            .value("Idempotency-Key đã được dùng cho một yêu cầu khác"));
         }
 
         @Test
@@ -112,7 +161,7 @@ class OrderControllerTest {
                     .andExpect(jsonPath("$.error.details.receiverName")
                             .value("Tên người nhận không được để trống"));
 
-            verifyNoInteractions(orderService);
+            verifyNoInteractions(orderService, checkoutIdempotencyService);
         }
 
         @Test
@@ -132,7 +181,7 @@ class OrderControllerTest {
                     .andExpect(jsonPath("$.error.details.receiverPhone")
                             .value("Số điện thoại không hợp lệ"));
 
-            verifyNoInteractions(orderService);
+            verifyNoInteractions(orderService, checkoutIdempotencyService);
         }
 
         @Test
@@ -173,7 +222,7 @@ class OrderControllerTest {
 
         @Test
         void checkout_WhenCartEmpty_ShouldReturnBadRequest() throws Exception {
-            when(orderService.checkout(eq(userId), any(CheckoutRequest.class)))
+            when(checkoutIdempotencyService.checkout(eq(userId), any(), any(CheckoutRequest.class)))
                     .thenThrow(new BadRequestException("Giỏ hàng đang trống"));
 
             mockMvc.perform(post("/api/v1/users/{userId}/checkout", userId)
@@ -185,7 +234,7 @@ class OrderControllerTest {
 
         @Test
         void checkout_WhenProductNotFound_ShouldReturnNotFound() throws Exception {
-            when(orderService.checkout(eq(userId), any(CheckoutRequest.class)))
+            when(checkoutIdempotencyService.checkout(eq(userId), any(), any(CheckoutRequest.class)))
                     .thenThrow(new ResourceNotFoundException("Không tìm thấy sản phẩm"));
 
             mockMvc.perform(post("/api/v1/users/{userId}/checkout", userId)
@@ -197,7 +246,7 @@ class OrderControllerTest {
 
         @Test
         void checkout_WhenPaymentFails_ShouldReturnBadGateway() throws Exception {
-            when(orderService.checkout(eq(userId), any(CheckoutRequest.class)))
+            when(checkoutIdempotencyService.checkout(eq(userId), any(), any(CheckoutRequest.class)))
                     .thenThrow(new ExternalServiceException("Payment service unavailable"));
 
             mockMvc.perform(post("/api/v1/users/{userId}/checkout", userId)

@@ -5,6 +5,7 @@ import com.tttn.orderservice.dto.request.CheckoutRequest;
 import com.tttn.orderservice.dto.request.UpdateOrderStatusRequest;
 import com.tttn.orderservice.dto.response.*;
 import com.tttn.orderservice.enums.OrderStatus;
+import com.tttn.orderservice.service.CheckoutIdempotencyService;
 import com.tttn.orderservice.service.OrderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -21,15 +22,30 @@ import java.util.UUID;
 public class OrderController {
 
     private final OrderService orderService;
+    private final CheckoutIdempotencyService checkoutIdempotencyService;
 
+    // Optional Idempotency-Key header: a retry with the same key replays the first response
+    // (same 201 status) with "Idempotent-Replayed: true" instead of creating a second order.
     @PostMapping("/users/{userId}/checkout")
     public ResponseEntity<ApiResponse<CheckoutResponse>> checkout(
             @PathVariable UUID userId,
+            @RequestHeader(value = "Idempotency-Key", required = false)
+            String idempotencyKey,
             @Valid @RequestBody CheckoutRequest request
     ) {
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(ApiResponse.ok(orderService.checkout(userId, request)));
+        IdempotentCheckoutResult result = checkoutIdempotencyService.checkout(
+                userId,
+                idempotencyKey,
+                request
+        );
+
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(HttpStatus.CREATED);
+
+        if (result.replayed()) {
+            builder.header("Idempotent-Replayed", "true");
+        }
+
+        return builder.body(ApiResponse.ok(result.response()));
     }
 
     @GetMapping("/users/{userId}/orders")

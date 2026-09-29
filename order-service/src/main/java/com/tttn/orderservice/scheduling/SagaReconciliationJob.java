@@ -4,11 +4,13 @@ import com.tttn.orderservice.dto.response.ReconciliationSettingsResponse;
 import com.tttn.orderservice.entity.Order;
 import com.tttn.orderservice.entity.OrderStatusHistory;
 import com.tttn.orderservice.enums.OrderStatus;
+import com.tttn.orderservice.enums.OutboxStatus;
 import com.tttn.orderservice.enums.SagaLogLevel;
 import com.tttn.orderservice.enums.SagaLogService;
 import com.tttn.orderservice.enums.SagaLogStage;
 import com.tttn.orderservice.messaging.OrderSagaEventPublisher;
 import com.tttn.orderservice.repository.OrderRepository;
+import com.tttn.orderservice.repository.OutboxEventRepository;
 import com.tttn.orderservice.service.OrderSagaLogService;
 import com.tttn.orderservice.service.ReconciliationSettingsService;
 import lombok.RequiredArgsConstructor;
@@ -71,6 +73,7 @@ public class SagaReconciliationJob {
     private final OrderSagaEventPublisher orderSagaEventPublisher;
     private final OrderSagaLogService orderSagaLogService;
     private final ReconciliationSettingsService reconciliationSettingsService;
+    private final OutboxEventRepository outboxEventRepository;
 
     // Set to "now" at the end of every tick that actually runs the reconciliation logic (never on
     // a tick that gets skipped) — see reconcile()'s elapsed-time check just below. volatile
@@ -131,6 +134,10 @@ public class SagaReconciliationJob {
 
     private void processStuckOrder(Order order, int stuckThresholdMinutes, int maxAttempts) {
         if (!isStuck(order, stuckThresholdMinutes)) {
+            return;
+        }
+
+        if (hasPendingOutboxEvent(order)) {
             return;
         }
 
@@ -210,6 +217,10 @@ public class SagaReconciliationJob {
             return;
         }
 
+        if (hasPendingOutboxEvent(order)) {
+            return;
+        }
+
         if (order.getReconciliationAttempts() >= maxAttempts) {
             markExhausted(order, maxAttempts);
             return;
@@ -225,6 +236,25 @@ public class SagaReconciliationJob {
         }
 
         bumpAttempt(order, published, SagaLogService.PRODUCT_SERVICE);
+    }
+
+    // An order whose saga event is still waiting in the outbox (e.g. RabbitMQ is down) is not
+    // stuck: OutboxRelay will deliver it. Skip it without resending or counting an attempt, so a
+    // long broker outage does not push it into markExhausted (auto-cancel).
+    private boolean hasPendingOutboxEvent(Order order) {
+        boolean pending = outboxEventRepository.existsByAggregateIdAndStatus(
+                order.getId(),
+                OutboxStatus.PENDING
+        );
+
+        if (pending) {
+            log.debug(
+                    "SagaReconciliationJob: bỏ qua đơn hàng {} vì còn sự kiện outbox đang chờ gửi",
+                    order.getId()
+            );
+        }
+
+        return pending;
     }
 
     private boolean isStuck(Order order, int stuckThresholdMinutes) {

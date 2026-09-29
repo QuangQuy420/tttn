@@ -4,6 +4,7 @@ import com.tttn.orderservice.client.ProductClient;
 import com.tttn.orderservice.enums.OrderStatus;
 import com.tttn.orderservice.mapper.OrderMapper;
 import com.tttn.orderservice.messaging.OrderSagaEventPublisher;
+import com.tttn.orderservice.repository.CheckoutIdempotencyKeyRepository;
 import com.tttn.orderservice.repository.OrderItemRepository;
 import com.tttn.orderservice.repository.OrderRepository;
 import com.tttn.orderservice.service.CartService;
@@ -19,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.UUID;
+import tools.jackson.databind.json.JsonMapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -52,6 +54,9 @@ class OrderServiceHasPurchasedTest {
     @Mock
     private OrderSagaLogService orderSagaLogService;
 
+    @Mock
+    private CheckoutIdempotencyKeyRepository checkoutIdempotencyKeyRepository;
+
     private OrderServiceImpl orderService;
 
     @BeforeEach
@@ -63,7 +68,9 @@ class OrderServiceHasPurchasedTest {
                 productClient,
                 orderSagaEventPublisher,
                 orderMapper,
-                orderSagaLogService
+                orderSagaLogService,
+                checkoutIdempotencyKeyRepository,
+                JsonMapper.builder().build()
         );
     }
 

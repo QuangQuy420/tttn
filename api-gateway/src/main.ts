@@ -12,6 +12,8 @@ async function bootstrap() {
   // Central CORS config (README: "Central CORS, /health, rate-limit").
   app.enableCors({
     origin: corsOrigin.split(',').map((origin) => origin.trim()),
+    // Lets the browser read the checkout replay flag set by order-service.
+    exposedHeaders: ['Idempotent-Replayed'],
   });
 
   await app.listen(port);
