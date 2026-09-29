@@ -1,5 +1,6 @@
 package com.tttn.orderservice.config;
 
+import com.tttn.orderservice.messaging.BehaviorEventRoutingKeys;
 import com.tttn.orderservice.messaging.OrderSagaRoutingKeys;
 import com.tttn.orderservice.messaging.ProductEventRoutingKeys;
 import lombok.extern.slf4j.Slf4j;
@@ -48,6 +49,12 @@ public class RabbitMqConfig {
     @Bean
     public TopicExchange orderSagaEventsExchange() {
         return new TopicExchange(OrderSagaRoutingKeys.EXCHANGE, true, false);
+    }
+
+    // Exchange only — the behavior-events queue belongs to recommendation-service.
+    @Bean
+    public TopicExchange behaviorEventsExchange() {
+        return new TopicExchange(BehaviorEventRoutingKeys.EXCHANGE, true, false);
     }
 
     @Bean

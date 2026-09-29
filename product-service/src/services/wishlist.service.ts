@@ -1,7 +1,9 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { IWishlistRepository } from '../repositories/wishlist.repository';
 import { IProductRepository } from '../repositories/product.repository';
+import { IBehaviorEventPublisher } from '../repositories/behavior-event-publisher.repository';
 import {
+  BEHAVIOR_EVENT_PUBLISHER,
   PRODUCT_REPOSITORY,
   WISHLIST_REPOSITORY,
 } from '../repositories/tokens';
@@ -20,6 +22,8 @@ export class WishlistService {
     @Inject(PRODUCT_REPOSITORY)
     private readonly productRepository: IProductRepository,
     private readonly productsService: ProductsService,
+    @Inject(BEHAVIOR_EVENT_PUBLISHER)
+    private readonly behaviorEventPublisher: IBehaviorEventPublisher,
   ) {}
 
   /** Idempotent like (AC1): liking twice leaves one row and returns `created: false`. */
@@ -31,7 +35,14 @@ export class WishlistService {
     }
 
     const created = await this.wishlistRepository.add(userId, productId);
-    // plan 05: publish behavior.like / behavior.unlike when created/removed === true
+    // Only a new like is a behavior signal — a repeated like publishes nothing (AC9).
+    if (created) {
+      await this.behaviorEventPublisher.publish({
+        eventType: 'LIKE',
+        userId,
+        productId,
+      });
+    }
     return { created };
   }
 
@@ -40,7 +51,13 @@ export class WishlistService {
     productId: string,
   ): Promise<{ removed: boolean }> {
     const removed = await this.wishlistRepository.remove(userId, productId);
-    // plan 05: publish behavior.like / behavior.unlike when created/removed === true
+    if (removed) {
+      await this.behaviorEventPublisher.publish({
+        eventType: 'UNLIKE',
+        userId,
+        productId,
+      });
+    }
     return { removed };
   }
 

@@ -6,6 +6,7 @@ import { ProductsService } from './products.service';
 import { Product } from '../db/entities/product.entity';
 import { ProductStatus } from '../db/enums/product-status.enum';
 import { ProductResponseDto } from '../routes/dto/product-response.dto';
+import { IBehaviorEventPublisher } from '../repositories/behavior-event-publisher.repository';
 
 describe('WishlistService', () => {
   let wishlistRepository: jest.Mocked<IWishlistRepository>;
@@ -13,6 +14,7 @@ describe('WishlistService', () => {
     Pick<IProductRepository, 'findByIdWithBrandAndCategory'>
   >;
   let productsService: jest.Mocked<Pick<ProductsService, 'findPublishedByIds'>>;
+  let behaviorEventPublisher: jest.Mocked<IBehaviorEventPublisher>;
   let service: WishlistService;
 
   beforeEach(() => {
@@ -24,10 +26,14 @@ describe('WishlistService', () => {
     };
     productRepository = { findByIdWithBrandAndCategory: jest.fn() };
     productsService = { findPublishedByIds: jest.fn() };
+    behaviorEventPublisher = {
+      publish: jest.fn().mockResolvedValue(undefined),
+    };
     service = new WishlistService(
       wishlistRepository,
       productRepository as unknown as IProductRepository,
       productsService as unknown as ProductsService,
+      behaviorEventPublisher,
     );
   });
 
@@ -82,5 +88,58 @@ describe('WishlistService', () => {
     ]);
     expect(result.items).toEqual(products);
     expect(result.meta).toEqual({ page: 1, limit: 2, total: 3, totalPages: 2 });
+  });
+
+  describe('behavior events (AC9)', () => {
+    beforeEach(() => {
+      productRepository.findByIdWithBrandAndCategory.mockResolvedValue({
+        id: 'product-1',
+        status: ProductStatus.PUBLISHED,
+      } as Product);
+    });
+
+    it('publishes LIKE once when a new like is inserted', async () => {
+      wishlistRepository.add.mockResolvedValue(true);
+
+      await service.add('user-1', 'product-1');
+
+      expect(behaviorEventPublisher.publish).toHaveBeenCalledTimes(1);
+      expect(behaviorEventPublisher.publish).toHaveBeenCalledWith({
+        eventType: 'LIKE',
+        userId: 'user-1',
+        productId: 'product-1',
+      });
+    });
+
+    it('publishes nothing when the like already exists', async () => {
+      wishlistRepository.add.mockResolvedValue(false);
+
+      await service.add('user-1', 'product-1');
+
+      expect(behaviorEventPublisher.publish).not.toHaveBeenCalled();
+    });
+
+    it('publishes UNLIKE when an existing like is removed', async () => {
+      wishlistRepository.remove.mockResolvedValue(true);
+
+      await expect(service.remove('user-1', 'product-1')).resolves.toEqual({
+        removed: true,
+      });
+
+      expect(behaviorEventPublisher.publish).toHaveBeenCalledTimes(1);
+      expect(behaviorEventPublisher.publish).toHaveBeenCalledWith({
+        eventType: 'UNLIKE',
+        userId: 'user-1',
+        productId: 'product-1',
+      });
+    });
+
+    it('publishes nothing when removing a like that does not exist', async () => {
+      wishlistRepository.remove.mockResolvedValue(false);
+
+      await service.remove('user-1', 'product-1');
+
+      expect(behaviorEventPublisher.publish).not.toHaveBeenCalled();
+    });
   });
 });

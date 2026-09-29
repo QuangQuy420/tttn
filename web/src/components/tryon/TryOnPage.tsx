@@ -9,6 +9,7 @@ import { LoadingState } from "@/components/common/LoadingState";
 import { useFaceTracking } from "@/hooks/useFaceTracking";
 import { useProductBySlug } from "@/hooks/useProduct";
 import { useProducts } from "@/hooks/useProducts";
+import { useTrackTryOn } from "@/hooks/useTrackTryOn";
 import { pickTryOnImage } from "@/lib/productImages";
 
 interface TryOnPageProps {
@@ -55,6 +56,8 @@ export function TryOnPage({ slug }: TryOnPageProps) {
     // null, so this just shows a plain live tracking preview until a frame is chosen.
     enabled: true,
   });
+  // Plan 05 (AC6): one TRY_ON once the face has been tracked for 3 s in total with this frame.
+  useTrackTryOn(product?.id ?? null, status === "tracking");
 
   // Once the camera view has rendered once, it must never be replaced by a full-page
   // loading/error state again — that would unmount the <video>/<canvas> the running camera

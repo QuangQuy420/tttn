@@ -12,6 +12,7 @@ import { useFaceAnalysis } from "@/hooks/useFaceAnalysis";
 import { useStaticFaceOverlay } from "@/hooks/useStaticFaceOverlay";
 import { getAccessToken } from "@/lib/auth/session";
 import { formatFaceShapeVi } from "@/lib/labels";
+import { track } from "@/lib/tracking/tracker";
 import { pickTryOnImage } from "@/lib/productImages";
 import { FaceCameraCapture } from "./FaceCameraCapture";
 import { RecommendationPreview } from "./RecommendationPreview";
@@ -422,7 +423,14 @@ export function FaceAnalysisPage() {
                 style={{ maxHeight: recommendMaxHeight ?? undefined }}
               >
                 <p className="face-analysis__section-label">Gọng kính gợi ý cho bạn</p>
-                <RecommendationPreview faceShape={activeResult.faceShape} onTryOnPhoto={setSelectedFrame} />
+                <RecommendationPreview
+                  faceShape={activeResult.faceShape}
+                  onTryOnPhoto={(frame) => {
+                    setSelectedFrame(frame);
+                    // Plan 05 (AC7): photo try-on counts as a TRY_ON for the analysed face shape.
+                    track("TRY_ON", frame.id, { faceShape: activeResult.faceShape });
+                  }}
+                />
               </div>
             </div>
           </div>

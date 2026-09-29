@@ -9,6 +9,7 @@ import { LoadingState } from "@/components/common/LoadingState";
 import { ProductReviews } from "@/components/reviews/ProductReviews";
 import { WishlistButton } from "@/components/wishlist/WishlistButton";
 import { useProductBySlug } from "@/hooks/useProduct";
+import { useTrackProductView } from "@/hooks/useTrackProductView";
 import { getColorSwatch } from "@/lib/format/color";
 import { formatPriceVnd } from "@/lib/format/price";
 import {
@@ -23,6 +24,8 @@ interface ProductDetailPageProps {
 
 export function ProductDetailPage({ slug }: ProductDetailPageProps) {
   const { product, isLoading, error } = useProductBySlug(slug);
+  // Plan 05 (AC5): one VIEW after 2 s on the page — must run before the early returns below.
+  useTrackProductView(product?.id ?? null);
   const [isAddToCartOpen, setIsAddToCartOpen] = useState(false);
   // FR6/AC7: which swatch the customer picked, if any — drives which image group is shown below.
   const [selectedColor, setSelectedColor] = useState<string | null>(null);

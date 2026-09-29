@@ -11,6 +11,7 @@ import { UsersModule } from './routes/users.module';
 import { RolesModule } from './routes/roles.module';
 import { RecommendationsModule } from './routes/recommendations.module';
 import { EngagementModule } from './routes/engagement.module';
+import { EventsModule } from './routes/events.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { EngagementModule } from './routes/engagement.module';
             RolesModule,
             RecommendationsModule,
             EngagementModule,
+            EventsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: GatewayExceptionFilter }],

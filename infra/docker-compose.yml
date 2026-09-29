@@ -99,6 +99,8 @@ services:
     depends_on:
       product-service:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     healthcheck:
       # start_period matches product-service: `nest start --watch` recompiles TS from scratch
       # on every container start, too slow for the old 10s to reliably clear.

@@ -23,20 +23,26 @@ checkout saga's `order-saga-events` (`infra/contracts/order-checkout-saga.md`).
 
 Routing key = `behavior.<eventType lowercase>`.
 
-| Routing key | `eventType` | Producer (`source`) | Trigger |
-|---|---|---|---|
-| `behavior.view` | `VIEW` | `api-gateway` (`web`) | User opens a product page (web → `POST /api/events`). |
-| `behavior.try_on` | `TRY_ON` | `api-gateway` (`web`) | User tries the frame on in the AR try-on (web → `POST /api/events`). |
-| `behavior.like` | `LIKE` | `product-service` | Product added to the wishlist. |
-| `behavior.unlike` | `UNLIKE` | `product-service` | Product removed from the wishlist. |
-| `behavior.add_to_cart` | `ADD_TO_CART` | `order-service` | Item added to the cart (`CartServiceImpl`). |
-| `behavior.purchase` | `PURCHASE` | `order-service` | One event per order item after `payment.completed`. |
-| any of the above | any | `simulator` | Synthetic behavior data (plan 09), published the same way. |
+| Routing key | `eventType` | Producer (`source`) | Trigger | `eventId` strategy |
+|---|---|---|---|---|
+| `behavior.view` | `VIEW` | `api-gateway` (`web`) | Logged-in user stays on a product detail page ≥ 2 s (web `useTrackProductView` → `POST /api/events`). | random uuid v4 (browser) |
+| `behavior.try_on` | `TRY_ON` | `api-gateway` (`web`) | Webcam try-on: face tracked ≥ 3 s in total with one frame (`useTrackTryOn`); or photo try-on of a frame on the face-analysis page. Web → `POST /api/events`. | random uuid v4 (browser) |
+| `behavior.like` | `LIKE` | `product-service` | `WishlistService.add` actually inserted a row (adding an existing item sends nothing). | random uuid v4 |
+| `behavior.unlike` | `UNLIKE` | `product-service` | `WishlistService.remove` actually deleted a row. | random uuid v4 |
+| `behavior.add_to_cart` | `ADD_TO_CART` | `order-service` | `CartServiceImpl.addItem` succeeded (after the cart is saved; validation / out-of-stock failures send nothing). Sent directly with `RabbitTemplate`, best effort. | random uuid v4 |
+| `behavior.purchase` | `PURCHASE` | `order-service` | `OrderSagaEventListener` moves the order to `CONFIRMED` on `payment.completed` — one event per order item, written to the transactional outbox. | deterministic uuid v3: `UUID.nameUUIDFromBytes("purchase:<orderId>:<variantId>")` |
+| any of the above | any | `simulator` | Synthetic behavior data (plan 09), published the same way. | random uuid v4 |
 
 - `source="web"` means the event came from the browser but was **published by `api-gateway`** on
   its behalf. The browser never talks to RabbitMQ.
-- Producers are implemented in `.planning/2026-09-29-05-behavior-event-producers.md` (plan 05),
-  which also fills in the exact trigger and `eventId` strategy per producer.
+- The browser may only send `VIEW` and `TRY_ON`; the gateway takes `userId` from the JWT and
+  ignores any `userId` in the body. `LIKE` / `UNLIKE` / `ADD_TO_CART` / `PURCHASE` are only
+  published by the services.
+- `PURCHASE` goes through the `order-service` transactional outbox (`outbox_events`, aggregate
+  type `BEHAVIOR_EVENT`, not `ORDER`): the rows commit in the same transaction as `CONFIRMED`,
+  and `OutboxRelay` publishes them. There the AMQP `messageId` is the **outbox row id**, not the
+  `eventId`, so de-duplication relies on the payload `eventId` (deterministic per order + variant).
+- Producers are implemented in `.planning/2026-09-29-05-behavior-event-producers.md` (plan 05).
 
 ## Payload
 
@@ -83,7 +89,7 @@ kept as sent, even if it is in the future or very old.
 - `eventId` is UNIQUE in `recommendation_db.interactions`. The consumer inserts with
   `ON CONFLICT (event_id) DO NOTHING`, so the same event delivered twice is stored once and the
   duplicate is still acked.
-- Producers set the AMQP `messageId` to `eventId`.
+- Producers set the AMQP `messageId` to `eventId`, except `PURCHASE` (outbox row id, see above).
 - Most producers use a random uuid v4 per event. `PURCHASE` uses a **deterministic** id derived
   from the order and the item (plan 05), so a redelivered `payment.completed` publishes the same
   `eventId` again and is de-duplicated here.

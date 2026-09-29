@@ -5,6 +5,7 @@ import { AxiosError, AxiosResponse } from 'axios';
 import { of, throwError } from 'rxjs';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { BehaviorEventPublisherService } from '../src/services/behavior-event-publisher.service';
 
 /**
  * `product-service` is not necessarily running while this suite executes,
@@ -30,6 +31,9 @@ describe('Products/categories proxy (e2e)', () => {
     })
       .overrideProvider(HttpService)
       .useValue(httpService)
+      // RabbitMQ is not running here — keep the publisher from connecting in the background.
+      .overrideProvider(BehaviorEventPublisherService)
+      .useValue({ publish: jest.fn() })
       .compile();
 
     app = moduleRef.createNestApplication();

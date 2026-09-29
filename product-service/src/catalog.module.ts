@@ -30,6 +30,7 @@ import { TypeOrmProductVariantRepository } from './repositories/product-variant.
 import { TypeOrmProductImageRepository } from './repositories/product-image.repository';
 import { S3ImageStorageRepository } from './repositories/image-storage.repository';
 import { RabbitMqProductEventPublisher } from './repositories/product-event-publisher.repository';
+import { RabbitMqBehaviorEventPublisher } from './repositories/behavior-event-publisher.repository';
 import { TypeOrmInventoryRepository } from './repositories/inventory.repository';
 import { TypeOrmStockReservationRepository } from './repositories/stock-reservation.repository';
 import { RabbitMqOrderSagaEventPublisher } from './repositories/order-saga-event-publisher.repository';
@@ -45,6 +46,7 @@ import {
   PRODUCT_IMAGE_REPOSITORY,
   IMAGE_STORAGE_REPOSITORY,
   PRODUCT_EVENT_PUBLISHER,
+  BEHAVIOR_EVENT_PUBLISHER,
   INVENTORY_REPOSITORY,
   STOCK_RESERVATION_REPOSITORY,
   ORDER_SAGA_EVENT_PUBLISHER,
@@ -108,6 +110,10 @@ import {
     {
       provide: PRODUCT_EVENT_PUBLISHER,
       useClass: RabbitMqProductEventPublisher,
+    },
+    {
+      provide: BEHAVIOR_EVENT_PUBLISHER,
+      useClass: RabbitMqBehaviorEventPublisher,
     },
     {
       provide: INVENTORY_REPOSITORY,
