@@ -53,13 +53,17 @@ export class FaceAnalysisProxyService {
     }
   }
 
-  async getHistory(userId: string): Promise<unknown> {
+  async getHistory(
+    userId: string,
+    query: Record<string, unknown>,
+  ): Promise<unknown> {
     const path = '/analyses';
 
     try {
       const response = await firstValueFrom(
         this.httpService.get(`${this.baseUrl}${path}`, {
           headers: { 'X-User-Id': userId },
+          params: query,
         }),
       );
       return response.data;
@@ -93,7 +97,7 @@ export class FaceAnalysisProxyService {
   private toGatewayError(error: AxiosError, path: string): HttpException {
     if (error.response) {
       return new HttpException(
-        this.normalizeErrorBody(error.response.data) ?? error.message,
+        error.response.data ?? error.message,
         error.response.status,
       );
     }
@@ -111,24 +115,5 @@ export class FaceAnalysisProxyService {
       'Không thể kết nối tới face-processing-service',
       HttpStatus.SERVICE_UNAVAILABLE,
     );
-  }
-
-  /**
-   * `face-processing-service` (FastAPI) returns errors as `{"detail": "..."}` by default —
-   * unlike `product-service` (Nest), whose exception filter already shapes errors as
-   * `{message: "..."}`, which is the key `web`'s `apiFetch` reads (see
-   * `web/src/lib/api/client.ts`). Without this, a real domain message like "No face detected"
-   * would silently get lost and `web` would fall back to a generic status-text error.
-   */
-  private normalizeErrorBody(data: unknown): unknown {
-    if (
-      data &&
-      typeof data === 'object' &&
-      'detail' in data &&
-      !('message' in data)
-    ) {
-      return { ...data, message: (data as { detail: unknown }).detail };
-    }
-    return data;
   }
 }

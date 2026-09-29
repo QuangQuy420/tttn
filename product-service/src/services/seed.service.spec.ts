@@ -55,7 +55,7 @@ describe('SeedService', () => {
 
   beforeEach(() => {
     brandRepository = {
-      findAll: jest.fn(),
+      findPage: jest.fn(),
       findById: jest.fn(),
       findByNameKey: jest.fn().mockResolvedValue(null),
       create: jest
@@ -68,7 +68,7 @@ describe('SeedService', () => {
       delete: jest.fn(),
     };
     categoryRepository = {
-      findAll: jest.fn(),
+      findPage: jest.fn(),
       findBySlug: jest.fn().mockResolvedValue(null),
       findById: jest.fn(),
       create: jest

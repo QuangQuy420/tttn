@@ -4,10 +4,10 @@ import type {
   CheckoutResult,
   GetOrdersParams,
   Order,
-  OrderPageResponse,
   OrderSummary,
 } from "@/types/order";
-import { apiFetch } from "./client";
+import type { Paginated } from "@/types/api";
+import { apiFetchData, apiFetchPage } from "./client";
 
 // Calls api-gateway's orders proxy (api-gateway/src/routes/orders.controller.ts's
 // OrdersController, @Controller('api/orders')), which forwards to order-service's
@@ -21,7 +21,7 @@ function authHeaders(token: string): HeadersInit {
 }
 
 export function checkout(token: string, payload: CheckoutPayload): Promise<CheckoutResult> {
-  return apiFetch<CheckoutResult>("/orders/checkout", {
+  return apiFetchData<CheckoutResult>("/orders/checkout", {
     method: "POST",
     headers: authHeaders(token),
     body: JSON.stringify(payload),
@@ -31,14 +31,14 @@ export function checkout(token: string, payload: CheckoutPayload): Promise<Check
 export function getOrders(
   token: string,
   params: GetOrdersParams = {},
-): Promise<OrderPageResponse<OrderSummary>> {
+): Promise<Paginated<OrderSummary>> {
   const query = new URLSearchParams();
   if (params.status) query.set("status", params.status);
   if (params.page !== undefined) query.set("page", String(params.page));
-  if (params.size !== undefined) query.set("size", String(params.size));
+  if (params.limit !== undefined) query.set("limit", String(params.limit));
 
   const queryString = query.toString();
-  return apiFetch<OrderPageResponse<OrderSummary>>(
+  return apiFetchPage<OrderSummary>(
     `/orders${queryString ? `?${queryString}` : ""}`,
     {
       method: "GET",
@@ -48,7 +48,7 @@ export function getOrders(
 }
 
 export function getOrderById(token: string, id: string): Promise<Order> {
-  return apiFetch<Order>(`/orders/${encodeURIComponent(id)}`, {
+  return apiFetchData<Order>(`/orders/${encodeURIComponent(id)}`, {
     method: "GET",
     headers: authHeaders(token),
   });
@@ -56,7 +56,7 @@ export function getOrderById(token: string, id: string): Promise<Order> {
 
 export function cancelOrder(token: string, id: string, reason: string): Promise<Order> {
   const payload: CancelOrderPayload = { reason };
-  return apiFetch<Order>(`/orders/${encodeURIComponent(id)}/cancel`, {
+  return apiFetchData<Order>(`/orders/${encodeURIComponent(id)}/cancel`, {
     method: "POST",
     headers: authHeaders(token),
     body: JSON.stringify(payload),

@@ -16,7 +16,7 @@ is the shared source of truth for `order-service`, `payment-service`, and `produ
 | Declared by | `order-service` (`OrderSagaEventPublisher`) and `product-service` (`order-saga-event-consumer.repository.ts`) — each asserts it idempotently on startup, whichever service starts first wins, `assertExchange`/`TopicExchange` are no-ops if it already exists with matching settings |
 
 This is a separate exchange from the existing `product-events` topic exchange (catalog
-`product.updated`/`product.deleted` notifications, see
+`product.updated`/`product.deleted` notifications, see `infra/contracts/product-events.md` and
 `infra/docs/adr/0002-event-bus-selection.md`) — the checkout saga is kept a distinct bounded
 concern from catalog-change notifications.
 

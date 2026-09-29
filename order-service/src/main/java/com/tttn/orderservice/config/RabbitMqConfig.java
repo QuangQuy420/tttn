@@ -1,6 +1,7 @@
 package com.tttn.orderservice.config;
 
 import com.tttn.orderservice.messaging.OrderSagaRoutingKeys;
+import com.tttn.orderservice.messaging.ProductEventRoutingKeys;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.FanoutExchange;
@@ -26,6 +27,10 @@ import org.springframework.context.annotation.Configuration;
  * message nacked without requeue (malformed payload) or redelivered past the limit is routed by
  * the broker to {@code order-saga-events.dlq} instead of being dropped or requeued forever — see
  * {@link com.tttn.orderservice.messaging.DeadLetterListener}.
+ *
+ * <p>Also consumes product-service's {@code product-events} exchange (cart sync) through its
+ * own quorum queue and its own dead-letter exchange/queue, so product events never mix with
+ * saga messages — see {@link com.tttn.orderservice.messaging.ProductEventListener}.
  */
 @Configuration
 public class RabbitMqConfig {
@@ -33,6 +38,9 @@ public class RabbitMqConfig {
     public static final String ORDER_SERVICE_QUEUE = "order-saga-events.order-service";
     public static final String ORDER_SAGA_EVENTS_DLX = "order-saga-events.dlx";
     public static final String ORDER_SAGA_EVENTS_DLQ = "order-saga-events.dlq";
+    public static final String PRODUCT_EVENTS_QUEUE = "product-events.order-service";
+    public static final String PRODUCT_EVENTS_DLX = "product-events.dlx";
+    public static final String PRODUCT_EVENTS_DLQ = "product-events.dlq";
 
     @Bean
     public TopicExchange orderSagaEventsExchange() {
@@ -113,6 +121,67 @@ public class RabbitMqConfig {
                 .bind(orderSagaEventsQueue)
                 .to(orderSagaEventsExchange)
                 .with(OrderSagaRoutingKeys.PAYMENT_FAILED);
+    }
+
+    // Same args as product-service's assertExchange('product-events', 'topic', {durable: true})
+    // — a mismatch would make the broker close the channel.
+    @Bean
+    public TopicExchange productEventsExchange() {
+        return new TopicExchange(ProductEventRoutingKeys.EXCHANGE, true, false);
+    }
+
+    @Bean
+    public Queue productEventsQueue(
+            @Value("${app.saga.delivery-limit}")
+            int deliveryLimit
+    ) {
+        return QueueBuilder.durable(PRODUCT_EVENTS_QUEUE)
+                .quorum()
+                .deadLetterExchange(PRODUCT_EVENTS_DLX)
+                .deliveryLimit(deliveryLimit)
+                .build();
+    }
+
+    @Bean
+    public FanoutExchange productEventsDlx() {
+        return new FanoutExchange(PRODUCT_EVENTS_DLX, true, false);
+    }
+
+    @Bean
+    public Queue productEventsDlq() {
+        return new Queue(PRODUCT_EVENTS_DLQ, true);
+    }
+
+    @Bean
+    public Binding productEventsDlqBinding(
+            Queue productEventsDlq,
+            FanoutExchange productEventsDlx
+    ) {
+        return BindingBuilder
+                .bind(productEventsDlq)
+                .to(productEventsDlx);
+    }
+
+    @Bean
+    public Binding productUpdatedBinding(
+            Queue productEventsQueue,
+            TopicExchange productEventsExchange
+    ) {
+        return BindingBuilder
+                .bind(productEventsQueue)
+                .to(productEventsExchange)
+                .with(ProductEventRoutingKeys.PRODUCT_UPDATED);
+    }
+
+    @Bean
+    public Binding productDeletedBinding(
+            Queue productEventsQueue,
+            TopicExchange productEventsExchange
+    ) {
+        return BindingBuilder
+                .bind(productEventsQueue)
+                .to(productEventsExchange)
+                .with(ProductEventRoutingKeys.PRODUCT_DELETED);
     }
 
     @Bean

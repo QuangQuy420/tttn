@@ -11,6 +11,7 @@ export interface RecommendRequest {
   genderTarget?: GenderTarget;
   minPrice?: number;
   maxPrice?: number;
+  page?: number;
   limit?: number;
 }
 
@@ -28,8 +29,4 @@ export interface RecommendedProduct {
   images: ProductImage[];
   faceShapes: FaceShapeTag[];
   score: number;
-}
-
-export interface RecommendResponse {
-  items: RecommendedProduct[];
 }

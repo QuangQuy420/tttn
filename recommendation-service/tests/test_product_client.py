@@ -50,7 +50,7 @@ def test_list_products_parses_a_successful_response(monkeypatch: pytest.MonkeyPa
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured_request["url"] = request.url
-        return httpx.Response(200, json={"items": [_PRODUCT_ITEM]})
+        return httpx.Response(200, json={"success": True, "message": "Thành công", "data": [_PRODUCT_ITEM]})
 
     _install_mock_transport(monkeypatch, httpx.MockTransport(handler))
     client = HttpxProductServiceClient(_SETTINGS)
@@ -116,7 +116,7 @@ def test_list_products_parses_image_kind_and_defaults_to_gallery(
     }
 
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"items": [item]})
+        return httpx.Response(200, json={"success": True, "message": "Thành công", "data": [item]})
 
     _install_mock_transport(monkeypatch, httpx.MockTransport(handler))
     client = HttpxProductServiceClient(_SETTINGS)

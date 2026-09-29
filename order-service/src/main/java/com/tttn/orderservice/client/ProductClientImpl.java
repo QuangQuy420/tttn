@@ -1,9 +1,11 @@
 package com.tttn.orderservice.client;
 
+import com.tttn.orderservice.dto.response.ApiResponse;
 import com.tttn.orderservice.dto.response.ProductResponse;
 import com.tttn.orderservice.exception.ExternalServiceException;
 import com.tttn.orderservice.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -15,12 +17,17 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ProductClientImpl implements ProductClient {
 
+    // product-service wraps every body in the shared envelope — only `data` is the product.
+    private static final ParameterizedTypeReference<ApiResponse<ProductResponse>> PRODUCT_ENVELOPE =
+            new ParameterizedTypeReference<>() {
+            };
+
     private final RestClient productRestClient;
 
     @Override
     public ProductResponse getProductById(UUID productId) {
         try {
-            ProductResponse response = productRestClient
+            ApiResponse<ProductResponse> response = productRestClient
                     .get()
                     .uri("/products/{productId}", productId)
                     .retrieve()
@@ -49,15 +56,15 @@ public class ProductClientImpl implements ProductClient {
                                 );
                             }
                     )
-                    .body(ProductResponse.class);
+                    .body(PRODUCT_ENVELOPE);
 
-            if (response == null) {
+            if (response == null || response.data() == null) {
                 throw new ExternalServiceException(
                         "Product Service trả về dữ liệu rỗng"
                 );
             }
 
-            return response;
+            return response.data();
         } catch (ResourceNotFoundException | ExternalServiceException exception) {
             throw exception;
         } catch (RestClientException exception) {

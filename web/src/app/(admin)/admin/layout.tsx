@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { Suspense } from "react";
 import { AdminGuard, useAdminProfile } from "@/components/admin/AdminGuard";
+import { LoadingState } from "@/components/common/LoadingState";
 import { removeAccessToken } from "@/lib/auth/session";
 
 const NAV_ITEMS = [
@@ -104,7 +106,11 @@ function AdminLayoutContent({
           </aside>
 
           <div className="admin-main">
-            {children}
+            {/* Admin list pages read `?page=` via useSearchParams() (usePageParam), which Next.js
+                requires to sit inside a Suspense boundary. */}
+            <Suspense fallback={<LoadingState label="Đang tải..." />}>
+              {children}
+            </Suspense>
           </div>
         </div>
   );

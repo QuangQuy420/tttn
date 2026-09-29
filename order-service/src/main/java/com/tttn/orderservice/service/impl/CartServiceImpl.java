@@ -3,10 +3,13 @@ package com.tttn.orderservice.service.impl;
 import com.tttn.orderservice.client.ProductClient;
 import com.tttn.orderservice.dto.request.AddCartItemRequest;
 import com.tttn.orderservice.dto.request.UpdateCartItemRequest;
+import com.tttn.orderservice.dto.response.CartItemResponse;
+import com.tttn.orderservice.dto.response.CartRefreshResponse;
 import com.tttn.orderservice.dto.response.CartResponse;
 import com.tttn.orderservice.dto.response.ProductImageResponse;
 import com.tttn.orderservice.dto.response.ProductResponse;
 import com.tttn.orderservice.dto.response.ProductVariantResponse;
+import com.tttn.orderservice.enums.CartItemUnavailableReason;
 import com.tttn.orderservice.enums.ProductStatus;
 import com.tttn.orderservice.exception.BadRequestException;
 import com.tttn.orderservice.exception.ResourceNotFoundException;
@@ -15,7 +18,9 @@ import com.tttn.orderservice.model.cart.Cart;
 import com.tttn.orderservice.model.cart.CartItem;
 import com.tttn.orderservice.service.CartService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -23,7 +28,9 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -35,6 +42,7 @@ public class CartServiceImpl implements CartService {
     private static final String CART_KEY_PREFIX = "cart:";
     private static final Duration CART_TTL = Duration.ofDays(7);
     private static final int MAX_ITEM_QUANTITY = 99;
+    private static final long SCAN_BATCH_SIZE = 100;
 
     private final RedisTemplate<String, Cart> cartRedisTemplate;
     private final ProductClient productClient;
@@ -91,6 +99,7 @@ public class CartServiceImpl implements CartService {
                     product,
                     variant
             );
+            applyAvailability(item, product, variant);
         } else {
             validateStock(variant, request.quantity());
 
@@ -99,6 +108,7 @@ public class CartServiceImpl implements CartService {
                     variant,
                     request.quantity()
             );
+            applyAvailability(newItem, product, variant);
 
             cart.getItems().add(newItem);
         }
@@ -156,6 +166,7 @@ public class CartServiceImpl implements CartService {
                 product,
                 variant
         );
+        applyAvailability(cartItem, product, variant);
 
         saveCart(cart);
 
@@ -245,6 +256,205 @@ public class CartServiceImpl implements CartService {
     @Override
     public Cart getCartEntity(UUID userId) {
         return getExistingCart(userId);
+    }
+
+    @Override
+    public void syncProduct(UUID productId) {
+        if (productId == null) {
+            return;
+        }
+
+        ProductResponse product = fetchProductOrNull(productId);
+
+        ScanOptions options = ScanOptions.scanOptions()
+                .match(CART_KEY_PREFIX + "*")
+                .count(SCAN_BATCH_SIZE)
+                .build();
+
+        try (Cursor<String> keys = cartRedisTemplate.scan(options)) {
+            while (keys.hasNext()) {
+                syncCartKey(keys.next(), productId, product);
+            }
+        }
+    }
+
+    @Override
+    public CartRefreshResponse refreshCart(UUID userId) {
+        Cart cart = getOrCreateCart(userId);
+
+        if (cart.isEmpty()) {
+            return new CartRefreshResponse(
+                    cartMapper.toResponse(cart),
+                    List.of()
+            );
+        }
+
+        // One product-service call per distinct product; null = product returned 404.
+        Map<UUID, ProductResponse> products = new HashMap<>();
+
+        for (CartItem item : cart.getItems()) {
+            if (!products.containsKey(item.getProductId())) {
+                products.put(
+                        item.getProductId(),
+                        fetchProductOrNull(item.getProductId())
+                );
+            }
+        }
+
+        List<UUID> changedVariantIds = new ArrayList<>();
+        boolean cartChanged = false;
+
+        for (CartItem item : cart.getItems()) {
+            BigDecimal previousUnitPrice = item.getUnitPrice();
+            boolean previouslyAvailable =
+                    !Boolean.FALSE.equals(item.getAvailable());
+
+            cartChanged |= applyProductState(
+                    item,
+                    products.get(item.getProductId())
+            );
+
+            if (!samePrice(previousUnitPrice, item.getUnitPrice())
+                    || previouslyAvailable != item.getAvailable()) {
+                changedVariantIds.add(item.getVariantId());
+            }
+        }
+
+        if (cartChanged) {
+            saveCart(cart);
+        }
+
+        return new CartRefreshResponse(
+                cartMapper.toResponse(cart),
+                changedVariantIds
+        );
+    }
+
+    private void syncCartKey(
+            String key,
+            UUID productId,
+            ProductResponse product
+    ) {
+        Cart cart = cartRedisTemplate.opsForValue().get(key);
+
+        if (cart == null || cart.isEmpty()) {
+            return;
+        }
+
+        boolean changed = false;
+
+        for (CartItem item : cart.getItems()) {
+            if (Objects.equals(item.getProductId(), productId)) {
+                changed |= applyProductState(item, product);
+            }
+        }
+
+        if (!changed) {
+            return;
+        }
+
+        // A background sync is not user activity — keep the cart's remaining lifetime
+        // instead of resetting it to CART_TTL like saveCart() does.
+        Long ttlSeconds = cartRedisTemplate.getExpire(key);
+
+        if (ttlSeconds == null || ttlSeconds == -2) {
+            // Key expired or was cleared (e.g. checkout) since we read it.
+            return;
+        }
+
+        cartRedisTemplate
+                .opsForValue()
+                .set(
+                        key,
+                        cart,
+                        ttlSeconds > 0
+                                ? Duration.ofSeconds(ttlSeconds)
+                                : CART_TTL
+                );
+    }
+
+    /**
+     * Updates one cart item from the latest product state and returns whether anything
+     * visible to the client changed. {@code product == null} means product-service returned
+     * 404 for it.
+     */
+    private boolean applyProductState(
+            CartItem item,
+            ProductResponse product
+    ) {
+        CartItemResponse before = cartMapper.toItemResponse(item);
+
+        ProductVariantResponse variant = product == null
+                ? null
+                : findVariantOrNull(product, item.getVariantId());
+
+        if (variant != null) {
+            refreshItemSnapshot(item, product, variant);
+        }
+
+        applyAvailability(item, product, variant);
+
+        return !before.equals(cartMapper.toItemResponse(item));
+    }
+
+    private void applyAvailability(
+            CartItem item,
+            ProductResponse product,
+            ProductVariantResponse variant
+    ) {
+        CartItemUnavailableReason reason =
+                CartItemUnavailableReason.resolve(
+                        product,
+                        variant,
+                        item.getQuantity()
+                );
+
+        item.setAvailable(reason == null);
+        item.setUnavailableReason(reason);
+        item.setAvailableStock(
+                variant == null || variant.stock() == null
+                        ? 0
+                        : variant.stock()
+        );
+    }
+
+    private ProductResponse fetchProductOrNull(UUID productId) {
+        try {
+            return productClient.getProductById(productId);
+        } catch (ResourceNotFoundException exception) {
+            return null;
+        }
+    }
+
+    private ProductVariantResponse findVariantOrNull(
+            ProductResponse product,
+            UUID variantId
+    ) {
+        if (product.variants() == null) {
+            return null;
+        }
+
+        return product.variants()
+                .stream()
+                .filter(variant ->
+                        Objects.equals(
+                                variant.id(),
+                                variantId
+                        )
+                )
+                .findFirst()
+                .orElse(null);
+    }
+
+    private boolean samePrice(
+            BigDecimal first,
+            BigDecimal second
+    ) {
+        if (first == null || second == null) {
+            return first == second;
+        }
+
+        return first.compareTo(second) == 0;
     }
 
     private CartItem createCartItem(

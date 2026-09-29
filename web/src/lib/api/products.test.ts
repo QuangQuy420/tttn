@@ -1,31 +1,36 @@
-import { apiFetch } from "./client";
+import { apiFetchData, apiFetchPage } from "./client";
 import { getCategories, getProductById, getProducts, uploadProductImage } from "./products";
 
 jest.mock("./client", () => ({
   apiFetch: jest.fn(),
+  apiFetchData: jest.fn(),
+  apiFetchPage: jest.fn(),
 }));
 
-const mockedApiFetch = apiFetch as jest.Mock;
+const mockedApiFetchData = apiFetchData as jest.Mock;
+const mockedApiFetchPage = apiFetchPage as jest.Mock;
+const emptyPage = { data: [], meta: { page: 1, limit: 20, total: 0, totalPages: 0 } };
 
 describe("products api client", () => {
   afterEach(() => {
-    mockedApiFetch.mockReset();
+    mockedApiFetchData.mockReset();
+    mockedApiFetchPage.mockReset();
   });
 
   it("getProducts calls /products with no query string when no filters are given", async () => {
-    mockedApiFetch.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, totalPages: 0 });
+    mockedApiFetchPage.mockResolvedValue(emptyPage);
 
     await getProducts();
 
-    expect(mockedApiFetch).toHaveBeenCalledWith("/products");
+    expect(mockedApiFetchPage).toHaveBeenCalledWith("/products");
   });
 
   it("getProducts serializes categoryId, brandId and frameShape filters into the query string", async () => {
-    mockedApiFetch.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, totalPages: 0 });
+    mockedApiFetchPage.mockResolvedValue(emptyPage);
 
     await getProducts({ categoryId: "cat-1", brandId: "brand-1", frameShape: "AVIATOR", page: 2, limit: 10 });
 
-    const calledPath = mockedApiFetch.mock.calls[0][0] as string;
+    const calledPath = mockedApiFetchPage.mock.calls[0][0] as string;
     expect(calledPath.startsWith("/products?")).toBe(true);
     const query = new URLSearchParams(calledPath.split("?")[1]);
     expect(query.get("categoryId")).toBe("cat-1");
@@ -36,11 +41,11 @@ describe("products api client", () => {
   });
 
   it("getProducts serializes search, minPrice and maxPrice into the query string", async () => {
-    mockedApiFetch.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, totalPages: 0 });
+    mockedApiFetchPage.mockResolvedValue(emptyPage);
 
     await getProducts({ search: "aviator", minPrice: 1_500_000, maxPrice: 2_500_000 });
 
-    const calledPath = mockedApiFetch.mock.calls[0][0] as string;
+    const calledPath = mockedApiFetchPage.mock.calls[0][0] as string;
     expect(calledPath.startsWith("/products?")).toBe(true);
     const query = new URLSearchParams(calledPath.split("?")[1]);
     expect(query.get("search")).toBe("aviator");
@@ -49,7 +54,7 @@ describe("products api client", () => {
   });
 
   it("getProducts serializes brandIds (comma-joined), materialType, color, genderTarget and sort", async () => {
-    mockedApiFetch.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20, totalPages: 0 });
+    mockedApiFetchPage.mockResolvedValue(emptyPage);
 
     await getProducts({
       brandIds: ["a", "b"],
@@ -59,7 +64,7 @@ describe("products api client", () => {
       sort: "price_asc",
     });
 
-    const calledPath = mockedApiFetch.mock.calls[0][0] as string;
+    const calledPath = mockedApiFetchPage.mock.calls[0][0] as string;
     const query = new URLSearchParams(calledPath.split("?")[1]);
     expect(query.get("brandIds")).toBe("a,b");
     expect(query.get("materialType")).toBe("METAL");
@@ -69,12 +74,12 @@ describe("products api client", () => {
   });
 
   it("uploadProductImage appends the image kind to the multipart form", async () => {
-    mockedApiFetch.mockResolvedValue({ id: "img1" });
+    mockedApiFetchData.mockResolvedValue({ id: "img1" });
     const file = new File(["png"], "try-on.png", { type: "image/png" });
 
     await uploadProductImage("p1", file, "token-1", undefined, "TRY_ON");
 
-    const [path, init] = mockedApiFetch.mock.calls[0];
+    const [path, init] = mockedApiFetchData.mock.calls[0];
     expect(path).toBe("/products/p1/images");
     const form = init.body as FormData;
     expect(form.get("kind")).toBe("TRY_ON");
@@ -82,18 +87,18 @@ describe("products api client", () => {
   });
 
   it("getProductById calls /products/:id with the given id", async () => {
-    mockedApiFetch.mockResolvedValue({ id: "abc" });
+    mockedApiFetchData.mockResolvedValue({ id: "abc" });
 
     await getProductById("abc");
 
-    expect(mockedApiFetch).toHaveBeenCalledWith("/products/abc");
+    expect(mockedApiFetchData).toHaveBeenCalledWith("/products/abc");
   });
 
-  it("getCategories calls /categories", async () => {
-    mockedApiFetch.mockResolvedValue([]);
+  it("getCategories calls /categories with the page/limit query", async () => {
+    mockedApiFetchPage.mockResolvedValue(emptyPage);
 
-    await getCategories();
+    await getCategories({ limit: 100 });
 
-    expect(mockedApiFetch).toHaveBeenCalledWith("/categories");
+    expect(mockedApiFetchPage).toHaveBeenCalledWith("/categories?limit=100");
   });
 });

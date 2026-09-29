@@ -1,5 +1,6 @@
 package com.tttn.orderservice.model.cart;
 
+import com.tttn.orderservice.enums.CartItemUnavailableReason;
 import lombok.*;
 
 import java.io.Serializable;
@@ -36,6 +37,14 @@ public class CartItem implements Serializable {
     private BigDecimal unitPrice;
 
     private Integer quantity;
+
+    // Availability fields are absent on carts saved before cart sync existed — null `available`
+    // means available (see CartMapper.toItemResponse).
+    private Boolean available;
+
+    private CartItemUnavailableReason unavailableReason;
+
+    private Integer availableStock;
 
     public BigDecimal getSubtotal() {
         if (unitPrice == null || quantity == null) {

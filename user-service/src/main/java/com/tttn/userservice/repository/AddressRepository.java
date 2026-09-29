@@ -1,6 +1,8 @@
 package com.tttn.userservice.repository;
 
 import com.tttn.userservice.entity.Address;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -13,6 +15,8 @@ import java.util.UUID;
 public interface AddressRepository extends JpaRepository<Address, UUID> {
 
     List<Address> findByUserIdOrderByDefaultAddressDescCreatedAtDesc(UUID userId);
+
+    Page<Address> findByUserIdOrderByDefaultAddressDescCreatedAtDesc(UUID userId, Pageable pageable);
 
     Optional<Address> findByIdAndUserId(UUID id, UUID userId);
 

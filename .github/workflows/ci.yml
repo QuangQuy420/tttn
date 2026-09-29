@@ -105,7 +105,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
       # RabbitMqProductEventPublisher (event-bus POC) requires RABBITMQ_URL to even boot
-      # the app, same as Postgres/MinIO below — unlike minio/minio, this image needs no
+      # the app, same as Postgres/MinIO below — unlike pgsty/minio, this image needs no
       # custom CMD, so a plain `services:` entry works (matching infra/docker-compose.yml).
       rabbitmq:
         image: rabbitmq:3-management-alpine
@@ -124,7 +124,7 @@ jobs:
       RABBITMQ_URL: amqp://guest:guest@localhost:5672
       # S3ImageStorageRepository (admin image upload) requires these to even boot the
       # app — see MinIO container step below (GH Actions `services:` can't override a
-      # container's CMD, which `minio/minio` needs, so it's started as a plain `docker
+      # container's CMD, which `pgsty/minio` needs, so it's started as a plain `docker
       # run` step instead of a `services:` entry, matching infra/docker-compose.yml's
       # dev defaults).
       MINIO_ENDPOINT: http://localhost:9000
@@ -145,11 +145,12 @@ jobs:
         run: |
           docker run -d --name minio -p 9000:9000 -p 9001:9001 \
             -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
-            minio/minio server /data --console-address ":9001"
+            pgsty/minio server /data --console-address ":9001"
           for i in $(seq 1 30); do
             curl -sf http://localhost:9000/minio/health/live && break
             sleep 2
           done
+          curl -sf http://localhost:9000/minio/health/live || { echo "MinIO not ready after 60s"; docker logs minio; exit 1; }
 
       - run: npm ci
       - run: npm run lint

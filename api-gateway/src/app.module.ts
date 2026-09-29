@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { APP_FILTER } from '@nestjs/core';
+import { GatewayExceptionFilter } from './common/gateway-exception.filter';
 import { AppConfigModule } from './config/app-config.module';
 import { FaceAnalysisModule } from './routes/face-analysis.module';
 import { HealthController } from './routes/health.controller';
@@ -21,5 +23,6 @@ import { RecommendationsModule } from './routes/recommendations.module';
             RecommendationsModule,
   ],
   controllers: [HealthController],
+  providers: [{ provide: APP_FILTER, useClass: GatewayExceptionFilter }],
 })
 export class AppModule {}

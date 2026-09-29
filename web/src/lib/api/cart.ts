@@ -1,5 +1,10 @@
-import type { AddCartItemPayload, Cart, UpdateCartItemPayload } from "@/types/cart";
-import { apiFetch } from "./client";
+import type {
+  AddCartItemPayload,
+  Cart,
+  CartRefreshResult,
+  UpdateCartItemPayload,
+} from "@/types/cart";
+import { apiFetch, apiFetchData } from "./client";
 
 // Calls api-gateway's cart proxy (api-gateway/src/routes/orders.controller.ts's
 // CartController, @Controller('api/cart')), which forwards to order-service's
@@ -13,14 +18,24 @@ function authHeaders(token: string): HeadersInit {
 }
 
 export function getCart(token: string): Promise<Cart> {
-  return apiFetch<Cart>("/cart", {
+  return apiFetchData<Cart>("/cart", {
     method: "GET",
     headers: authHeaders(token),
   });
 }
 
+// Re-syncs every cart item with product-service (price, name, image, availability) and returns
+// the refreshed cart plus the variants whose price or availability changed. Called by
+// CheckoutPage on mount and right before placing the order.
+export function refreshCart(token: string): Promise<CartRefreshResult> {
+  return apiFetchData<CartRefreshResult>("/cart/refresh", {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+}
+
 export function addCartItem(token: string, payload: AddCartItemPayload): Promise<Cart> {
-  return apiFetch<Cart>("/cart/items", {
+  return apiFetchData<Cart>("/cart/items", {
     method: "POST",
     headers: authHeaders(token),
     body: JSON.stringify(payload),
@@ -32,7 +47,7 @@ export function updateCartItem(
   variantId: string,
   payload: UpdateCartItemPayload,
 ): Promise<Cart> {
-  return apiFetch<Cart>(`/cart/items/${encodeURIComponent(variantId)}`, {
+  return apiFetchData<Cart>(`/cart/items/${encodeURIComponent(variantId)}`, {
     method: "PUT",
     headers: authHeaders(token),
     body: JSON.stringify(payload),
@@ -40,7 +55,7 @@ export function updateCartItem(
 }
 
 export function removeCartItem(token: string, variantId: string): Promise<Cart> {
-  return apiFetch<Cart>(`/cart/items/${encodeURIComponent(variantId)}`, {
+  return apiFetchData<Cart>(`/cart/items/${encodeURIComponent(variantId)}`, {
     method: "DELETE",
     headers: authHeaders(token),
   });

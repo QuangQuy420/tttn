@@ -80,25 +80,26 @@ def test_recommend_ranks_products_by_frame_shape_score_for_the_requested_face_sh
 
     response = asyncio.run(service.recommend(RecommendRequest(faceShape=FaceShape.ROUND)))
 
-    assert [item.id for item in response.items] == ["b", "c", "a"]
-    assert response.items[0].score > response.items[1].score > response.items[2].score
+    assert [item.id for item in response.data] == ["b", "c", "a"]
+    assert response.data[0].score > response.data[1].score > response.data[2].score
 
 
-def test_recommend_applies_the_requested_limit_after_ranking() -> None:
+def test_recommend_paginates_the_ranked_list_by_page_and_limit() -> None:
     products = [
+        _product("c", FrameShape.CAT_EYE),
         _product("a", FrameShape.SQUARE),
         _product("b", FrameShape.RECTANGLE),
-        _product("c", FrameShape.CAT_EYE),
     ]
     client = FakeProductServiceClient(products=products)
     service = RecommendationService(client)
 
     response = asyncio.run(
-        service.recommend(RecommendRequest(faceShape=FaceShape.ROUND, limit=2))
+        service.recommend(RecommendRequest(faceShape=FaceShape.ROUND, page=2, limit=2))
     )
 
-    assert len(response.items) == 2
-    assert [item.id for item in response.items] == ["a", "b"]
+    # Ranked order is a, b, c -> page 2 of size 2 holds only c.
+    assert [item.id for item in response.data] == ["c"]
+    assert response.meta.model_dump() == {"page": 2, "limit": 2, "total": 3, "totalPages": 2}
 
 
 def test_recommend_passes_optional_filters_through_to_the_product_client() -> None:
@@ -122,17 +123,15 @@ def test_recommend_passes_optional_filters_through_to_the_product_client() -> No
     assert client.last_call["max_price"] == 500
 
 
-def test_recommend_over_fetches_from_the_client_even_when_no_limit_is_requested() -> None:
-    # Regression test: passing `limit=None` straight through used to skip the over-fetch
-    # multiplier entirely, so product-service's own default page size (20) silently capped
-    # the ranking pool instead of being over-fetched before ranking.
+def test_recommend_always_fetches_the_full_candidate_pool_from_the_client() -> None:
+    # The ranking pool must not shrink with the requested page size — product-service's
+    # own default page size (20) would otherwise silently cap it before ranking.
     client = FakeProductServiceClient(products=[])
     service = RecommendationService(client)
 
-    asyncio.run(service.recommend(RecommendRequest(faceShape=FaceShape.OVAL)))
+    asyncio.run(service.recommend(RecommendRequest(faceShape=FaceShape.OVAL, limit=5)))
 
-    assert client.last_call["limit"] is not None
-    assert client.last_call["limit"] > 20
+    assert client.last_call["limit"] == 100
 
 
 @pytest.mark.parametrize(

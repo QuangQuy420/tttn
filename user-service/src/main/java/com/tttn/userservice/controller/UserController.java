@@ -3,7 +3,6 @@ package com.tttn.userservice.controller;
 import com.tttn.userservice.dto.request.ChangePasswordRequest;
 import com.tttn.userservice.dto.request.UpdateProfileRequest;
 import com.tttn.userservice.dto.response.ApiResponse;
-import com.tttn.userservice.dto.response.PaginatedResponse;
 import com.tttn.userservice.dto.response.ProfileResponse;
 import com.tttn.userservice.dto.response.UserResponse;
 import com.tttn.userservice.exception.BusinessException;
@@ -22,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -36,7 +36,7 @@ public class UserController {
     private final JwtUtil jwtUtil;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<PaginatedResponse<UserResponse>>> listUsers(
+    public ResponseEntity<ApiResponse<List<UserResponse>>> listUsers(
             @RequestHeader(
                     value = "Authorization",
                     required = false
@@ -47,7 +47,7 @@ public class UserController {
         requirePermission(authorizationHeader);
 
         return ResponseEntity.ok(
-                ApiResponse.success(
+                ApiResponse.page(
                         "Lấy danh sách người dùng thành công",
                         userService.listUsers(page, limit)
                 )

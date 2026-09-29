@@ -41,7 +41,12 @@ describe('Products/categories proxy (e2e)', () => {
   });
 
   it('GET /api/products forwards query params to product-service and returns its body', async () => {
-    const body = { items: [{ id: '1', name: 'Aviator' }], total: 1 };
+    const body = {
+      success: true,
+      message: 'Thành công',
+      data: [{ id: '1', name: 'Aviator' }],
+      meta: { page: 1, limit: 20, total: 1, totalPages: 1 },
+    };
     httpService.get.mockReturnValue(of(axiosResponse(body)));
 
     const res = await request(app.getHttpServer())
@@ -55,11 +60,16 @@ describe('Products/categories proxy (e2e)', () => {
     );
   });
 
-  it('GET /api/products/:id passes through a downstream 404', async () => {
+  it('GET /api/products/:id passes through a downstream 404 envelope unchanged', async () => {
+    const envelope = {
+      success: false,
+      message: 'Không tìm thấy sản phẩm',
+      error: { code: 'NOT_FOUND', details: null },
+    };
     const axiosError = {
       isAxiosError: true,
       message: 'Request failed with status code 404',
-      response: { status: 404, data: { message: 'Product not found' } },
+      response: { status: 404, data: envelope },
     } as AxiosError;
     httpService.get.mockReturnValue(throwError(() => axiosError));
 
@@ -67,7 +77,7 @@ describe('Products/categories proxy (e2e)', () => {
       .get('/api/products/missing-id')
       .expect(404);
 
-    expect(res.body).toMatchObject({ message: 'Product not found' });
+    expect(res.body).toEqual(envelope);
   });
 
   it('GET /api/products returns 503 with a clear message when product-service is unreachable', async () => {
@@ -80,11 +90,20 @@ describe('Products/categories proxy (e2e)', () => {
 
     const res = await request(app.getHttpServer()).get('/api/products').expect(503);
 
-    expect(res.body.message).toContain('unreachable');
+    expect(res.body).toEqual({
+      success: false,
+      message: 'Không thể kết nối tới product-service',
+      error: { code: 'SERVICE_UNAVAILABLE', details: null },
+    });
   });
 
   it('GET /api/categories forwards to product-service and returns its body', async () => {
-    const body = [{ id: '1', name: 'Sunglasses' }];
+    const body = {
+      success: true,
+      message: 'Thành công',
+      data: [{ id: '1', name: 'Sunglasses' }],
+      meta: { page: 1, limit: 20, total: 1, totalPages: 1 },
+    };
     httpService.get.mockReturnValue(of(axiosResponse(body)));
 
     const res = await request(app.getHttpServer()).get('/api/categories').expect(200);

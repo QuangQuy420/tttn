@@ -5,7 +5,11 @@ import { Brand } from '../db/entities/brand.entity';
 import { Product } from '../db/entities/product.entity';
 
 export interface IBrandRepository {
-  findAll(): Promise<Brand[]>;
+  /** One page (1-based) ordered by name, plus the total row count. */
+  findPage(
+    page: number,
+    limit: number,
+  ): Promise<{ items: Brand[]; total: number }>;
   findById(id: string): Promise<Brand | null>;
   findByNameKey(nameKey: string): Promise<Brand | null>;
   create(data: Partial<Brand>): Promise<Brand>;
@@ -20,8 +24,16 @@ export class TypeOrmBrandRepository implements IBrandRepository {
     @InjectRepository(Brand) private readonly repo: Repository<Brand>,
   ) {}
 
-  findAll(): Promise<Brand[]> {
-    return this.repo.find({ order: { name: 'ASC' } });
+  async findPage(
+    page: number,
+    limit: number,
+  ): Promise<{ items: Brand[]; total: number }> {
+    const [items, total] = await this.repo.findAndCount({
+      order: { name: 'ASC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+    return { items, total };
   }
 
   findById(id: string): Promise<Brand | null> {

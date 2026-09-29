@@ -11,6 +11,8 @@ import { CATEGORY_REPOSITORY } from '../repositories/tokens';
 import { CreateCategoryDto } from '../routes/dto/create-category.dto';
 import { CategoryResponseDto } from '../routes/dto/category-response.dto';
 import { UpdateCategoryDto } from '../routes/dto/update-category.dto';
+import { PaginationQueryDto } from '../routes/dto/pagination-query.dto';
+import { Paginated, paginated } from '../common/api-response';
 
 @Injectable()
 export class CategoriesService {
@@ -19,9 +21,19 @@ export class CategoriesService {
     private readonly categoryRepository: ICategoryRepository,
   ) {}
 
-  async findAll(): Promise<CategoryResponseDto[]> {
-    const categories = await this.categoryRepository.findAll();
-    return categories.map((category) => this.toResponseDto(category));
+  async findAll(
+    query: PaginationQueryDto,
+  ): Promise<Paginated<CategoryResponseDto>> {
+    const { items, total } = await this.categoryRepository.findPage(
+      query.page,
+      query.limit,
+    );
+    return paginated(
+      items.map((category) => this.toResponseDto(category)),
+      total,
+      query.page,
+      query.limit,
+    );
   }
 
   async findOne(id: string): Promise<CategoryResponseDto> {

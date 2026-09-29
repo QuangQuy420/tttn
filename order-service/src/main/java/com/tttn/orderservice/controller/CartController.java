@@ -2,6 +2,8 @@ package com.tttn.orderservice.controller;
 
 import com.tttn.orderservice.dto.request.AddCartItemRequest;
 import com.tttn.orderservice.dto.request.UpdateCartItemRequest;
+import com.tttn.orderservice.dto.response.ApiResponse;
+import com.tttn.orderservice.dto.response.CartRefreshResponse;
 import com.tttn.orderservice.dto.response.CartResponse;
 import com.tttn.orderservice.service.CartService;
 import jakarta.validation.Valid;
@@ -20,46 +22,57 @@ public class CartController {
     private final CartService cartService;
 
     @GetMapping("/{userId}")
-    public ResponseEntity<CartResponse> getCart(
+    public ResponseEntity<ApiResponse<CartResponse>> getCart(
             @PathVariable UUID userId
     ) {
         return ResponseEntity.ok(
-                cartService.getCart(userId)
+                ApiResponse.ok(cartService.getCart(userId))
+        );
+    }
+
+    @PostMapping("/{userId}/refresh")
+    public ResponseEntity<ApiResponse<CartRefreshResponse>> refreshCart(
+            @PathVariable UUID userId
+    ) {
+        return ResponseEntity.ok(
+                ApiResponse.ok(cartService.refreshCart(userId))
         );
     }
 
     @PostMapping("/{userId}/items")
-    public ResponseEntity<CartResponse> addItem(
+    public ResponseEntity<ApiResponse<CartResponse>> addItem(
             @PathVariable UUID userId,
             @Valid @RequestBody AddCartItemRequest request
     ) {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(cartService.addItem(userId, request));
+                .body(ApiResponse.ok(cartService.addItem(userId, request)));
     }
 
     @PutMapping("/{userId}/items/{variantId}")
-    public ResponseEntity<CartResponse> updateItem(
+    public ResponseEntity<ApiResponse<CartResponse>> updateItem(
             @PathVariable UUID userId,
             @PathVariable UUID variantId,
             @Valid @RequestBody UpdateCartItemRequest request
     ) {
         return ResponseEntity.ok(
-                cartService.updateItem(
-                        userId,
-                        variantId,
-                        request
+                ApiResponse.ok(
+                        cartService.updateItem(
+                                userId,
+                                variantId,
+                                request
+                        )
                 )
         );
     }
 
     @DeleteMapping("/{userId}/items/{variantId}")
-    public ResponseEntity<CartResponse> removeItem(
+    public ResponseEntity<ApiResponse<CartResponse>> removeItem(
             @PathVariable UUID userId,
             @PathVariable UUID variantId
     ) {
         return ResponseEntity.ok(
-                cartService.removeItem(userId, variantId)
+                ApiResponse.ok(cartService.removeItem(userId, variantId))
         );
     }
 

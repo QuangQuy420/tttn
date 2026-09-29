@@ -7,19 +7,24 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { BrandsService } from '../services/brands.service';
 import { CreateBrandDto } from './dto/create-brand.dto';
 import { BrandResponseDto } from './dto/brand-response.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
+import { PaginationQueryDto } from './dto/pagination-query.dto';
+import { Paginated } from '../common/api-response';
 
 @Controller('brands')
 export class BrandsController {
   constructor(private readonly brandsService: BrandsService) {}
 
   @Get()
-  findAll(): Promise<BrandResponseDto[]> {
-    return this.brandsService.findAll();
+  findAll(
+    @Query() query: PaginationQueryDto,
+  ): Promise<Paginated<BrandResponseDto>> {
+    return this.brandsService.findAll(query);
   }
 
   @Get(':id')

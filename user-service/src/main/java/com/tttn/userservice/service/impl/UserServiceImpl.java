@@ -2,7 +2,6 @@ package com.tttn.userservice.service.impl;
 
 import com.tttn.userservice.dto.request.ChangePasswordRequest;
 import com.tttn.userservice.dto.request.UpdateProfileRequest;
-import com.tttn.userservice.dto.response.PaginatedResponse;
 import com.tttn.userservice.dto.response.ProfileResponse;
 import com.tttn.userservice.dto.response.UserResponse;
 import com.tttn.userservice.entity.Profile;
@@ -14,9 +13,10 @@ import com.tttn.userservice.repository.ProfileRepository;
 import com.tttn.userservice.repository.UserRepository;
 import com.tttn.userservice.service.PermissionService;
 import com.tttn.userservice.service.UserService;
+import com.tttn.userservice.util.PageRequests;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -119,23 +119,10 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(readOnly = true)
-    public PaginatedResponse<UserResponse> listUsers(int page, int limit) {
-        Page<User> userPage = userRepository.findAll(
-                PageRequest.of(page - 1, limit)
-        );
-
-        List<UserResponse> items = userPage.getContent()
-                .stream()
-                .map(this::toUserResponse)
-                .toList();
-
-        return new PaginatedResponse<>(
-                items,
-                userPage.getTotalElements(),
-                page,
-                limit,
-                userPage.getTotalPages()
-        );
+    public Page<UserResponse> listUsers(int page, int limit) {
+        return userRepository.findAll(
+                PageRequests.of(page, limit, Sort.unsorted())
+        ).map(this::toUserResponse);
     }
 
     private User findUser(UUID userId) {

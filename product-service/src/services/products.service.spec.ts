@@ -132,7 +132,7 @@ describe('ProductsService', () => {
       deleteById: jest.fn(),
     };
     brandRepository = {
-      findAll: jest.fn(),
+      findPage: jest.fn(),
       findById: jest.fn(),
       findByNameKey: jest.fn(),
       create: jest.fn(),
@@ -141,7 +141,7 @@ describe('ProductsService', () => {
       delete: jest.fn(),
     };
     categoryRepository = {
-      findAll: jest.fn(),
+      findPage: jest.fn(),
       findBySlug: jest.fn(),
       findById: jest.fn(),
       create: jest.fn(),
@@ -190,12 +190,12 @@ describe('ProductsService', () => {
 
       const result = await service.findAll(baseQuery());
 
-      expect(result.total).toBe(1);
+      expect(result.meta.total).toBe(1);
       expect(result.items).toHaveLength(1);
       expect(result.items[0].variants).toHaveLength(1);
       expect(result.items[0].images).toHaveLength(1);
       expect(result.items[0].brand.name).toBe('Test Brand');
-      expect(result.totalPages).toBe(1);
+      expect(result.meta.totalPages).toBe(1);
     });
 
     it('passes filter fields straight through to the repository', async () => {
@@ -245,8 +245,8 @@ describe('ProductsService', () => {
       const result = await service.findAll(baseQuery());
 
       expect(result.items).toEqual([]);
-      expect(result.total).toBe(0);
-      expect(result.totalPages).toBe(0);
+      expect(result.meta.total).toBe(0);
+      expect(result.meta.totalPages).toBe(0);
       expect(variantRepository.findByProductIds).not.toHaveBeenCalled();
       expect(imageRepository.findByProductIds).not.toHaveBeenCalled();
     });
@@ -261,7 +261,7 @@ describe('ProductsService', () => {
 
       const result = await service.findAll(baseQuery({ limit: 20 }));
 
-      expect(result.totalPages).toBe(2);
+      expect(result.meta.totalPages).toBe(2);
     });
 
     it('only attaches variants/images belonging to each specific product', async () => {

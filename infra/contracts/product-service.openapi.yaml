@@ -11,7 +11,12 @@ info:
     Face shapes are stored as a product enum array; variant stock is stored on the variant.
     0.3.0 adds material type, frame measurements (mm), image `kind` (TRY_ON) and the
     brandIds/materialType/color/sort list filters (.planning/2026-09-29-01-catalog-enrichment-seed.md).
-  version: "0.3.0"
+    0.4.0 wraps every response in the shared envelope (see infra/contracts/README.md,
+    .planning/2026-09-29-17-unified-response-pagination-cart-sync.md): success bodies are
+    `{success: true, message, data}` (lists add `meta`), every error body is `ErrorResponse`
+    (`{success: false, message, error: {code, details}}`). `GET /health` and 204 responses are
+    not wrapped. `/categories` and `/brands` are now paginated like `/products`.
+  version: "0.4.0"
 servers:
   - url: http://localhost:3002
     description: product-service, direct (local dev only)
@@ -142,19 +147,8 @@ paths:
             type: string
             enum: [newest, price_asc, price_desc]
             default: newest
-        - name: page
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 20
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
       responses:
         "200":
           description: Paginated list of products
@@ -163,7 +157,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/PaginatedProductResponse"
         "400":
-          description: Invalid query parameters (validation failure)
+          $ref: "#/components/responses/ValidationError"
 
     post:
       tags: [products]
@@ -186,7 +180,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ProductResponse"
+                $ref: "#/components/schemas/ProductEnvelope"
         "400":
           description: >
             Validation failure, or `categoryId`/`brandId` does not reference an
@@ -213,7 +207,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ProductResponse"
+                $ref: "#/components/schemas/ProductEnvelope"
         "404":
           description: Product not found
 
@@ -235,7 +229,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ProductResponse"
+                $ref: "#/components/schemas/ProductEnvelope"
         "404":
           description: Product not found
 
@@ -265,7 +259,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ProductResponse"
+                $ref: "#/components/schemas/ProductEnvelope"
         "400":
           description: >
             Validation failure, or `categoryId`/`brandId` does not reference an
@@ -340,7 +334,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ProductImageResponse"
+                $ref: "#/components/schemas/ProductImageEnvelope"
         "400":
           description: >
             Missing file, disallowed content type, file over 5 MB, `kind=TRY_ON` with a
@@ -388,7 +382,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ProductImageResponse"
+                $ref: "#/components/schemas/ProductImageEnvelope"
         "400":
           description: "`isThumbnail` was not `true`."
         "404":
@@ -419,17 +413,23 @@ paths:
   /categories:
     get:
       tags: [categories]
-      summary: List all categories
+      summary: List categories (paginated)
+      description: >
+        Ordered by `name` ASC. Admin screens and filter dropdowns that need every row call
+        `limit=100`.
       operationId: listCategories
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
       responses:
         "200":
-          description: Public flat list of one-level categories. This remains an array, not a pagination envelope.
+          description: Paginated list of categories
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/CategoryResponse"
+                $ref: "#/components/schemas/PaginatedCategoryResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
 
     post:
       tags: [categories]
@@ -450,7 +450,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CategoryResponse"
+                $ref: "#/components/schemas/CategoryEnvelope"
         "400":
           $ref: "#/components/responses/ValidationError"
         "401":
@@ -471,7 +471,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CategoryResponse"
+                $ref: "#/components/schemas/CategoryEnvelope"
         "404":
           $ref: "#/components/responses/NotFoundError"
 
@@ -496,7 +496,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CategoryResponse"
+                $ref: "#/components/schemas/CategoryEnvelope"
         "400":
           $ref: "#/components/responses/ValidationError"
         "401":
@@ -530,17 +530,23 @@ paths:
   /brands:
     get:
       tags: [brands]
-      summary: List all brands
+      summary: List brands (paginated)
+      description: >
+        Ordered by `name` ASC. Admin screens and filter dropdowns that need every row call
+        `limit=100`.
       operationId: listBrands
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
       responses:
         "200":
-          description: Public flat list of brands. This remains an array, not a pagination envelope.
+          description: Paginated list of brands
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/BrandResponse"
+                $ref: "#/components/schemas/PaginatedBrandResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
 
     post:
       tags: [brands]
@@ -561,7 +567,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BrandResponse"
+                $ref: "#/components/schemas/BrandEnvelope"
         "400":
           $ref: "#/components/responses/ValidationError"
         "401":
@@ -584,7 +590,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BrandResponse"
+                $ref: "#/components/schemas/BrandEnvelope"
         "404":
           $ref: "#/components/responses/NotFoundError"
 
@@ -607,7 +613,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BrandResponse"
+                $ref: "#/components/schemas/BrandEnvelope"
         "400":
           $ref: "#/components/responses/ValidationError"
         "401":
@@ -644,14 +650,66 @@ components:
   schemas:
     ErrorResponse:
       type: object
+      description: >
+        Error envelope used by every non-2xx response. `error.code` is UPPER_SNAKE — generic
+        by status when no specific code applies: 400 `BAD_REQUEST`, validation
+        `VALIDATION_FAILED` (field errors in `details`), 401 `UNAUTHORIZED`, 403 `FORBIDDEN`,
+        404 `NOT_FOUND`, 409 `CONFLICT`, 500 `INTERNAL_ERROR`.
       properties:
-        statusCode:
-          type: integer
+        success:
+          type: boolean
+          enum: [false]
         message:
           type: string
+          description: Vietnamese text for the user.
+          example: Không tìm thấy sản phẩm 5f1c2d3e-0000-0000-0000-000000000001
         error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: NOT_FOUND
+            details:
+              oneOf:
+                - type: object
+                  nullable: true
+                - type: array
+                  items: {}
+              description: >
+                Extra data (object or array), e.g. field errors for `VALIDATION_FAILED`;
+                `null` when there is none.
+          required: [code, details]
+      required: [success, message, error]
+
+    SuccessEnvelope:
+      type: object
+      description: Base of every success body; `data` is added by each concrete envelope.
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        message:
           type: string
-      required: [statusCode, message]
+          example: Thành công
+      required: [success, message]
+
+    PageMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        total:
+          type: integer
+          minimum: 0
+        totalPages:
+          type: integer
+          minimum: 0
+      required: [page, limit, total, totalPages]
 
     FrameShape:
       type: string
@@ -1063,24 +1121,82 @@ components:
           $ref: "#/components/schemas/ProductStatus"
 
     PaginatedProductResponse:
-      type: object
-      description: >
-        Flat pagination envelope (NOT a nested data/meta shape) — see
-        product-service/src/routes/dto/paginated-response.dto.ts.
-      properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/ProductResponse"
-        total:
-          type: integer
-        page:
-          type: integer
-        limit:
-          type: integer
-        totalPages:
-          type: integer
-      required: [items, total, page, limit, totalPages]
+      description: List envelope for products — `data` is the current page, `meta` the paging info.
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/ProductResponse"
+            meta:
+              $ref: "#/components/schemas/PageMeta"
+          required: [data, meta]
+
+    PaginatedCategoryResponse:
+      description: List envelope for categories — `data` is the current page, `meta` the paging info.
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/CategoryResponse"
+            meta:
+              $ref: "#/components/schemas/PageMeta"
+          required: [data, meta]
+
+    PaginatedBrandResponse:
+      description: List envelope for brands — `data` is the current page, `meta` the paging info.
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/BrandResponse"
+            meta:
+              $ref: "#/components/schemas/PageMeta"
+          required: [data, meta]
+
+    ProductEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/ProductResponse"
+          required: [data]
+
+    ProductImageEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/ProductImageResponse"
+          required: [data]
+
+    CategoryEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/CategoryResponse"
+          required: [data]
+
+    BrandEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/BrandResponse"
+          required: [data]
 
   parameters:
     ResourceId:
@@ -1090,6 +1206,23 @@ components:
       schema:
         type: string
         format: uuid
+    Page:
+      name: page
+      in: query
+      description: 1-based page number.
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    Limit:
+      name: limit
+      in: query
+      description: Page size.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
 
   responses:
     ValidationError:

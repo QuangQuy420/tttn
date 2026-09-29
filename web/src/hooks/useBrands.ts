@@ -22,8 +22,9 @@ export function useBrands(): UseBrandsResult {
       setIsLoading(true);
       setError(null);
       try {
-        const result = await getBrands();
-        if (!cancelled) setBrands(result);
+        // Filter/dropdown options: ask for the API max so every option shows up.
+        const result = await getBrands({ limit: 100 });
+        if (!cancelled) setBrands(result.data);
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof ApiError ? err.message : "Không thể tải thương hiệu.");

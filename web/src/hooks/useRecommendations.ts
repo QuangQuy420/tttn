@@ -2,20 +2,23 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ApiError, getRecommendations } from "@/lib/api";
+import type { PageMeta } from "@/types/api";
 import type { FaceShapeTag } from "@/types/product";
 import type { RecommendedProduct } from "@/types/recommendation";
 
 interface UseRecommendationsResult {
   items: RecommendedProduct[];
+  meta: PageMeta | null;
   isLoading: boolean;
   error: string | null;
-  recommend: (faceShape: FaceShapeTag) => Promise<void>;
+  recommend: (faceShape: FaceShapeTag, page?: number) => Promise<void>;
 }
 
 // Action-triggered (not fetch-on-mount) — mirrors useFaceAnalysis.ts's shape, called once the
 // caller knows which face shape to ask for (e.g. read from a URL query param).
 export function useRecommendations(): UseRecommendationsResult {
   const [items, setItems] = useState<RecommendedProduct[]>([]);
+  const [meta, setMeta] = useState<PageMeta | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,18 +34,21 @@ export function useRecommendations(): UseRecommendationsResult {
     };
   }, []);
 
-  async function recommend(faceShape: FaceShapeTag) {
+  async function recommend(faceShape: FaceShapeTag, page = 1) {
     const requestId = ++latestRequestId.current;
     setIsLoading(true);
     setError(null);
     setItems([]);
+    setMeta(null);
     try {
-      const response = await getRecommendations(faceShape);
+      const response = await getRecommendations(faceShape, { page });
       if (requestId !== latestRequestId.current) return;
-      setItems(response.items);
+      setItems(response.data);
+      setMeta(response.meta);
     } catch (err) {
       if (requestId !== latestRequestId.current) return;
       setItems([]);
+      setMeta(null);
       setError(
         err instanceof ApiError ? err.message : "Không thể tải danh sách gọng kính gợi ý.",
       );
@@ -51,5 +57,5 @@ export function useRecommendations(): UseRecommendationsResult {
     }
   }
 
-  return { items, isLoading, error, recommend };
+  return { items, meta, isLoading, error, recommend };
 }

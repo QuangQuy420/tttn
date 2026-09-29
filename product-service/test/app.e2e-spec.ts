@@ -46,8 +46,10 @@ describe('product-service (e2e)', () => {
       const res = await request(app.getHttpServer())
         .get('/categories')
         .expect(200);
-      expect(Array.isArray(res.body)).toBe(true);
-      const testCategory = res.body.find(
+      expect(res.body.success).toBe(true);
+      expect(Array.isArray(res.body.data)).toBe(true);
+      expect(res.body.meta).toMatchObject({ page: 1, limit: 20 });
+      const testCategory = res.body.data.find(
         (c: { slug: string }) => c.slug === 'e2e-test-category',
       );
       expect(testCategory).toBeDefined();
@@ -62,14 +64,14 @@ describe('product-service (e2e)', () => {
         .get('/products')
         .expect(200);
 
-      expect(res.body.total).toBe(2); // the DRAFT fixture product is excluded by default
-      const skus = res.body.items.map((p: { sku: string }) => p.sku);
+      expect(res.body.meta.total).toBe(2); // the DRAFT fixture product is excluded by default
+      const skus = res.body.data.map((p: { sku: string }) => p.sku);
       expect(skus).toEqual(
         expect.arrayContaining(['E2E-AVI-001', 'E2E-RND-002']),
       );
       expect(skus).not.toContain('E2E-SQR-003');
 
-      const aviator = res.body.items.find(
+      const aviator = res.body.data.find(
         (p: { sku: string }) => p.sku === 'E2E-AVI-001',
       );
       expect(aviator.variants).toHaveLength(2);
@@ -84,8 +86,8 @@ describe('product-service (e2e)', () => {
         .query({ frameShape: 'ROUND' })
         .expect(200);
 
-      expect(res.body.total).toBe(1);
-      expect(res.body.items[0].sku).toBe('E2E-RND-002');
+      expect(res.body.meta.total).toBe(1);
+      expect(res.body.data[0].sku).toBe('E2E-RND-002');
     });
 
     it('can explicitly opt into non-PUBLISHED statuses', async () => {
@@ -94,8 +96,8 @@ describe('product-service (e2e)', () => {
         .query({ status: 'DRAFT' })
         .expect(200);
 
-      expect(res.body.total).toBe(1);
-      expect(res.body.items[0].sku).toBe('E2E-SQR-003');
+      expect(res.body.meta.total).toBe(1);
+      expect(res.body.data[0].sku).toBe('E2E-SQR-003');
     });
 
     it('returns an empty page (not an error) when a filter matches nothing', async () => {
@@ -104,9 +106,9 @@ describe('product-service (e2e)', () => {
         .query({ frameShape: 'CAT_EYE' })
         .expect(200);
 
-      expect(res.body.items).toEqual([]);
-      expect(res.body.total).toBe(0);
-      expect(res.body.totalPages).toBe(0);
+      expect(res.body.data).toEqual([]);
+      expect(res.body.meta.total).toBe(0);
+      expect(res.body.meta.totalPages).toBe(0);
     });
 
     it('paginates: page 1 of limit=1 then page 2 returns the other product', async () => {
@@ -114,16 +116,16 @@ describe('product-service (e2e)', () => {
         .get('/products')
         .query({ limit: 1, page: 1 })
         .expect(200);
-      expect(page1.body.items).toHaveLength(1);
-      expect(page1.body.totalPages).toBe(2);
+      expect(page1.body.data).toHaveLength(1);
+      expect(page1.body.meta.totalPages).toBe(2);
 
       const page2 = await request(app.getHttpServer())
         .get('/products')
         .query({ limit: 1, page: 2 })
         .expect(200);
-      expect(page2.body.items).toHaveLength(1);
+      expect(page2.body.data).toHaveLength(1);
 
-      expect(page1.body.items[0].id).not.toBe(page2.body.items[0].id);
+      expect(page1.body.data[0].id).not.toBe(page2.body.data[0].id);
     });
 
     it('400s on an invalid enum filter value', async () => {
@@ -140,15 +142,15 @@ describe('product-service (e2e)', () => {
         .get('/products')
         .query({ frameShape: 'AVIATOR' })
         .expect(200);
-      const id = list.body.items[0].id;
+      const id = list.body.data[0].id;
 
       const res = await request(app.getHttpServer())
         .get(`/products/${id}`)
         .expect(200);
 
-      expect(res.body.sku).toBe('E2E-AVI-001');
-      expect(res.body.variants).toHaveLength(2);
-      expect(res.body.images).toHaveLength(2);
+      expect(res.body.data.sku).toBe('E2E-AVI-001');
+      expect(res.body.data.variants).toHaveLength(2);
+      expect(res.body.data.images).toHaveLength(2);
     });
 
     it('404s for a well-formed but non-existent id', async () => {

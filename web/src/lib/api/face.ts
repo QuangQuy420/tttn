@@ -1,5 +1,7 @@
 import type { FaceAnalysisResult } from "@/types/face";
-import { apiFetch } from "./client";
+import type { PageParams, Paginated } from "@/types/api";
+import { apiFetch, apiFetchData, apiFetchPage } from "./client";
+import { pageQuery } from "./query";
 
 function authHeaders(token: string): HeadersInit {
   return {
@@ -16,7 +18,7 @@ function authHeaders(token: string): HeadersInit {
 export function analyzeFace(file: File, token: string): Promise<FaceAnalysisResult> {
   const form = new FormData();
   form.append("file", file);
-  return apiFetch<FaceAnalysisResult>("/face-analysis/analyze", {
+  return apiFetchData<FaceAnalysisResult>("/face-analysis/analyze", {
     method: "POST",
     headers: authHeaders(token),
     body: form,
@@ -25,8 +27,11 @@ export function analyzeFace(file: File, token: string): Promise<FaceAnalysisResu
 
 // Forwards to api-gateway's GET /api/face-analysis/history, which proxies to
 // face-processing-service's GET /analyses — returns only the calling user's past analyses.
-export function getFaceAnalysisHistory(token: string): Promise<FaceAnalysisResult[]> {
-  return apiFetch<FaceAnalysisResult[]>("/face-analysis/history", {
+export function getFaceAnalysisHistory(
+  token: string,
+  params: PageParams = {},
+): Promise<Paginated<FaceAnalysisResult>> {
+  return apiFetchPage<FaceAnalysisResult>(`/face-analysis/history${pageQuery(params)}`, {
     method: "GET",
     headers: authHeaders(token),
   });

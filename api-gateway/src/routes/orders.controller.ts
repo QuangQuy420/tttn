@@ -72,6 +72,12 @@ export class CartController {
     );
   }
 
+  @Post('refresh')
+  @UseGuards(JwtGuard)
+  refreshCart(@Req() request: Request & { user: AuthenticatedUser }): Promise<unknown> {
+    return this.ordersProxyService.refreshCart(request.user.userId);
+  }
+
   @Delete()
   @UseGuards(JwtGuard)
   clearCart(@Req() request: Request & { user: AuthenticatedUser }): Promise<unknown> {
@@ -190,22 +196,28 @@ export class AdminSagaLogsController {
   @Get('days')
   @UseGuards(JwtGuard, PermissionsGuard)
   @RequirePermission('order:manage')
-  getDays(): Promise<unknown> {
-    return this.ordersProxyService.getSagaLogDays();
+  getDays(@Query() query: Record<string, unknown>): Promise<unknown> {
+    return this.ordersProxyService.getSagaLogDays(query);
   }
 
   @Get('days/:date')
   @UseGuards(JwtGuard, PermissionsGuard)
   @RequirePermission('order:manage')
-  getOrdersForDay(@Param('date') date: string): Promise<unknown> {
-    return this.ordersProxyService.getSagaLogsForDay(date);
+  getOrdersForDay(
+    @Param('date') date: string,
+    @Query() query: Record<string, unknown>,
+  ): Promise<unknown> {
+    return this.ordersProxyService.getSagaLogsForDay(date, query);
   }
 
   @Get('orders/:orderId')
   @UseGuards(JwtGuard, PermissionsGuard)
   @RequirePermission('order:manage')
-  getOrderLogs(@Param('orderId') orderId: string): Promise<unknown> {
-    return this.ordersProxyService.getOrderSagaLogs(orderId);
+  getOrderLogs(
+    @Param('orderId') orderId: string,
+    @Query() query: Record<string, unknown>,
+  ): Promise<unknown> {
+    return this.ordersProxyService.getOrderSagaLogs(orderId, query);
   }
 }
 

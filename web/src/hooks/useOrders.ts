@@ -3,13 +3,12 @@
 import { useEffect, useState } from "react";
 import { ApiError, getOrders } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth/session";
-import type { GetOrdersParams, OrderPageResponse, OrderSummary } from "@/types/order";
+import type { PageMeta, Paginated } from "@/types/api";
+import type { GetOrdersParams, OrderSummary } from "@/types/order";
 
 interface UseOrdersResult {
   orders: OrderSummary[];
-  page: number;
-  totalPages: number;
-  totalElements: number;
+  meta: PageMeta | null;
   isLoading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
@@ -18,11 +17,11 @@ interface UseOrdersResult {
 // Order history is always for the logged-in user — reads the access token itself, same as
 // useCart. See useProducts.ts for the state/effect/cancellation pattern this mirrors.
 export function useOrders(params: GetOrdersParams): UseOrdersResult {
-  const [response, setResponse] = useState<OrderPageResponse<OrderSummary> | null>(null);
+  const [response, setResponse] = useState<Paginated<OrderSummary> | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { status, page, size } = params;
+  const { status, page, limit } = params;
 
   async function run() {
     const token = getAccessToken();
@@ -36,7 +35,7 @@ export function useOrders(params: GetOrdersParams): UseOrdersResult {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await getOrders(token, { status, page, size });
+      const result = await getOrders(token, { status, page, limit });
       setResponse(result);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Không thể tải danh sách đơn hàng.");
@@ -62,7 +61,7 @@ export function useOrders(params: GetOrdersParams): UseOrdersResult {
       setIsLoading(true);
       setError(null);
       try {
-        const result = await getOrders(token, { status, page, size });
+        const result = await getOrders(token, { status, page, limit });
         if (!cancelled) setResponse(result);
       } catch (err) {
         if (!cancelled) {
@@ -78,13 +77,11 @@ export function useOrders(params: GetOrdersParams): UseOrdersResult {
     return () => {
       cancelled = true;
     };
-  }, [status, page, size]);
+  }, [status, page, limit]);
 
   return {
-    orders: response?.content ?? [],
-    page: response?.page ?? 0,
-    totalPages: response?.totalPages ?? 0,
-    totalElements: response?.totalElements ?? 0,
+    orders: response?.data ?? [],
+    meta: response?.meta ?? null,
     isLoading,
     error,
     refetch: run,

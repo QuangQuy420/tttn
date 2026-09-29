@@ -13,6 +13,10 @@
 # `package.json`/`requirements.txt` changes (new/updated deps) fall back to a full image rebuild +
 # container restart, since a synced file can't add packages to an already-built
 # `node_modules`/site-packages.
+#
+# order-service, user-service and recommendation-service have no dev target, so any source change
+# triggers a full image rebuild + restart (slower: ~1-2 min for the Maven builds). Without these
+# rules `watch` would keep running their stale images, since it never rebuilds an existing image.
 # ============================================================================
 
 services:
@@ -78,3 +82,27 @@ services:
           target: /app/app
         - action: rebuild
           path: ../face-processing-service/requirements.txt
+
+  order-service:
+    develop:
+      watch:
+        - action: rebuild
+          path: ../order-service/src
+        - action: rebuild
+          path: ../order-service/pom.xml
+
+  user-service:
+    develop:
+      watch:
+        - action: rebuild
+          path: ../user-service/src
+        - action: rebuild
+          path: ../user-service/pom.xml
+
+  recommendation-service:
+    develop:
+      watch:
+        - action: rebuild
+          path: ../recommendation-service/app
+        - action: rebuild
+          path: ../recommendation-service/requirements.txt

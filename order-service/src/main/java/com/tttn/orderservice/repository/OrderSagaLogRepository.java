@@ -1,6 +1,8 @@
 package com.tttn.orderservice.repository;
 
 import com.tttn.orderservice.entity.OrderSagaLog;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -13,7 +15,7 @@ import java.util.UUID;
 @Repository
 public interface OrderSagaLogRepository extends JpaRepository<OrderSagaLog, UUID> {
 
-    List<OrderSagaLog> findByOrderIdOrderByOccurredAtAsc(UUID orderId);
+    Page<OrderSagaLog> findByOrderId(UUID orderId, Pageable pageable);
 
     List<OrderSagaLog> findByOccurredAtBetweenOrderByOccurredAtDesc(
             LocalDateTime from,

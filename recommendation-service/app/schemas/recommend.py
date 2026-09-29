@@ -50,7 +50,8 @@ class RecommendRequest(BaseModel):
     genderTarget: GenderTarget | None = None
     minPrice: float | None = Field(default=None, gt=0)
     maxPrice: float | None = Field(default=None, gt=0)
-    limit: int | None = Field(default=None, gt=0, le=100)
+    page: int = Field(default=1, ge=1)
+    limit: int = Field(default=20, ge=1, le=100)
 
 
 class ProductImageDto(BaseModel):
@@ -86,7 +87,3 @@ class RecommendedProductDto(BaseModel):
     images: list[ProductImageDto]
     faceShapes: list[FaceShape]
     score: float = Field(..., description="Ranking score — how well this product's frame shape fits the requested face shape")
-
-
-class RecommendResponse(BaseModel):
-    items: list[RecommendedProductDto]

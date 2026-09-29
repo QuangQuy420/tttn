@@ -8,12 +8,14 @@ import com.tttn.orderservice.dto.response.*;
 import com.tttn.orderservice.entity.Order;
 import com.tttn.orderservice.entity.OrderItem;
 import com.tttn.orderservice.entity.OrderStatusHistory;
+import com.tttn.orderservice.enums.CartItemUnavailableReason;
 import com.tttn.orderservice.enums.OrderStatus;
 import com.tttn.orderservice.enums.PaymentStatus;
 import com.tttn.orderservice.enums.SagaLogLevel;
 import com.tttn.orderservice.enums.SagaLogService;
 import com.tttn.orderservice.enums.SagaLogStage;
 import com.tttn.orderservice.exception.BadRequestException;
+import com.tttn.orderservice.exception.CartChangedException;
 import com.tttn.orderservice.exception.ResourceNotFoundException;
 import com.tttn.orderservice.mapper.OrderMapper;
 import com.tttn.orderservice.messaging.OrderSagaEventPublisher;
@@ -23,7 +25,9 @@ import com.tttn.orderservice.repository.OrderRepository;
 import com.tttn.orderservice.service.CartService;
 import com.tttn.orderservice.service.OrderSagaLogService;
 import com.tttn.orderservice.service.OrderService;
+import com.tttn.orderservice.util.PageRequests;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -32,15 +36,18 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrderServiceImpl implements OrderService {
@@ -97,28 +104,64 @@ public class OrderServiceImpl implements OrderService {
 
         BigDecimal totalAmount = BigDecimal.ZERO;
 
+        // Cart guard (AC14): the user must see the price/availability they are paying for.
+        // Every selected item is checked against product-service before anything is created;
+        // all mismatches are collected so the client gets them in one 409.
+        List<CartChangedItemResponse> changedItems = new ArrayList<>();
+        Map<UUID, BigDecimal> expectedUnitPrices =
+                request.expectedUnitPrices() == null
+                        ? Map.of()
+                        : request.expectedUnitPrices();
+
         for (CartItem cartItem : selectedItems) {
             ProductResponse product =
-                    productClient.getProductById(cartItem.getProductId());
+                    fetchProductOrNull(cartItem.getProductId());
 
-            ProductVariantResponse variant = product.variants()
-                    .stream()
-                    .filter(item ->
-                            item.id().equals(cartItem.getVariantId())
-                    )
-                    .findFirst()
-                    .orElseThrow(() ->
-                            new ResourceNotFoundException(
-                                    "Không tìm thấy biến thể sản phẩm"
-                            )
+            ProductVariantResponse variant =
+                    findVariantOrNull(product, cartItem.getVariantId());
+
+            CartItemUnavailableReason unavailableReason =
+                    CartItemUnavailableReason.resolve(
+                            product,
+                            variant,
+                            cartItem.getQuantity()
                     );
 
-            BigDecimal unitPrice = product.basePrice()
+            BigDecimal unitPrice = variant == null
+                    ? null
+                    : Objects.requireNonNullElse(
+                            product.basePrice(),
+                            BigDecimal.ZERO
+                    )
                     .add(
                             variant.extraPrice() == null
                                     ? BigDecimal.ZERO
                                     : variant.extraPrice()
                     );
+
+            BigDecimal expectedUnitPrice = Objects.requireNonNullElse(
+                    expectedUnitPrices.get(cartItem.getVariantId()),
+                    cartItem.getUnitPrice()
+            );
+
+            boolean priceChanged = unitPrice != null
+                    && (expectedUnitPrice == null
+                    || expectedUnitPrice.compareTo(unitPrice) != 0);
+
+            if (unavailableReason != null || priceChanged) {
+                changedItems.add(
+                        new CartChangedItemResponse(
+                                cartItem.getProductId(),
+                                cartItem.getVariantId(),
+                                cartItem.getProductName(),
+                                expectedUnitPrice,
+                                unitPrice,
+                                unavailableReason == null,
+                                unavailableReason
+                        )
+                );
+                continue;
+            }
 
             OrderItem orderItem = OrderItem.builder()
                     .productId(product.id())
@@ -144,6 +187,23 @@ public class OrderServiceImpl implements OrderService {
             totalAmount = totalAmount.add(
                     orderItem.getSubtotal()
             );
+        }
+
+        if (!changedItems.isEmpty()) {
+            // Persist the fresh snapshot so the client sees the new state on reload. Redis is
+            // outside the DB transaction, so this survives the rollback triggered below.
+            try {
+                cartService.refreshCart(userId);
+            } catch (RuntimeException exception) {
+                // The 409 is the important answer; a failed refresh must not turn it into 502.
+                log.warn(
+                        "Không thể làm mới giỏ hàng của người dùng {} sau khi phát hiện thay đổi: {}",
+                        userId,
+                        exception.getMessage()
+                );
+            }
+
+            throw new CartChangedException(changedItems);
         }
 
         order.setTotalAmount(totalAmount);
@@ -200,27 +260,15 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<OrderSummaryResponse> getOrders(
+    public Page<OrderSummaryResponse> getOrders(
             UUID userId,
             OrderStatus status,
             int page,
-            int size
+            int limit
     ) {
-        if (page < 0) {
-            throw new BadRequestException(
-                    "Trang không được nhỏ hơn 0"
-            );
-        }
-
-        if (size < 1 || size > 100) {
-            throw new BadRequestException(
-                    "Kích thước trang phải từ 1 đến 100"
-            );
-        }
-
-        PageRequest pageable = PageRequest.of(
+        PageRequest pageable = PageRequests.of(
                 page,
-                size,
+                limit,
                 Sort.by(Sort.Direction.DESC, "createdAt")
         );
 
@@ -240,7 +288,7 @@ public class OrderServiceImpl implements OrderService {
                     .map(orderMapper::toSummaryResponse);
         }
 
-        return PageResponse.from(result);
+        return result;
     }
 
     @Override
@@ -381,26 +429,14 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<OrderSummaryResponse> getAllOrders(
+    public Page<OrderSummaryResponse> getAllOrders(
             OrderStatus status,
             int page,
-            int size
+            int limit
     ) {
-        if (page < 0) {
-            throw new BadRequestException(
-                    "Trang không được nhỏ hơn 0"
-            );
-        }
-
-        if (size < 1 || size > 100) {
-            throw new BadRequestException(
-                    "Kích thước trang phải từ 1 đến 100"
-            );
-        }
-
-        PageRequest pageable = PageRequest.of(
+        PageRequest pageable = PageRequests.of(
                 page,
-                size,
+                limit,
                 Sort.by(Sort.Direction.DESC, "createdAt")
         );
 
@@ -416,7 +452,7 @@ public class OrderServiceImpl implements OrderService {
                     .map(orderMapper::toSummaryResponse);
         }
 
-        return PageResponse.from(result);
+        return result;
     }
 
     @Override
@@ -488,6 +524,29 @@ public class OrderServiceImpl implements OrderService {
                             + target
             );
         }
+    }
+
+    private ProductResponse fetchProductOrNull(UUID productId) {
+        try {
+            return productClient.getProductById(productId);
+        } catch (ResourceNotFoundException exception) {
+            return null;
+        }
+    }
+
+    private ProductVariantResponse findVariantOrNull(
+            ProductResponse product,
+            UUID variantId
+    ) {
+        if (product == null || product.variants() == null) {
+            return null;
+        }
+
+        return product.variants()
+                .stream()
+                .filter(item -> Objects.equals(item.id(), variantId))
+                .findFirst()
+                .orElse(null);
     }
 
     private String generateOrderCode() {

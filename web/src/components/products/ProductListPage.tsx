@@ -5,9 +5,11 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ErrorState } from "@/components/common/ErrorState";
 import { LoadingState } from "@/components/common/LoadingState";
+import { Pagination } from "@/components/common/Pagination";
 import { useAvailableFrameShapes } from "@/hooks/useAvailableFrameShapes";
 import { useBrands } from "@/hooks/useBrands";
 import { useCategories } from "@/hooks/useCategories";
+import { usePageParam } from "@/hooks/usePageParam";
 import { useProducts } from "@/hooks/useProducts";
 import type { FrameShape, GenderTarget, MaterialType, ProductSort } from "@/types/product";
 import { HeroCarousel } from "./HeroCarousel";
@@ -51,8 +53,9 @@ export function ProductListPage() {
   const minPrice = searchParams.has("minPrice") ? Number(searchParams.get("minPrice")) : undefined;
   const maxPrice = searchParams.has("maxPrice") ? Number(searchParams.get("maxPrice")) : undefined;
   const search = searchParams.get("search") ?? undefined;
+  const [page, setPage] = usePageParam();
 
-  const { products, isLoading, error } = useProducts({
+  const { products, meta, isLoading, error } = useProducts({
     categoryId,
     brandIds,
     frameShape,
@@ -63,6 +66,7 @@ export function ProductListPage() {
     minPrice,
     maxPrice,
     search,
+    page,
   });
   const { categories } = useCategories();
   const { brands } = useBrands();
@@ -123,6 +127,9 @@ export function ProductListPage() {
 
     if (nextSearch) params.set("search", nextSearch);
     else params.delete("search");
+
+    // A new filter set starts again from page 1.
+    params.delete("page");
 
     const query = params.toString();
     router.push(query ? `/?${query}` : "/");
@@ -227,6 +234,9 @@ export function ProductListPage() {
         {isLoading && <LoadingState label="Đang tải sản phẩm..." />}
         {!isLoading && error && <ErrorState message={error} />}
         {!isLoading && !error && <ProductGrid products={products} />}
+        {!isLoading && !error && meta && (
+          <Pagination page={page} totalPages={meta.totalPages} onPageChange={setPage} />
+        )}
       </section>
     </>
   );

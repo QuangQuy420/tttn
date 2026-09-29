@@ -26,9 +26,3 @@ export interface LoginData {
   tokenType?: string;
   expiresIn?: number;
 }
-
-export interface ApiResponse<T> {
-  success?: boolean;
-  message?: string;
-  data: T;
-}

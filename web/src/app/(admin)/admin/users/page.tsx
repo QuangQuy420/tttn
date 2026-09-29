@@ -11,6 +11,8 @@ import {
 } from "@/lib/api";
 import { ErrorState } from "@/components/common/ErrorState";
 import { LoadingState } from "@/components/common/LoadingState";
+import { Pagination } from "@/components/common/Pagination";
+import { usePageParam } from "@/hooks/usePageParam";
 import { getAccessToken } from "@/lib/auth/session";
 import type { Role } from "@/types/user";
 
@@ -23,8 +25,7 @@ const PAGE_SIZE = 20;
 // modal-based edit pattern.
 export default function AdminUsersPage() {
     const [users, setUsers] = useState<AdminUser[]>([]);
-    const [total, setTotal] = useState(0);
-    const [page, setPage] = useState(1);
+    const [page, setPage] = usePageParam();
     const [totalPages, setTotalPages] = useState(1);
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
@@ -33,32 +34,6 @@ export default function AdminUsersPage() {
     const [rolesError, setRolesError] = useState<string | null>(null);
 
     const [managingUser, setManagingUser] = useState<AdminUser | null>(null);
-
-    async function run(targetPage: number) {
-        setIsLoading(true);
-        setLoadError(null);
-
-        const token = getAccessToken();
-        if (!token) {
-            setLoadError("Vui lòng đăng nhập lại.");
-            setIsLoading(false);
-            return;
-        }
-
-        try {
-            const response = await listUsers(token, targetPage, PAGE_SIZE);
-            setUsers(response.data.items);
-            setTotal(response.data.total);
-            setTotalPages(response.data.totalPages);
-            setPage(response.data.page);
-        } catch (err) {
-            setLoadError(
-                err instanceof ApiError ? err.message : "Không thể tải danh sách người dùng.",
-            );
-        } finally {
-            setIsLoading(false);
-        }
-    }
 
     useEffect(() => {
         let cancelled = false;
@@ -79,10 +54,8 @@ export default function AdminUsersPage() {
             try {
                 const response = await listUsers(token, page, PAGE_SIZE);
                 if (!cancelled) {
-                    setUsers(response.data.items);
-                    setTotal(response.data.total);
-                    setTotalPages(response.data.totalPages);
-                    setPage(response.data.page);
+                    setUsers(response.data);
+                    setTotalPages(response.meta.totalPages);
                 }
             } catch (err) {
                 if (!cancelled) {
@@ -111,7 +84,8 @@ export default function AdminUsersPage() {
             const token = getAccessToken();
             if (!token) return;
             try {
-                const response = await listRoles(token);
+                // Role picker options: ask for the API max so every role shows up.
+                const response = await listRoles(token, { limit: 100 });
                 if (!cancelled) setRoles(response.data);
             } catch (err) {
                 if (!cancelled) {
@@ -175,28 +149,8 @@ export default function AdminUsersPage() {
                     </div>
                 )}
 
-                {!isLoading && !loadError && totalPages > 1 && (
-                    <div className="orders-page__pagination">
-                        <button
-                            type="button"
-                            className="btn btn--outline btn--small"
-                            onClick={() => run(Math.max(1, page - 1))}
-                            disabled={page <= 1}
-                        >
-                            Trang trước
-                        </button>
-                        <span>
-                            Trang {page} / {totalPages} ({total} người dùng)
-                        </span>
-                        <button
-                            type="button"
-                            className="btn btn--outline btn--small"
-                            onClick={() => run(Math.min(totalPages, page + 1))}
-                            disabled={page >= totalPages}
-                        >
-                            Trang sau
-                        </button>
-                    </div>
+                {!isLoading && !loadError && (
+                    <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
                 )}
             </section>
 

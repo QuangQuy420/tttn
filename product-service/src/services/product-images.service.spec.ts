@@ -3,6 +3,7 @@ import { ProductImagesService } from './product-images.service';
 import { IProductVariantRepository } from '../repositories/product-variant.repository';
 import { IProductImageRepository } from '../repositories/product-image.repository';
 import { IImageStorageRepository } from '../repositories/image-storage.repository';
+import { IProductEventPublisher } from '../repositories/product-event-publisher.repository';
 import { ProductVariant } from '../db/entities/product-variant.entity';
 import { ImageKind } from '../db/enums/image-kind.enum';
 
@@ -17,6 +18,7 @@ describe('ProductImagesService', () => {
   let variantRepository: jest.Mocked<IProductVariantRepository>;
   let imageRepository: jest.Mocked<IProductImageRepository>;
   let imageStorageRepository: jest.Mocked<IImageStorageRepository>;
+  let eventPublisher: jest.Mocked<IProductEventPublisher>;
   let service: ProductImagesService;
 
   beforeEach(() => {
@@ -42,10 +44,14 @@ describe('ProductImagesService', () => {
       upload: jest.fn(),
       deleteByUrl: jest.fn(),
     };
+    eventPublisher = {
+      publish: jest.fn(),
+    };
     service = new ProductImagesService(
       variantRepository,
       imageRepository,
       imageStorageRepository,
+      eventPublisher,
     );
   });
 
@@ -141,6 +147,26 @@ describe('ProductImagesService', () => {
         }),
       );
       expect(imageRepository.createDemotingTryOn).not.toHaveBeenCalled();
+    });
+
+    it('publishes product.updated after the image is attached (AC9)', async () => {
+      imageRepository.findByProductIds.mockResolvedValue([]);
+      imageStorageRepository.upload.mockResolvedValue(
+        'https://example.test/gallery.jpg',
+      );
+      imageRepository.create.mockResolvedValue({ id: 'image-1' } as never);
+
+      await service.uploadAndAttach(
+        'product-1',
+        null,
+        makeFile('image/jpeg', JPEG_BYTES),
+      );
+
+      expect(eventPublisher.publish).toHaveBeenCalledTimes(1);
+      expect(eventPublisher.publish).toHaveBeenCalledWith({
+        type: 'product.updated',
+        productId: 'product-1',
+      });
     });
 
     it('stores a TRY_ON PNG through createDemotingTryOn so the previous TRY_ON is demoted (AC3)', async () => {

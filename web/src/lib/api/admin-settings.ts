@@ -6,7 +6,7 @@
 // /api/v1/admin/saga-settings routes, guarded by JwtGuard + PermissionsGuard +
 // saga-settings:manage.
 
-import { apiFetch } from "./client";
+import { apiFetchData } from "./client";
 
 // Mirrors order-service's ReconciliationSettingsResponse, returned by both GET and PUT.
 export interface SagaSettings {
@@ -31,7 +31,7 @@ function authHeaders(token: string): HeadersInit {
 }
 
 export function getSagaSettings(token: string): Promise<SagaSettings> {
-  return apiFetch<SagaSettings>("/admin/saga-settings", {
+  return apiFetchData<SagaSettings>("/admin/saga-settings", {
     method: "GET",
     headers: authHeaders(token),
   });
@@ -41,7 +41,7 @@ export function updateSagaSettings(
   token: string,
   payload: UpdateSagaSettingsRequest,
 ): Promise<SagaSettings> {
-  return apiFetch<SagaSettings>("/admin/saga-settings", {
+  return apiFetchData<SagaSettings>("/admin/saga-settings", {
     method: "PUT",
     headers: authHeaders(token),
     body: JSON.stringify(payload),

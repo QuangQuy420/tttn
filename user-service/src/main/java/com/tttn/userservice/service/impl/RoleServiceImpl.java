@@ -12,7 +12,10 @@ import com.tttn.userservice.repository.PermissionRepository;
 import com.tttn.userservice.repository.RoleRepository;
 import com.tttn.userservice.repository.UserRepository;
 import com.tttn.userservice.service.RoleService;
+import com.tttn.userservice.util.PageRequests;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,11 +34,9 @@ public class RoleServiceImpl implements RoleService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<RoleResponse> listRoles() {
-        return roleRepository.findAll()
-                .stream()
-                .map(this::toRoleResponse)
-                .toList();
+    public Page<RoleResponse> listRoles(int page, int limit) {
+        return roleRepository.findAll(PageRequests.of(page, limit, Sort.by("name")))
+                .map(this::toRoleResponse);
     }
 
     @Override
@@ -97,11 +98,9 @@ public class RoleServiceImpl implements RoleService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<PermissionResponse> listPermissions() {
-        return permissionRepository.findAll()
-                .stream()
-                .map(this::toPermissionResponse)
-                .toList();
+    public Page<PermissionResponse> listPermissions(int page, int limit) {
+        return permissionRepository.findAll(PageRequests.of(page, limit, Sort.by("code")))
+                .map(this::toPermissionResponse);
     }
 
     private Role findRole(UUID roleId) {

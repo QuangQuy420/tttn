@@ -2,14 +2,18 @@ package com.tttn.orderservice.service.impl;
 
 import com.tttn.orderservice.client.ProductClient;
 import com.tttn.orderservice.dto.request.CheckoutRequest;
+import com.tttn.orderservice.dto.response.CartChangedItemResponse;
 import com.tttn.orderservice.dto.response.CheckoutResponse;
 import com.tttn.orderservice.dto.response.ProductResponse;
 import com.tttn.orderservice.dto.response.ProductVariantResponse;
 import com.tttn.orderservice.entity.Order;
 import com.tttn.orderservice.entity.OrderItem;
+import com.tttn.orderservice.enums.CartItemUnavailableReason;
 import com.tttn.orderservice.enums.OrderStatus;
 import com.tttn.orderservice.enums.PaymentStatus;
+import com.tttn.orderservice.enums.ProductStatus;
 import com.tttn.orderservice.exception.BadRequestException;
+import com.tttn.orderservice.exception.CartChangedException;
 import com.tttn.orderservice.exception.ExternalServiceException;
 import com.tttn.orderservice.exception.ResourceNotFoundException;
 import com.tttn.orderservice.mapper.OrderMapper;
@@ -31,6 +35,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -88,7 +93,8 @@ class OrderServiceCheckoutTest {
                 "123 Nguyễn Trãi, Quận 1, TP.HCM",
                 "Giao hàng trong giờ hành chính",
                 "VNPAY",
-                List.of(variantId)
+                List.of(variantId),
+                null
         );
     }
 
@@ -175,7 +181,8 @@ class OrderServiceCheckoutTest {
                             productId,
                             variantId,
                             3,
-                            "image-url"
+                            "image-url",
+                            new BigDecimal("550000")
                     )
             );
 
@@ -241,7 +248,8 @@ class OrderServiceCheckoutTest {
                             productId,
                             variantId,
                             2,
-                            "image-url"
+                            "image-url",
+                            new BigDecimal("750000")
                     )
             );
 
@@ -294,14 +302,16 @@ class OrderServiceCheckoutTest {
                     productId,
                     variantId,
                     2,
-                    "first-image"
+                    "first-image",
+                    new BigDecimal("600000")
             );
 
             CartItem secondItem = createCartItem(
                     secondProductId,
                     secondVariantId,
                     1,
-                    "second-image"
+                    "second-image",
+                    new BigDecimal("1250000")
             );
 
             Cart cart = createCart(firstItem, secondItem);
@@ -349,7 +359,8 @@ class OrderServiceCheckoutTest {
                     checkoutRequest.shippingAddress(),
                     checkoutRequest.note(),
                     checkoutRequest.paymentMethod(),
-                    List.of(variantId, secondVariantId)
+                    List.of(variantId, secondVariantId),
+                    null
             );
 
             CheckoutResponse response =
@@ -390,7 +401,8 @@ class OrderServiceCheckoutTest {
                             productId,
                             variantId,
                             1,
-                            "product-image"
+                            "product-image",
+                            new BigDecimal("100000")
                     )
             );
 
@@ -473,7 +485,8 @@ class OrderServiceCheckoutTest {
                             productId,
                             variantId,
                             1,
-                            "image-url"
+                            "image-url",
+                            new BigDecimal("100000")
                     )
             );
 
@@ -546,7 +559,8 @@ class OrderServiceCheckoutTest {
                             productId,
                             variantId,
                             3,
-                            "image-url"
+                            "image-url",
+                            new BigDecimal("100000")
                     )
             );
 
@@ -661,8 +675,8 @@ class OrderServiceCheckoutTest {
         }
 
         @Test
-        @DisplayName("Ném ResourceNotFoundException khi không tìm thấy variant")
-        void checkout_WhenVariantDoesNotExist_ShouldThrowResourceNotFoundException() {
+        @DisplayName("Ném CartChangedException khi variant đã bị xóa")
+        void checkout_WhenVariantDoesNotExist_ShouldThrowCartChangedException() {
             UUID differentVariantId = UUID.randomUUID();
 
             Cart cart = createCart(
@@ -691,19 +705,27 @@ class OrderServiceCheckoutTest {
             when(productClient.getProductById(productId))
                     .thenReturn(product);
 
-            ResourceNotFoundException exception =
+            CartChangedException exception =
                     assertThrows(
-                            ResourceNotFoundException.class,
+                            CartChangedException.class,
                             () -> orderService.checkout(
                                     userId,
                                     checkoutRequest
                             )
                     );
 
+            List<CartChangedItemResponse> changedItems =
+                    exception.getChangedItems();
+
+            assertEquals(1, changedItems.size());
+            assertEquals(variantId, changedItems.get(0).variantId());
+            assertFalse(changedItems.get(0).available());
             assertEquals(
-                    "Không tìm thấy biến thể sản phẩm",
-                    exception.getMessage()
+                    CartItemUnavailableReason.VARIANT_REMOVED,
+                    changedItems.get(0).unavailableReason()
             );
+
+            verify(cartService).refreshCart(userId);
 
             verify(orderRepository, never())
                     .save(any(Order.class));
@@ -715,7 +737,73 @@ class OrderServiceCheckoutTest {
         }
 
         @Test
-        @DisplayName("Không xóa giỏ hàng khi ProductClient phát sinh lỗi")
+        @DisplayName("Ném CartChangedException khi giá trong giỏ khác giá hiện tại")
+        void checkout_WhenPriceChanged_ShouldThrowCartChangedException() {
+            Cart cart = createCart(
+                    createCartItem(
+                            productId,
+                            variantId,
+                            1,
+                            "image-url",
+                            new BigDecimal("500000")
+                    )
+            );
+
+            ProductResponse product = createProduct(
+                    productId,
+                    new BigDecimal("600000"),
+                    List.of(
+                            createVariant(
+                                    variantId,
+                                    BigDecimal.ZERO
+                            )
+                    )
+            );
+
+            when(cartService.getCartEntity(userId))
+                    .thenReturn(cart);
+
+            when(productClient.getProductById(productId))
+                    .thenReturn(product);
+
+            CartChangedException exception =
+                    assertThrows(
+                            CartChangedException.class,
+                            () -> orderService.checkout(
+                                    userId,
+                                    checkoutRequest
+                            )
+                    );
+
+            List<CartChangedItemResponse> changedItems =
+                    exception.getChangedItems();
+
+            assertEquals(1, changedItems.size());
+            assertEquals(variantId, changedItems.get(0).variantId());
+            assertEquals(
+                    new BigDecimal("500000"),
+                    changedItems.get(0).cartUnitPrice()
+            );
+            assertEquals(
+                    new BigDecimal("600000"),
+                    changedItems.get(0).currentUnitPrice()
+            );
+            assertTrue(changedItems.get(0).available());
+            assertNull(changedItems.get(0).unavailableReason());
+
+            verify(cartService).refreshCart(userId);
+
+            verify(orderRepository, never())
+                    .save(any(Order.class));
+
+            verifyNoInteractions(orderSagaEventPublisher);
+
+            verify(cartService, never())
+                    .clearCart(any(UUID.class));
+        }
+
+        @Test
+        @DisplayName("Không xóa giỏ hàng và ném CartChangedException khi sản phẩm không còn tồn tại")
         void checkout_WhenProductClientThrowsException_ShouldNotClearCart() {
             Cart cart = createCart(
                     createCartItem(
@@ -736,9 +824,9 @@ class OrderServiceCheckoutTest {
                             )
                     );
 
-            ResourceNotFoundException exception =
+            CartChangedException exception =
                     assertThrows(
-                            ResourceNotFoundException.class,
+                            CartChangedException.class,
                             () -> orderService.checkout(
                                     userId,
                                     checkoutRequest
@@ -746,8 +834,8 @@ class OrderServiceCheckoutTest {
                     );
 
             assertEquals(
-                    "Không tìm thấy sản phẩm",
-                    exception.getMessage()
+                    CartItemUnavailableReason.PRODUCT_UNAVAILABLE,
+                    exception.getChangedItems().get(0).unavailableReason()
             );
 
             verify(orderRepository, never())
@@ -760,6 +848,70 @@ class OrderServiceCheckoutTest {
         }
 
         @Test
+        @DisplayName("Ném CartChangedException khi giá user đã thấy khác giá hiện tại dù giỏ đã được đồng bộ")
+        void checkout_WhenExpectedPriceDiffersFromLivePrice_ShouldThrowCartChangedException() {
+            // Background sync already wrote the new price (1,300,000) into the Redis snapshot,
+            // but the user saw 1,200,000 on the checkout page.
+            Cart cart = createCart(
+                    createCartItem(
+                            productId,
+                            variantId,
+                            1,
+                            "image-url",
+                            new BigDecimal("1300000")
+                    )
+            );
+
+            ProductResponse product = createProduct(
+                    productId,
+                    new BigDecimal("1300000"),
+                    List.of(
+                            createVariant(
+                                    variantId,
+                                    BigDecimal.ZERO
+                            )
+                    )
+            );
+
+            CheckoutRequest requestWithSeenPrice = new CheckoutRequest(
+                    checkoutRequest.receiverName(),
+                    checkoutRequest.receiverPhone(),
+                    checkoutRequest.shippingAddress(),
+                    checkoutRequest.note(),
+                    checkoutRequest.paymentMethod(),
+                    List.of(variantId),
+                    Map.of(variantId, new BigDecimal("1200000"))
+            );
+
+            when(cartService.getCartEntity(userId))
+                    .thenReturn(cart);
+
+            when(productClient.getProductById(productId))
+                    .thenReturn(product);
+
+            CartChangedException exception =
+                    assertThrows(
+                            CartChangedException.class,
+                            () -> orderService.checkout(
+                                    userId,
+                                    requestWithSeenPrice
+                            )
+                    );
+
+            CartChangedItemResponse changedItem =
+                    exception.getChangedItems().get(0);
+
+            assertEquals(0, new BigDecimal("1200000").compareTo(changedItem.cartUnitPrice()));
+            assertEquals(0, new BigDecimal("1300000").compareTo(changedItem.currentUnitPrice()));
+            assertTrue(changedItem.available());
+
+            verify(orderRepository, never())
+                    .save(any(Order.class));
+
+            verifyNoInteractions(orderSagaEventPublisher);
+        }
+
+        @Test
         @DisplayName("Ném ngoại lệ khi gửi sự kiện giữ hàng thất bại")
         void checkout_WhenStockReserveRequestPublishFails_ShouldPropagateException() {
             Cart cart = createCart(
@@ -767,7 +919,8 @@ class OrderServiceCheckoutTest {
                             productId,
                             variantId,
                             1,
-                            "image-url"
+                            "image-url",
+                            new BigDecimal("500000")
                     )
             );
 
@@ -833,6 +986,24 @@ class OrderServiceCheckoutTest {
             int quantity,
             String imageUrl
     ) {
+        return createCartItem(
+                itemProductId,
+                itemVariantId,
+                quantity,
+                imageUrl,
+                new BigDecimal("1200000")
+        );
+    }
+
+    // The checkout guard rejects a cart whose unitPrice differs from product-service's current
+    // price, so fixtures must use the same price as the product they are paired with.
+    private CartItem createCartItem(
+            UUID itemProductId,
+            UUID itemVariantId,
+            int quantity,
+            String imageUrl,
+            BigDecimal unitPrice
+    ) {
         return CartItem.builder()
                 .productId(itemProductId)
                 .variantId(itemVariantId)
@@ -843,7 +1014,7 @@ class OrderServiceCheckoutTest {
                 .productImageUrl(imageUrl)
                 .basePrice(new BigDecimal("1000000"))
                 .extraPrice(new BigDecimal("200000"))
-                .unitPrice(new BigDecimal("1200000"))
+                .unitPrice(unitPrice)
                 .quantity(quantity)
                 .build();
     }
@@ -879,7 +1050,7 @@ class OrderServiceCheckoutTest {
                 "UNISEX",
                 "ACETATE",
                 basePrice,
-                null,
+                ProductStatus.PUBLISHED,
                 null,
                 null,
                 variants,

@@ -2,13 +2,13 @@ package com.tttn.userservice.service;
 
 import com.tttn.userservice.dto.request.AddressRequest;
 import com.tttn.userservice.dto.response.AddressResponse;
+import org.springframework.data.domain.Page;
 
-import java.util.List;
 import java.util.UUID;
 
 public interface AddressService {
 
-    List<AddressResponse> listAddresses(UUID userId);
+    Page<AddressResponse> listAddresses(UUID userId, int page, int limit);
 
     AddressResponse createAddress(UUID userId, AddressRequest request);
 

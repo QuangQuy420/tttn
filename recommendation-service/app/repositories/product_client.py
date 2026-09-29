@@ -90,8 +90,9 @@ class HttpxProductServiceClient:
                 "Không thể kết nối tới product-service."
             ) from exc
 
+        # product-service wraps lists in the shared envelope `{success, message, data, meta}`.
         body = response.json()
-        return [RecommendedProductDto(**item, score=0.0) for item in body["items"]]
+        return [RecommendedProductDto(**item, score=0.0) for item in body["data"]]
 
 
 @lru_cache

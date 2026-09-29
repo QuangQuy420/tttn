@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { ApiError, getProducts } from "@/lib/api";
+import type { PageMeta } from "@/types/api";
 import type { Product, ProductListParams } from "@/types/product";
 
 interface UseProductsResult {
   products: Product[];
+  // Pagination info of the last successful fetch (null until the first one resolves).
+  meta: PageMeta | null;
   isLoading: boolean;
   error: string | null;
   // Re-runs the same fetch on demand (e.g. after an admin delete) without waiting for a param
@@ -15,6 +18,7 @@ interface UseProductsResult {
 
 export function useProducts(params: ProductListParams): UseProductsResult {
   const [products, setProducts] = useState<Product[]>([]);
+  const [meta, setMeta] = useState<PageMeta | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,7 +61,8 @@ export function useProducts(params: ProductListParams): UseProductsResult {
         maxPrice,
         includeAllStatuses,
       });
-      setProducts(response.items);
+      setProducts(response.data);
+      setMeta(response.meta);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to load products.");
     } finally {
@@ -88,7 +93,10 @@ export function useProducts(params: ProductListParams): UseProductsResult {
           maxPrice,
           includeAllStatuses,
         });
-        if (!cancelled) setProducts(response.items);
+        if (!cancelled) {
+          setProducts(response.data);
+          setMeta(response.meta);
+        }
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof ApiError ? err.message : "Failed to load products.");
@@ -120,5 +128,5 @@ export function useProducts(params: ProductListParams): UseProductsResult {
     includeAllStatuses,
   ]);
 
-  return { products, isLoading, error, refetch: run };
+  return { products, meta, isLoading, error, refetch: run };
 }

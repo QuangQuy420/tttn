@@ -2,9 +2,9 @@
 // only ever acts on the *caller's own* account via /users/me). Everything here acts on an
 // arbitrary user by id and requires the caller to hold `user:manage-roles`.
 
-import type { ApiResponse } from "@/types/auth";
-import type { PaginatedResponse } from "@/types/api";
-import { apiFetch } from "./client";
+import type { ApiResponse, Paginated } from "@/types/api";
+import { apiFetch, apiFetchPage } from "./client";
+import { pageQuery } from "./query";
 
 // Mirrors user-service's UserResponse (id, email, username, roles: string[], status) —
 // returned by both the assign- and remove-role endpoints.
@@ -26,14 +26,11 @@ export function listUsers(
     token: string,
     page: number,
     limit: number,
-): Promise<ApiResponse<PaginatedResponse<AdminUser>>> {
-    return apiFetch<ApiResponse<PaginatedResponse<AdminUser>>>(
-        `/users?page=${encodeURIComponent(page)}&limit=${encodeURIComponent(limit)}`,
-        {
-            method: "GET",
-            headers: authHeaders(token),
-        },
-    );
+): Promise<Paginated<AdminUser>> {
+    return apiFetchPage<AdminUser>(`/users${pageQuery({ page, limit })}`, {
+        method: "GET",
+        headers: authHeaders(token),
+    });
 }
 
 export function assignRoleToUser(

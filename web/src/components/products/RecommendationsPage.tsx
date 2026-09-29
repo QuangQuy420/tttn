@@ -4,6 +4,8 @@ import { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { ErrorState } from "@/components/common/ErrorState";
 import { LoadingState } from "@/components/common/LoadingState";
+import { Pagination } from "@/components/common/Pagination";
+import { usePageParam } from "@/hooks/usePageParam";
 import { useRecommendations } from "@/hooks/useRecommendations";
 import { formatFaceShapeVi } from "@/lib/labels";
 import type { FaceShapeTag } from "@/types/product";
@@ -21,14 +23,15 @@ function isFaceShapeTag(value: string | null): value is FaceShapeTag {
 export function RecommendationsPage() {
   const searchParams = useSearchParams();
   const faceShapeParam = searchParams.get("faceShape");
-  const { items, isLoading, error, recommend } = useRecommendations();
+  const [page, setPage] = usePageParam();
+  const { items, meta, isLoading, error, recommend } = useRecommendations();
 
   useEffect(() => {
     if (isFaceShapeTag(faceShapeParam)) {
-      void recommend(faceShapeParam);
+      void recommend(faceShapeParam, page);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- recommend is stable across renders.
-  }, [faceShapeParam]);
+  }, [faceShapeParam, page]);
 
   if (!isFaceShapeTag(faceShapeParam)) {
     return (
@@ -57,6 +60,9 @@ export function RecommendationsPage() {
         <p className="product-grid__empty">Chưa có gọng kính nào phù hợp với dáng mặt này.</p>
       )}
       {!isLoading && !error && items.length > 0 && <RecommendationGrid products={items} />}
+      {!isLoading && !error && meta && (
+        <Pagination page={page} totalPages={meta.totalPages} onPageChange={setPage} />
+      )}
     </section>
   );
 }

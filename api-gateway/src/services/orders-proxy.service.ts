@@ -82,6 +82,23 @@ export class OrdersProxyService {
     }
   }
 
+  /**
+   * Re-reads every cart item from product-service (price/name/image/stock/
+   * availability) and returns `{ cart, changedVariantIds }` — used by web
+   * before checkout.
+   */
+  async refreshCart(userId: string): Promise<unknown> {
+    const path = `/api/v1/carts/${userId}/refresh`;
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(`${this.baseUrl}${path}`),
+      );
+      return response.data;
+    } catch (error) {
+      throw this.toGatewayError(error as AxiosError, path);
+    }
+  }
+
   async clearCart(userId: string): Promise<unknown> {
     const path = `/api/v1/carts/${userId}`;
     try {
@@ -166,16 +183,25 @@ export class OrdersProxyService {
     }
   }
 
-  async getSagaLogDays(): Promise<unknown> {
-    return this.forwardGet('/api/v1/admin/saga-logs/days');
+  async getSagaLogDays(query: Record<string, unknown>): Promise<unknown> {
+    return this.forwardGet('/api/v1/admin/saga-logs/days', query);
   }
 
-  async getSagaLogsForDay(date: string): Promise<unknown> {
-    return this.forwardGet(`/api/v1/admin/saga-logs/days/${date}`);
+  async getSagaLogsForDay(
+    date: string,
+    query: Record<string, unknown>,
+  ): Promise<unknown> {
+    return this.forwardGet(`/api/v1/admin/saga-logs/days/${date}`, query);
   }
 
-  async getOrderSagaLogs(orderId: string): Promise<unknown> {
-    return this.forwardGet(`/api/v1/admin/saga-logs/orders/${orderId}`);
+  async getOrderSagaLogs(
+    orderId: string,
+    query: Record<string, unknown>,
+  ): Promise<unknown> {
+    return this.forwardGet(
+      `/api/v1/admin/saga-logs/orders/${orderId}`,
+      query,
+    );
   }
 
   async getSagaSettings(): Promise<unknown> {

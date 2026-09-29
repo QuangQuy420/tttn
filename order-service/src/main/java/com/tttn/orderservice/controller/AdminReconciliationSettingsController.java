@@ -1,6 +1,7 @@
 package com.tttn.orderservice.controller;
 
 import com.tttn.orderservice.dto.request.UpdateReconciliationSettingsRequest;
+import com.tttn.orderservice.dto.response.ApiResponse;
 import com.tttn.orderservice.dto.response.ReconciliationSettingsResponse;
 import com.tttn.orderservice.service.ReconciliationSettingsService;
 import jakarta.validation.Valid;
@@ -29,23 +30,25 @@ public class AdminReconciliationSettingsController {
     private final ReconciliationSettingsService reconciliationSettingsService;
 
     @GetMapping
-    public ResponseEntity<ReconciliationSettingsResponse> getSettings() {
-        return ResponseEntity.ok(reconciliationSettingsService.get());
+    public ResponseEntity<ApiResponse<ReconciliationSettingsResponse>> getSettings() {
+        return ResponseEntity.ok(ApiResponse.ok(reconciliationSettingsService.get()));
     }
 
     @PutMapping
-    public ResponseEntity<ReconciliationSettingsResponse> updateSettings(
+    public ResponseEntity<ApiResponse<ReconciliationSettingsResponse>> updateSettings(
             @RequestHeader("X-User-Id")
             UUID updatedBy,
             @Valid @RequestBody
             UpdateReconciliationSettingsRequest request
     ) {
         return ResponseEntity.ok(
-                reconciliationSettingsService.update(
-                        request.intervalMs(),
-                        request.stuckThresholdMinutes(),
-                        request.maxAttempts(),
-                        updatedBy
+                ApiResponse.ok(
+                        reconciliationSettingsService.update(
+                                request.intervalMs(),
+                                request.stuckThresholdMinutes(),
+                                request.maxAttempts(),
+                                updatedBy
+                        )
                 )
         );
     }

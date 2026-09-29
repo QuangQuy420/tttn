@@ -52,8 +52,11 @@ export class UsersProxyService {
         );
     }
 
-    listAddresses(authorization?: string): Promise<unknown> {
-        return this.forwardGet('/api/v1/addresses', authorization);
+    listAddresses(
+        query: Record<string, unknown>,
+        authorization?: string,
+    ): Promise<unknown> {
+        return this.forwardGet('/api/v1/addresses', authorization, query);
     }
 
     createAddress(
@@ -75,8 +78,11 @@ export class UsersProxyService {
         return this.forwardDelete(`/api/v1/addresses/${id}`, authorization);
     }
 
-    listRoles(authorization?: string): Promise<unknown> {
-        return this.forwardGet('/api/v1/roles', authorization);
+    listRoles(
+        query: Record<string, unknown>,
+        authorization?: string,
+    ): Promise<unknown> {
+        return this.forwardGet('/api/v1/roles', authorization, query);
     }
 
     listUsers(
@@ -105,8 +111,11 @@ export class UsersProxyService {
         return this.forwardDelete(`/api/v1/roles/${id}`, authorization);
     }
 
-    listPermissions(authorization?: string): Promise<unknown> {
-        return this.forwardGet('/api/v1/permissions', authorization);
+    listPermissions(
+        query: Record<string, unknown>,
+        authorization?: string,
+    ): Promise<unknown> {
+        return this.forwardGet('/api/v1/permissions', authorization, query);
     }
 
     assignRoleToUser(

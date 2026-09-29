@@ -11,7 +11,8 @@ from app.repositories.product_client import (
     ProductServiceTimeoutError,
     ProductServiceUnavailableError,
 )
-from app.schemas.recommend import RecommendRequest, RecommendResponse
+from app.schemas.common import ApiResponse
+from app.schemas.recommend import RecommendedProductDto, RecommendRequest
 from app.services.recommendation_service import (
     RecommendationService,
     get_recommendation_service,
@@ -25,11 +26,11 @@ async def health() -> dict:
     return {"status": "ok"}
 
 
-@router.post("/recommend", response_model=RecommendResponse)
+@router.post("/recommend", response_model=ApiResponse[list[RecommendedProductDto]])
 async def recommend(
     request: RecommendRequest,
     service: RecommendationService = Depends(get_recommendation_service),
-) -> RecommendResponse:
+) -> ApiResponse[list[RecommendedProductDto]]:
     try:
         return await service.recommend(request)
     except ProductServiceTimeoutError as exc:

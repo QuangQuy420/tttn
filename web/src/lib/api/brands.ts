@@ -3,7 +3,9 @@ import type {
   CreateBrandPayload,
   UpdateBrandPayload,
 } from "@/types/product";
-import { apiFetch } from "./client";
+import type { PageParams, Paginated } from "@/types/api";
+import { apiFetch, apiFetchData, apiFetchPage } from "./client";
+import { pageQuery } from "./query";
 
 function authHeaders(token: string): HeadersInit {
   return {
@@ -11,14 +13,14 @@ function authHeaders(token: string): HeadersInit {
   };
 }
 
-// Mirrors getCategories in ./products.ts — a flat GET, no query params, calling GET /brands
-// (api-gateway's BrandsController forwards to product-service's GET /brands).
-export function getBrands(): Promise<Brand[]> {
-  return apiFetch<Brand[]>("/brands");
+// Mirrors getCategories in ./products.ts — a paginated GET /brands (api-gateway's
+// BrandsController forwards to product-service's GET /brands).
+export function getBrands(params: PageParams = {}): Promise<Paginated<Brand>> {
+  return apiFetchPage<Brand>(`/brands${pageQuery(params)}`);
 }
 
 export function createBrand(payload: CreateBrandPayload, token: string): Promise<Brand> {
-  return apiFetch<Brand>("/brands", {
+  return apiFetchData<Brand>("/brands", {
     method: "POST",
     headers: authHeaders(token),
     body: JSON.stringify(payload),
@@ -30,7 +32,7 @@ export function updateBrand(
   payload: UpdateBrandPayload,
   token: string,
 ): Promise<Brand> {
-  return apiFetch<Brand>(`/brands/${encodeURIComponent(id)}`, {
+  return apiFetchData<Brand>(`/brands/${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: authHeaders(token),
     body: JSON.stringify(payload),

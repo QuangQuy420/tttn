@@ -9,8 +9,12 @@ import com.tttn.orderservice.enums.SagaLogLevel;
 import com.tttn.orderservice.enums.SagaLogService;
 import com.tttn.orderservice.enums.SagaLogStage;
 import com.tttn.orderservice.repository.OrderSagaLogRepository;
+import com.tttn.orderservice.util.PageRequests;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -70,10 +74,16 @@ public class OrderSagaLogService {
     }
 
     @Transactional(readOnly = true)
-    public List<SagaLogDayResponse> getLogDays() {
-        List<LocalDate> dates = orderSagaLogRepository.findDistinctLogDates();
+    public Page<SagaLogDayResponse> getLogDays(int page, int limit) {
+        PageRequest pageable = PageRequests.of(page, limit);
 
-        return dates.stream()
+        // Slice the (cheap) date list first so per-day aggregation only runs for this page.
+        Page<LocalDate> dates = PageRequests.slice(
+                orderSagaLogRepository.findDistinctLogDates(),
+                pageable
+        );
+
+        return dates
                 .map(date -> {
                     List<OrderSagaLog> logsOfDay = logsBetween(date);
 
@@ -85,18 +95,23 @@ public class OrderSagaLogService {
                             logsOfDay.size(),
                             hasWarning
                     );
-                })
-                .toList();
+                });
     }
 
     @Transactional(readOnly = true)
-    public List<OrderLogSummaryResponse> getOrdersForDay(LocalDate date) {
+    public Page<OrderLogSummaryResponse> getOrdersForDay(
+            LocalDate date,
+            int page,
+            int limit
+    ) {
+        PageRequest pageable = PageRequests.of(page, limit);
+
         List<OrderSagaLog> logsOfDay = logsBetween(date);
 
         Map<UUID, List<OrderSagaLog>> byOrder = logsOfDay.stream()
                 .collect(Collectors.groupingBy(entry -> entry.getOrder().getId()));
 
-        return byOrder.values().stream()
+        List<OrderLogSummaryResponse> summaries = byOrder.values().stream()
                 .map(this::toOrderLogSummary)
                 .sorted(
                         Comparator.comparing(
@@ -105,13 +120,24 @@ public class OrderSagaLogService {
                         )
                 )
                 .toList();
+
+        return PageRequests.slice(summaries, pageable);
     }
 
     @Transactional(readOnly = true)
-    public List<OrderSagaLogResponse> getOrderLogs(UUID orderId) {
+    public Page<OrderSagaLogResponse> getOrderLogs(
+            UUID orderId,
+            int page,
+            int limit
+    ) {
+        PageRequest pageable = PageRequests.of(
+                page,
+                limit,
+                Sort.by(Sort.Direction.ASC, "occurredAt")
+        );
+
         return orderSagaLogRepository
-                .findByOrderIdOrderByOccurredAtAsc(orderId)
-                .stream()
+                .findByOrderId(orderId, pageable)
                 .map(entry -> new OrderSagaLogResponse(
                         entry.getStage(),
                         entry.getLevel(),
@@ -121,8 +147,7 @@ public class OrderSagaLogService {
                         entry.getErrorDetail(),
                         entry.getRetryCount(),
                         entry.getOccurredAt()
-                ))
-                .toList();
+                ));
     }
 
     private List<OrderSagaLog> logsBetween(LocalDate date) {

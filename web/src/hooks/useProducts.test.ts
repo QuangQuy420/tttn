@@ -22,11 +22,8 @@ describe("useProducts", () => {
 
   it("starts in a loading state and resolves with the fetched products", async () => {
     mockedGetProducts.mockResolvedValue({
-      items: [sampleProduct],
-      total: 1,
-      page: 1,
-      limit: 20,
-      totalPages: 1,
+      data: [sampleProduct],
+      meta: { total: 1, page: 1, limit: 20, totalPages: 1 },
     });
 
     const { result } = renderHook(() => useProducts({}));
@@ -36,16 +33,14 @@ describe("useProducts", () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.products).toEqual([sampleProduct]);
+    expect(result.current.meta).toEqual({ total: 1, page: 1, limit: 20, totalPages: 1 });
     expect(result.current.error).toBeNull();
   });
 
   it("resolves to an empty product list without setting an error", async () => {
     mockedGetProducts.mockResolvedValue({
-      items: [],
-      total: 0,
-      page: 1,
-      limit: 20,
-      totalPages: 0,
+      data: [],
+      meta: { total: 0, page: 1, limit: 20, totalPages: 0 },
     });
 
     const { result } = renderHook(() => useProducts({}));
@@ -69,11 +64,8 @@ describe("useProducts", () => {
 
   it("refetches when the filter params change", async () => {
     mockedGetProducts.mockResolvedValue({
-      items: [sampleProduct],
-      total: 1,
-      page: 1,
-      limit: 20,
-      totalPages: 1,
+      data: [sampleProduct],
+      meta: { total: 1, page: 1, limit: 20, totalPages: 1 },
     });
 
     const { rerender } = renderHook(({ categoryId }) => useProducts({ categoryId }), {
@@ -92,11 +84,8 @@ describe("useProducts", () => {
 
   it("refetches when the search param changes", async () => {
     mockedGetProducts.mockResolvedValue({
-      items: [sampleProduct],
-      total: 1,
-      page: 1,
-      limit: 20,
-      totalPages: 1,
+      data: [sampleProduct],
+      meta: { total: 1, page: 1, limit: 20, totalPages: 1 },
     });
 
     const { rerender } = renderHook(({ search }) => useProducts({ search }), {
@@ -115,11 +104,8 @@ describe("useProducts", () => {
 
   it("refetches when the brand filter changes", async () => {
     mockedGetProducts.mockResolvedValue({
-      items: [sampleProduct],
-      total: 1,
-      page: 1,
-      limit: 20,
-      totalPages: 1,
+      data: [sampleProduct],
+      meta: { total: 1, page: 1, limit: 20, totalPages: 1 },
     });
 
     const { rerender } = renderHook(({ brandId }) => useProducts({ brandId }), {
@@ -138,11 +124,8 @@ describe("useProducts", () => {
 
   it("refetches when the minPrice/maxPrice params change", async () => {
     mockedGetProducts.mockResolvedValue({
-      items: [sampleProduct],
-      total: 1,
-      page: 1,
-      limit: 20,
-      totalPages: 1,
+      data: [sampleProduct],
+      meta: { total: 1, page: 1, limit: 20, totalPages: 1 },
     });
 
     const { rerender } = renderHook(

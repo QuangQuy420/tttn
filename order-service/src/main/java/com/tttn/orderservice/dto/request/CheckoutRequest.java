@@ -5,7 +5,9 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public record CheckoutRequest(
@@ -32,6 +34,11 @@ public record CheckoutRequest(
         String paymentMethod,
 
         @NotEmpty(message = "Vui lòng chọn ít nhất 1 sản phẩm để thanh toán")
-        List<UUID> variantIds
+        List<UUID> variantIds,
+
+        // Optional: variantId → unit price the user saw on the checkout page. The background
+        // cart sync can rewrite the Redis snapshot, so this is the only reliable record of
+        // what the user agreed to pay. Missing entries fall back to the cart's unitPrice.
+        Map<UUID, BigDecimal> expectedUnitPrices
 ) {
 }

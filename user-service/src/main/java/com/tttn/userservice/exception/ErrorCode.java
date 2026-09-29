@@ -46,6 +46,11 @@ public enum ErrorCode {
             HttpStatus.BAD_REQUEST,
             "Dữ liệu đầu vào không hợp lệ"
     ),
+
+    BAD_REQUEST(
+            HttpStatus.BAD_REQUEST,
+            "Yêu cầu không hợp lệ"
+    ),
     RESET_TOKEN_INVALID(
             HttpStatus.BAD_REQUEST,
             "Reset token không hợp lệ"
