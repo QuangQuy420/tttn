@@ -2,6 +2,11 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import type { Product } from "@/types/product";
 import { ProductGrid } from "./ProductGrid";
 
+// ProductCard's ❤ button reads the shared wishlist store (useRouter + wishlist API).
+jest.mock("@/hooks/useWishlist", () => ({
+  useWishlist: () => ({ isLiked: () => false, toggle: jest.fn() }),
+}));
+
 function buildProduct(overrides: Partial<Product> = {}): Product {
   return {
     id: "p1",

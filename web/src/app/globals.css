@@ -4015,3 +4015,230 @@ main {
     width: 100%;
   }
 }
+
+/* ==========================================================================
+   Wishlist (❤) + product reviews
+   ========================================================================== */
+
+.wishlist-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 38px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.wishlist-button:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.wishlist-button--active {
+  border-color: var(--color-accent);
+  color: #c0392b;
+}
+
+.wishlist-button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.wishlist-button--large {
+  width: 52px;
+  font-size: 1.4rem;
+}
+
+.rating-stars {
+  color: #d99a2b;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.rating-stars__empty {
+  color: rgba(43, 36, 32, 0.18);
+}
+
+.product-card__rating {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.4rem;
+  font-size: 0.85rem;
+}
+
+.product-card__rating-count {
+  color: var(--color-text-muted);
+}
+
+.product-reviews {
+  margin-top: clamp(2rem, 5vw, 3.5rem);
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.product-reviews h2 {
+  margin: 0 0 1.25rem;
+  font-family: var(--font-heading);
+  font-size: clamp(1.4rem, 2.5vw, 1.75rem);
+}
+
+.product-reviews__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.product-reviews__average {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 120px;
+}
+
+.product-reviews__average-value {
+  font-family: var(--font-heading);
+  font-size: 2.5rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.product-reviews__count,
+.product-reviews__date,
+.product-reviews__hint {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.product-reviews__distribution {
+  flex: 1;
+  min-width: 220px;
+  max-width: 420px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.product-reviews__bar-row {
+  display: grid;
+  grid-template-columns: 36px 1fr 32px;
+  gap: 0.6rem;
+  align-items: center;
+  font-size: 0.82rem;
+  margin-bottom: 0.3rem;
+}
+
+.product-reviews__bar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(43, 36, 32, 0.08);
+  overflow: hidden;
+}
+
+.product-reviews__bar-fill {
+  display: block;
+  height: 100%;
+  background: #d99a2b;
+}
+
+.product-reviews__mine {
+  margin-bottom: 1.5rem;
+}
+
+.product-reviews__form {
+  max-width: 640px;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+}
+
+.product-reviews__form-title {
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+}
+
+.product-reviews__actions {
+  display: flex;
+  gap: 0.5rem;
+  max-width: 280px;
+}
+
+.star-picker {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.star-picker__star {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 1.6rem;
+  line-height: 1;
+  color: rgba(43, 36, 32, 0.18);
+  cursor: pointer;
+}
+
+.star-picker__star--active {
+  color: #d99a2b;
+}
+
+.product-reviews__list {
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.product-reviews__item {
+  padding: 1rem 0;
+  border-bottom: 1px solid rgba(43, 36, 32, 0.08);
+}
+
+.product-reviews__item--mine {
+  max-width: 640px;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+}
+
+.product-reviews__item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 0.4rem;
+}
+
+.product-reviews__verified {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(74, 90, 82, 0.14);
+  color: #4a5a52;
+}
+
+.product-reviews__comment {
+  margin: 0 0 0.6rem;
+  white-space: pre-line;
+}
+
+.admin-table__row--reviews {
+  grid-template-columns: 1.3fr 1.1fr 0.8fr 2fr 0.9fr 80px;
+}
+
+.admin-table__comment {
+  white-space: pre-line;
+  word-break: break-word;
+}

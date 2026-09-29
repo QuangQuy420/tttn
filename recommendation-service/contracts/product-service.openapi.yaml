@@ -16,7 +16,11 @@ info:
     `{success: true, message, data}` (lists add `meta`), every error body is `ErrorResponse`
     (`{success: false, message, error: {code, details}}`). `GET /health` and 204 responses are
     not wrapped. `/categories` and `/brands` are now paginated like `/products`.
-  version: "0.4.0"
+    0.5.0 adds the wishlist (`/wishlist`), product reviews (`/products/{id}/reviews`) and
+    review moderation (`/admin/reviews`), `avgRating`/`reviewCount` on products and the
+    `rating` sort (.planning/2026-09-29-02-wishlist-and-reviews.md). The caller's identity comes
+    from the `X-User-Id`/`X-User-Name` headers set by api-gateway after its JWT check.
+  version: "0.5.0"
 servers:
   - url: http://localhost:3002
     description: product-service, direct (local dev only)
@@ -31,6 +35,8 @@ tags:
   - name: products
   - name: categories
   - name: brands
+  - name: wishlist
+  - name: reviews
   - name: health
 
 paths:
@@ -142,10 +148,11 @@ paths:
           in: query
           description: >
             `newest` = `createdAt` DESC; `price_asc`/`price_desc` order by `basePrice`,
-            then `createdAt` DESC as a tiebreak.
+            then `createdAt` DESC as a tiebreak; `rating` = `avgRating` DESC, then
+            `reviewCount` DESC, then `createdAt` DESC.
           schema:
             type: string
-            enum: [newest, price_asc, price_desc]
+            enum: [newest, price_asc, price_desc, rating]
             default: newest
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/Limit"
@@ -646,6 +653,303 @@ paths:
         "409":
           $ref: "#/components/responses/BrandInUseError"
 
+  /wishlist:
+    get:
+      tags: [wishlist]
+      summary: List the caller's liked products (newest like first)
+      description: >
+        Only PUBLISHED, non-deleted products are listed (and counted in `meta.total`).
+      operationId: listWishlist
+      parameters:
+        - $ref: "#/components/parameters/XUserId"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated list of liked products
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedProductResponse"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
+  /wishlist/product-ids:
+    get:
+      tags: [wishlist]
+      summary: Every product id the caller has liked (not paginated)
+      description: Used only to paint the ❤ state on product cards — deliberately unpaginated.
+      operationId: listWishlistProductIds
+      parameters:
+        - $ref: "#/components/parameters/XUserId"
+      responses:
+        "200":
+          description: Liked product ids
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductIdsEnvelope"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
+  /wishlist/{productId}:
+    post:
+      tags: [wishlist]
+      summary: Like a product (idempotent)
+      description: "A repeated like keeps a single row and returns `created: false`."
+      operationId: addToWishlist
+      parameters:
+        - $ref: "#/components/parameters/XUserId"
+        - $ref: "#/components/parameters/ProductIdPath"
+      responses:
+        "201":
+          description: Liked (or already liked)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WishlistAddEnvelope"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          description: Product not found or not PUBLISHED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      tags: [wishlist]
+      summary: Unlike a product (idempotent)
+      operationId: removeFromWishlist
+      parameters:
+        - $ref: "#/components/parameters/XUserId"
+        - $ref: "#/components/parameters/ProductIdPath"
+      responses:
+        "204":
+          description: Removed (or was not liked)
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+
+  /products/{id}/reviews/summary:
+    get:
+      tags: [reviews]
+      summary: Rating summary of a product (public)
+      operationId: getReviewSummary
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Average, count and 1–5 star distribution over PUBLISHED reviews
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewSummaryEnvelope"
+        "404":
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /products/{id}/reviews:
+    get:
+      tags: [reviews]
+      summary: List a product's PUBLISHED reviews, newest first (public)
+      operationId: listProductReviews
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated reviews
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedReviewResponse"
+    post:
+      tags: [reviews]
+      summary: Review a purchased product
+      description: >
+        Only a buyer with an order in CONFIRMED/PROCESSING/SHIPPING/DELIVERED/COMPLETED
+        containing the product may review it (checked against order-service, 3 s timeout).
+        One review per user and product. The product's `avgRating`/`reviewCount` are
+        updated in the same transaction.
+      operationId: createReview
+      parameters:
+        - $ref: "#/components/parameters/XUserId"
+        - $ref: "#/components/parameters/XUserName"
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReviewRequest"
+      responses:
+        "201":
+          description: Review created (`isVerifiedPurchase` = true, status PUBLISHED)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewEnvelope"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          description: Bạn cần mua sản phẩm này trước khi đánh giá
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Product not found or not PUBLISHED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Bạn đã đánh giá sản phẩm này
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: >
+            Không thể xác minh lịch sử mua hàng, vui lòng thử lại sau (order-service down or
+            timed out; code `SERVICE_UNAVAILABLE`). No review is created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /products/{id}/reviews/mine:
+    get:
+      tags: [reviews]
+      summary: The caller's own review of a product
+      operationId: getMyReview
+      parameters:
+        - $ref: "#/components/parameters/XUserId"
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: "The review, or `data: null` when the caller has not reviewed the product"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NullableReviewEnvelope"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+    patch:
+      tags: [reviews]
+      summary: Edit the caller's own review
+      operationId: updateMyReview
+      parameters:
+        - $ref: "#/components/parameters/XUserId"
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateReviewRequest"
+      responses:
+        "200":
+          description: Review updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewEnvelope"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          description: Bạn chưa đánh giá sản phẩm này
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      tags: [reviews]
+      summary: Delete the caller's own review
+      operationId: deleteMyReview
+      parameters:
+        - $ref: "#/components/parameters/XUserId"
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "204":
+          description: Review deleted
+        "401":
+          $ref: "#/components/responses/UnauthorizedError"
+        "404":
+          description: Bạn chưa đánh giá sản phẩm này
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/reviews:
+    get:
+      tags: [reviews]
+      summary: List all reviews for moderation (admin, `product:manage` at the gateway)
+      operationId: listAdminReviews
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/ReviewStatus"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated reviews (newest first) with the product name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedAdminReviewResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+
+  /admin/reviews/{reviewId}/status:
+    patch:
+      tags: [reviews]
+      summary: Hide or show a review (admin, `product:manage` at the gateway)
+      description: HIDDEN reviews are excluded from the public list and the product aggregate.
+      operationId: setReviewStatus
+      parameters:
+        - name: reviewId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  $ref: "#/components/schemas/ReviewStatus"
+              required: [status]
+      responses:
+        "200":
+          description: Review with its new status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewEnvelope"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "404":
+          description: Review not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     ErrorResponse:
@@ -942,6 +1246,12 @@ components:
           type: number
         status:
           $ref: "#/components/schemas/ProductStatus"
+        avgRating:
+          type: number
+          description: Average of PUBLISHED review ratings, 2 decimals (0 when there are none).
+        reviewCount:
+          type: integer
+          description: Number of PUBLISHED reviews.
         brand:
           $ref: "#/components/schemas/BrandSummary"
         category:
@@ -981,6 +1291,8 @@ components:
         - frameWidthMm
         - basePrice
         - status
+        - avgRating
+        - reviewCount
         - brand
         - category
         - variants
@@ -1198,7 +1510,215 @@ components:
               $ref: "#/components/schemas/BrandResponse"
           required: [data]
 
+    ReviewStatus:
+      type: string
+      enum: [PUBLISHED, HIDDEN]
+
+    ReviewResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        reviewerName:
+          type: string
+          description: Snapshot of the reviewer's username at write time.
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+          nullable: true
+        isVerifiedPurchase:
+          type: boolean
+        status:
+          $ref: "#/components/schemas/ReviewStatus"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - productId
+        - userId
+        - reviewerName
+        - rating
+        - comment
+        - isVerifiedPurchase
+        - status
+        - createdAt
+        - updatedAt
+
+    AdminReviewResponse:
+      allOf:
+        - $ref: "#/components/schemas/ReviewResponse"
+        - type: object
+          properties:
+            productName:
+              type: string
+          required: [productName]
+
+    ReviewSummary:
+      type: object
+      properties:
+        avgRating:
+          type: number
+          description: Average of PUBLISHED ratings, 2 decimals (0 when there are none).
+        reviewCount:
+          type: integer
+        distribution:
+          type: object
+          description: PUBLISHED review count per star.
+          properties:
+            "1":
+              type: integer
+            "2":
+              type: integer
+            "3":
+              type: integer
+            "4":
+              type: integer
+            "5":
+              type: integer
+          required: ["1", "2", "3", "4", "5"]
+      required: [avgRating, reviewCount, distribution]
+
+    CreateReviewRequest:
+      type: object
+      properties:
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+          maxLength: 1000
+      required: [rating]
+
+    UpdateReviewRequest:
+      type: object
+      properties:
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+          maxLength: 1000
+
+    ReviewEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/ReviewResponse"
+          required: [data]
+
+    NullableReviewEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              allOf:
+                - $ref: "#/components/schemas/ReviewResponse"
+              nullable: true
+          required: [data]
+
+    ReviewSummaryEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/ReviewSummary"
+          required: [data]
+
+    PaginatedReviewResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/ReviewResponse"
+            meta:
+              $ref: "#/components/schemas/PageMeta"
+          required: [data, meta]
+
+    PaginatedAdminReviewResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: "#/components/schemas/AdminReviewResponse"
+            meta:
+              $ref: "#/components/schemas/PageMeta"
+          required: [data, meta]
+
+    WishlistAddEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                created:
+                  type: boolean
+                  description: false when the product was already liked.
+              required: [created]
+          required: [data]
+
+    ProductIdsEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                type: string
+                format: uuid
+          required: [data]
+
   parameters:
+    XUserId:
+      name: X-User-Id
+      in: header
+      required: true
+      description: Caller's user id, set by api-gateway after JWT verification. Missing/invalid → 401.
+      schema:
+        type: string
+        format: uuid
+    XUserName:
+      name: X-User-Name
+      in: header
+      required: false
+      description: Caller's username (JWT `sub`), stored as the reviewer name; defaults to "Người dùng".
+      schema:
+        type: string
+    ProductIdPath:
+      name: productId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     ResourceId:
       name: id
       in: path

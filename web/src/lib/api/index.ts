@@ -50,6 +50,24 @@ export {
 } from "./cart";
 
 export {
+  addToWishlist,
+  getWishlist,
+  getWishlistProductIds,
+  removeFromWishlist,
+} from "./wishlist";
+
+export {
+  createReview,
+  deleteMyReview,
+  getAdminReviews,
+  getMyReview,
+  getProductReviews,
+  getReviewSummary,
+  setReviewStatus,
+  updateMyReview,
+} from "./reviews";
+
+export {
   cancelOrder,
   checkout,
   getOrderById,

@@ -5,6 +5,11 @@ import type { Product } from "@/types/product";
 import { ProductDetailPage } from "./ProductDetailPage";
 
 jest.mock("@/hooks/useProduct", () => ({ useProductBySlug: jest.fn() }));
+// The ❤ button and the reviews block call the wishlist/review APIs (and useRouter).
+jest.mock("@/hooks/useWishlist", () => ({
+  useWishlist: () => ({ isLiked: () => false, toggle: jest.fn() }),
+}));
+jest.mock("@/components/reviews/ProductReviews", () => ({ ProductReviews: () => null }));
 
 const mockedUseProduct = useProductBySlug as jest.Mock;
 

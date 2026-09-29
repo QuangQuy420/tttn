@@ -24,7 +24,7 @@ export type MaterialType = "ACETATE" | "METAL" | "TITANIUM" | "TR90" | "PLASTIC"
 // transparent PNG used as the try-on overlay (at most one per product).
 export type ImageKind = "GALLERY" | "TRY_ON";
 
-export type ProductSort = "newest" | "price_asc" | "price_desc";
+export type ProductSort = "newest" | "price_asc" | "price_desc" | "rating";
 
 // Face shape taxonomy (khuôn mặt shapes) — used only by Product.faceShapes (which face shapes a
 // product suits). A different taxonomy from FrameShape above — do not conflate the two, mirrors
@@ -90,6 +90,9 @@ export interface Product {
   variants: ProductVariant[];
   images: ProductImage[];
   faceShapes: FaceShapeTag[];
+  // PUBLISHED-review aggregates kept on the product row (0 when there are no reviews).
+  avgRating?: number;
+  reviewCount?: number;
 }
 
 export interface ProductListParams {

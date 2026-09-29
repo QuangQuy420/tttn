@@ -59,6 +59,9 @@ export class ProductResponseDto {
   frameWidthMm: number | null;
   basePrice: number;
   status: ProductStatus;
+  /** Average of PUBLISHED review ratings (0 when there are none). */
+  avgRating: number;
+  reviewCount: number;
   brand: BrandSummaryDto;
   category: CategorySummaryDto;
   variants: ProductVariantResponseDto[];

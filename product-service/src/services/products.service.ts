@@ -109,6 +109,32 @@ export class ProductsService {
     return paginated(dtos, total, query.page, query.limit);
   }
 
+  /**
+   * PUBLISHED, non-deleted products for `ids`, hydrated like `findAll()` and returned in the
+   * input `ids` order (ids that no longer match are skipped). Used by the wishlist page.
+   */
+  async findPublishedByIds(ids: string[]): Promise<ProductResponseDto[]> {
+    const products =
+      await this.productRepository.findPublishedByIdsWithRelations(ids);
+    if (products.length === 0) {
+      return [];
+    }
+
+    const productIds = products.map((product) => product.id);
+    const [variants, images] = await Promise.all([
+      this.variantRepository.findByProductIds(productIds),
+      this.imageRepository.findByProductIds(productIds),
+    ]);
+
+    const productById = new Map(
+      products.map((product) => [product.id, product]),
+    );
+    return ids
+      .map((id) => productById.get(id))
+      .filter((product): product is Product => product !== undefined)
+      .map((product) => this.toResponseDto(product, variants, images));
+  }
+
   async findOne(id: string): Promise<ProductResponseDto> {
     const product =
       await this.productRepository.findByIdWithBrandAndCategory(id);
@@ -315,6 +341,8 @@ export class ProductsService {
     dto.frameWidthMm = product.frameWidthMm;
     dto.basePrice = product.basePrice;
     dto.status = product.status;
+    dto.avgRating = product.avgRating;
+    dto.reviewCount = product.reviewCount;
     dto.brand = {
       id: product.brand.id,
       name: product.brand.name,

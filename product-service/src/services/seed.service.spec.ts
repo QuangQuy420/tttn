@@ -84,6 +84,7 @@ describe('SeedService', () => {
       findAndCount: jest.fn(),
       findByIdWithBrandAndCategory: jest.fn(),
       findBySlugWithBrandAndCategory: jest.fn(),
+      findPublishedByIdsWithRelations: jest.fn(),
       findBySku: jest.fn().mockResolvedValue(null),
       findBySlug: jest.fn(),
       create: jest

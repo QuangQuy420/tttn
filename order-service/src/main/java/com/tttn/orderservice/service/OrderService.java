@@ -56,4 +56,13 @@ public interface OrderService {
     OrderResponse getOrderDetailForAdmin(UUID orderId);
 
     AdminOrderSummaryResponse getOrdersSummary();
+
+    /**
+     * True when the user has an order in a paid status (CONFIRMED onwards, not CANCELLED)
+     * that contains the product.
+     */
+    boolean hasPurchased(
+            UUID userId,
+            UUID productId
+    );
 }
