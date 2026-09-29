@@ -50,6 +50,7 @@ public class OrderSagaEventListener {
     private final OrderSagaEventPublisher orderSagaEventPublisher;
     private final CartService cartService;
     private final OrderSagaLogService orderSagaLogService;
+    private final BehaviorEventPublisher behaviorEventPublisher;
 
     @Value("${app.saga.chaos-mode}")
     private SagaChaosMode chaosMode;
@@ -251,6 +252,12 @@ public class OrderSagaEventListener {
         );
 
         orderRepository.save(order);
+
+        // Outbox rows commit atomically with CONFIRMED; the status guard above stops a
+        // redelivery before it enqueues again, and the deterministic eventId dedupes downstream.
+        for (OrderItem item : order.getItems()) {
+            behaviorEventPublisher.enqueuePurchase(order, item);
+        }
 
         orderSagaLogService.log(
                 order,

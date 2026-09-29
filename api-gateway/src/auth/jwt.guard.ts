@@ -17,6 +17,45 @@ export interface AuthenticatedUser {
 }
 
 /**
+ * Shared bearer-token check used by `JwtGuard` and `OptionalJwtGuard`.
+ * Returns the decoded user when the `Authorization: Bearer <token>` header
+ * holds a token signed with `JWT_SECRET` (Base64-decoded, see `JwtGuard`);
+ * returns `undefined` when the header is missing, malformed, or the token
+ * is invalid/expired. Never throws.
+ */
+export function verifyBearerToken(
+  request: Request,
+  jwtSecret: string,
+): AuthenticatedUser | undefined {
+  const token = extractBearerToken(request);
+  if (!token) {
+    return undefined;
+  }
+
+  const signingKey = Buffer.from(jwtSecret, 'base64');
+  try {
+    const payload = jwt.verify(token, signingKey) as jwt.JwtPayload;
+    return {
+      userId: payload.userId as string,
+      email: payload.email as string,
+      username: payload.sub as string,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+export function extractBearerToken(request: Request): string | undefined {
+  const header = request.headers.authorization;
+  if (!header) {
+    return undefined;
+  }
+
+  const [scheme, token] = header.split(' ');
+  return scheme === 'Bearer' ? token : undefined;
+}
+
+/**
  * Edge JWT verification (Q1, chose option A: verify at api-gateway, no
  * separate service). Reads `Authorization: Bearer <token>`, verifies the
  * signature against the shared `JWT_SECRET`, and attaches the decoded
@@ -38,35 +77,18 @@ export class JwtGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<Request>();
-    const token = this.extractToken(request);
 
-    if (!token) {
+    if (!extractBearerToken(request)) {
       throw new UnauthorizedException('Thiếu token xác thực (bearer token)');
     }
 
     const jwtSecret = this.configService.get<AppConfig>('app')!.jwtSecret;
-    const signingKey = Buffer.from(jwtSecret, 'base64');
-
-    try {
-      const payload = jwt.verify(token, signingKey) as jwt.JwtPayload;
-      (request as Request & { user: AuthenticatedUser }).user = {
-        userId: payload.userId as string,
-        email: payload.email as string,
-        username: payload.sub as string,
-      };
-      return true;
-    } catch {
+    const user = verifyBearerToken(request, jwtSecret);
+    if (!user) {
       throw new UnauthorizedException('Token không hợp lệ hoặc đã hết hạn');
     }
-  }
 
-  private extractToken(request: Request): string | undefined {
-    const header = request.headers.authorization;
-    if (!header) {
-      return undefined;
-    }
-
-    const [scheme, token] = header.split(' ');
-    return scheme === 'Bearer' ? token : undefined;
+    (request as Request & { user: AuthenticatedUser }).user = user;
+    return true;
   }
 }

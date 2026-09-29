@@ -13,6 +13,7 @@ import com.tttn.orderservice.enums.ProductStatus;
 import com.tttn.orderservice.exception.BadRequestException;
 import com.tttn.orderservice.exception.ResourceNotFoundException;
 import com.tttn.orderservice.mapper.CartMapper;
+import com.tttn.orderservice.messaging.BehaviorEventPublisher;
 import com.tttn.orderservice.model.cart.Cart;
 import com.tttn.orderservice.model.cart.CartItem;
 import org.junit.jupiter.api.BeforeEach;
@@ -67,6 +68,9 @@ class CartServiceImplTest {
     @Mock
     private ProductClient productClient;
 
+    @Mock
+    private BehaviorEventPublisher behaviorEventPublisher;
+
     private CartMapper cartMapper;
 
     private CartServiceImpl cartService;
@@ -82,7 +86,8 @@ class CartServiceImplTest {
         cartService = new CartServiceImpl(
                 cartRedisTemplate,
                 productClient,
-                cartMapper
+                cartMapper,
+                behaviorEventPublisher
         );
 
         userId = UUID.randomUUID();
@@ -614,6 +619,95 @@ class CartServiceImplTest {
 
             verify(valueOperations, never())
                     .get(any(String.class));
+        }
+
+        @Test
+        @DisplayName("Thêm thành công → gửi sự kiện ADD_TO_CART đúng một lần")
+        void addItem_whenSuccessful_shouldPublishAddToCartOnce() {
+            AddCartItemRequest request =
+                    new AddCartItemRequest(
+                            productId,
+                            variantId,
+                            2
+                    );
+
+            when(productClient.getProductById(productId))
+                    .thenReturn(createPublishedProduct());
+
+            when(valueOperations.get(buildCartKey(userId)))
+                    .thenReturn(null);
+
+            cartService.addItem(userId, request);
+
+            verify(behaviorEventPublisher, times(1))
+                    .publishAddToCart(
+                            userId,
+                            productId,
+                            variantId,
+                            2
+                    );
+        }
+
+        @Test
+        @DisplayName("Hết hàng → không gửi sự kiện ADD_TO_CART")
+        void addItem_whenOutOfStock_shouldNotPublishAddToCart() {
+            AddCartItemRequest request =
+                    new AddCartItemRequest(
+                            productId,
+                            variantId,
+                            2
+                    );
+
+            ProductResponse outOfStockProduct =
+                    new ProductResponse(
+                            productId,
+                            "SKU-001",
+                            "Kính mắt thời trang",
+                            "kinh-mat-thoi-trang",
+                            "Mô tả sản phẩm",
+                            null,
+                            null,
+                            null,
+                            null,
+                            new BigDecimal("1000000"),
+                            ProductStatus.PUBLISHED,
+                            null,
+                            null,
+                            List.of(
+                                    new ProductVariantResponse(
+                                            variantId,
+                                            "Đen",
+                                            "#000000",
+                                            "M",
+                                            new BigDecimal("200000"),
+                                            "SKU-VARIANT-001",
+                                            0
+                                    )
+                            ),
+                            List.of(),
+                            List.of(),
+                            OffsetDateTime.now(),
+                            OffsetDateTime.now()
+                    );
+
+            when(productClient.getProductById(productId))
+                    .thenReturn(outOfStockProduct);
+
+            when(valueOperations.get(buildCartKey(userId)))
+                    .thenReturn(null);
+
+            assertThrows(
+                    BadRequestException.class,
+                    () -> cartService.addItem(userId, request)
+            );
+
+            verify(behaviorEventPublisher, never())
+                    .publishAddToCart(
+                            any(),
+                            any(),
+                            any(),
+                            org.mockito.ArgumentMatchers.anyInt()
+                    );
         }
     }
 

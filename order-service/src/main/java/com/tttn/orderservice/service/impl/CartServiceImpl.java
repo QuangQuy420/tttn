@@ -14,6 +14,7 @@ import com.tttn.orderservice.enums.ProductStatus;
 import com.tttn.orderservice.exception.BadRequestException;
 import com.tttn.orderservice.exception.ResourceNotFoundException;
 import com.tttn.orderservice.mapper.CartMapper;
+import com.tttn.orderservice.messaging.BehaviorEventPublisher;
 import com.tttn.orderservice.model.cart.Cart;
 import com.tttn.orderservice.model.cart.CartItem;
 import com.tttn.orderservice.service.CartService;
@@ -47,6 +48,7 @@ public class CartServiceImpl implements CartService {
     private final RedisTemplate<String, Cart> cartRedisTemplate;
     private final ProductClient productClient;
     private final CartMapper cartMapper;
+    private final BehaviorEventPublisher behaviorEventPublisher;
 
     @Override
     public CartResponse getCart(UUID userId) {
@@ -114,6 +116,13 @@ public class CartServiceImpl implements CartService {
         }
 
         saveCart(cart);
+
+        behaviorEventPublisher.publishAddToCart(
+                userId,
+                request.productId(),
+                request.variantId(),
+                request.quantity()
+        );
 
         return cartMapper.toResponse(cart);
     }

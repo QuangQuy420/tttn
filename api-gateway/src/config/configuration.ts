@@ -13,6 +13,10 @@ export interface AppConfig {
   orderServiceUrl: string;
   faceProcessingServiceUrl: string;
   recommendationServiceUrl: string;
+  /** AMQP URL of the broker that receives behavior events (`behavior-events` exchange). */
+  rabbitmqUrl: string;
+  /** Max events accepted in one `POST /api/events` batch. */
+  eventsMaxBatch: number;
 }
 
 export default (): { app: AppConfig } => ({
@@ -30,5 +34,7 @@ export default (): { app: AppConfig } => ({
       process.env.FACE_PROCESSING_SERVICE_URL ?? 'http://face-processing-service:8000',
     recommendationServiceUrl:
       process.env.RECOMMENDATION_SERVICE_URL ?? 'http://recommendation-service:8000',
+    rabbitmqUrl: process.env.RABBITMQ_URL ?? 'amqp://guest:guest@rabbitmq:5672',
+    eventsMaxBatch: parseInt(process.env.EVENTS_MAX_BATCH ?? '20', 10),
   },
 });

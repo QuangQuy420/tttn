@@ -2,6 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { BehaviorEventPublisherService } from '../src/services/behavior-event-publisher.service';
 
 describe('Health (e2e)', () => {
   let app: INestApplication;
@@ -9,7 +10,11 @@ describe('Health (e2e)', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      // RabbitMQ is not running here — keep the publisher from connecting in the background.
+      .overrideProvider(BehaviorEventPublisherService)
+      .useValue({ publish: jest.fn() })
+      .compile();
 
     app = moduleRef.createNestApplication();
     await app.init();
