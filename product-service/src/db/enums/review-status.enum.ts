@@ -1,0 +1,4 @@
+export enum ReviewStatus {
+  PUBLISHED = 'PUBLISHED',
+  HIDDEN = 'HIDDEN',
+}

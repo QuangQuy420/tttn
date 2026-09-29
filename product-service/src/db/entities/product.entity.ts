@@ -136,6 +136,23 @@ export class Product {
   })
   status: ProductStatus;
 
+  /**
+   * Aggregate over PUBLISHED `ps_reviews` rows — recomputed inside every review write
+   * transaction (`IReviewRepository.recomputeProductRating`).
+   */
+  @Column({
+    name: 'avg_rating',
+    type: 'numeric',
+    precision: 3,
+    scale: 2,
+    default: 0,
+    transformer: numericTransformer,
+  })
+  avgRating: number;
+
+  @Column({ name: 'review_count', type: 'int', default: 0 })
+  reviewCount: number;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 

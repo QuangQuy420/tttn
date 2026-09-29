@@ -109,9 +109,10 @@ export const PRODUCT_SORT_LABELS_VI: Record<ProductSort, string> = {
   newest: "Mới nhất",
   price_asc: "Giá thấp đến cao",
   price_desc: "Giá cao đến thấp",
+  rating: "Đánh giá cao",
 };
 
-export const PRODUCT_SORTS: ProductSort[] = ["newest", "price_asc", "price_desc"];
+export const PRODUCT_SORTS: ProductSort[] = ["newest", "price_asc", "price_desc", "rating"];
 
 // Order status labels — mirrors order-service's OrderStatus enum (see @/types/order).
 export const ORDER_STATUS_LABELS_VI: Record<OrderStatus, string> = {

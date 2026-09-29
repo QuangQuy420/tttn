@@ -10,6 +10,7 @@ import { AuthModule } from './routes/auth.module';
 import { UsersModule } from './routes/users.module';
 import { RolesModule } from './routes/roles.module';
 import { RecommendationsModule } from './routes/recommendations.module';
+import { EngagementModule } from './routes/engagement.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { RecommendationsModule } from './routes/recommendations.module';
             UsersModule,
             RolesModule,
             RecommendationsModule,
+            EngagementModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: GatewayExceptionFilter }],

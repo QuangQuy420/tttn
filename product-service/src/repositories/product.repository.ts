@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Product } from '../db/entities/product.entity';
 import { FrameShape } from '../db/enums/frame-shape.enum';
 import { GenderTarget } from '../db/enums/gender-target.enum';
@@ -8,7 +8,7 @@ import { ProductStatus } from '../db/enums/product-status.enum';
 import { FaceShape } from '../db/enums/face-shape.enum';
 import { MaterialType } from '../db/enums/material-type.enum';
 
-export type ProductSort = 'newest' | 'price_asc' | 'price_desc';
+export type ProductSort = 'newest' | 'price_asc' | 'price_desc' | 'rating';
 
 export interface ProductListFilter {
   categoryId?: string;
@@ -45,6 +45,8 @@ export interface IProductRepository {
   findAndCount(filter: ProductListFilter): Promise<ProductListResult>;
   findByIdWithBrandAndCategory(id: string): Promise<Product | null>;
   findBySlugWithBrandAndCategory(slug: string): Promise<Product | null>;
+  /** PUBLISHED, non-deleted products among `ids`, with brand/category joined (any order). */
+  findPublishedByIdsWithRelations(ids: string[]): Promise<Product[]>;
   findBySku(sku: string): Promise<Product | null>;
   findBySlug(slug: string): Promise<Product | null>;
   create(data: Partial<Product>): Promise<Product>;
@@ -143,6 +145,11 @@ export class TypeOrmProductRepository implements IProductRepository {
           'DESC',
         );
         break;
+      case 'rating':
+        qb.orderBy('product.avgRating', 'DESC')
+          .addOrderBy('product.reviewCount', 'DESC')
+          .addOrderBy('product.createdAt', 'DESC');
+        break;
       default:
         qb.orderBy('product.createdAt', 'DESC');
     }
@@ -163,6 +170,14 @@ export class TypeOrmProductRepository implements IProductRepository {
   findBySlugWithBrandAndCategory(slug: string): Promise<Product | null> {
     return this.repo.findOne({
       where: { slug },
+      relations: ['brand', 'category'],
+    });
+  }
+
+  findPublishedByIdsWithRelations(ids: string[]): Promise<Product[]> {
+    if (ids.length === 0) return Promise.resolve([]);
+    return this.repo.find({
+      where: { id: In(ids), status: ProductStatus.PUBLISHED },
       relations: ['brand', 'category'],
     });
   }

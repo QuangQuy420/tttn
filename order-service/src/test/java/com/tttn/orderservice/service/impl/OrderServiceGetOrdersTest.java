@@ -8,6 +8,7 @@ import com.tttn.orderservice.enums.PaymentStatus;
 import com.tttn.orderservice.exception.BadRequestException;
 import com.tttn.orderservice.mapper.OrderMapper;
 import com.tttn.orderservice.messaging.OrderSagaEventPublisher;
+import com.tttn.orderservice.repository.OrderItemRepository;
 import com.tttn.orderservice.repository.OrderRepository;
 import com.tttn.orderservice.service.CartService;
 import com.tttn.orderservice.service.OrderSagaLogService;
@@ -42,6 +43,9 @@ class OrderServiceGetOrdersTest {
     private OrderRepository orderRepository;
 
     @Mock
+    private OrderItemRepository orderItemRepository;
+
+    @Mock
     private CartService cartService;
 
     @Mock
@@ -64,6 +68,7 @@ class OrderServiceGetOrdersTest {
     void setUp() {
         orderService = new OrderServiceImpl(
                 orderRepository,
+                orderItemRepository,
                 cartService,
                 productClient,
                 orderSagaEventPublisher,

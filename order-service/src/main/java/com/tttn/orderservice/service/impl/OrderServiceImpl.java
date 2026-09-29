@@ -21,6 +21,7 @@ import com.tttn.orderservice.mapper.OrderMapper;
 import com.tttn.orderservice.messaging.OrderSagaEventPublisher;
 import com.tttn.orderservice.model.cart.Cart;
 import com.tttn.orderservice.model.cart.CartItem;
+import com.tttn.orderservice.repository.OrderItemRepository;
 import com.tttn.orderservice.repository.OrderRepository;
 import com.tttn.orderservice.service.CartService;
 import com.tttn.orderservice.service.OrderSagaLogService;
@@ -52,7 +53,17 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class OrderServiceImpl implements OrderService {
 
+    // Order statuses that count as "purchased" (paid): used to allow product reviews.
+    private static final Set<OrderStatus> PURCHASED_STATUSES = EnumSet.of(
+            OrderStatus.CONFIRMED,
+            OrderStatus.PROCESSING,
+            OrderStatus.SHIPPING,
+            OrderStatus.DELIVERED,
+            OrderStatus.COMPLETED
+    );
+
     private final OrderRepository orderRepository;
+    private final OrderItemRepository orderItemRepository;
     private final CartService cartService;
     private final ProductClient productClient;
     private final OrderSagaEventPublisher orderSagaEventPublisher;
@@ -484,6 +495,19 @@ public class OrderServiceImpl implements OrderService {
         return new AdminOrderSummaryResponse(
                 orderRepository.count(),
                 ordersByStatus
+        );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean hasPurchased(
+            UUID userId,
+            UUID productId
+    ) {
+        return orderItemRepository.existsPurchased(
+                userId,
+                productId,
+                PURCHASED_STATUSES
         );
     }
 

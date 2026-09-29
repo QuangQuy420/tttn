@@ -139,6 +139,14 @@ export function Header() {
                     Thử Kính
                 </Link>
 
+                <Link
+                    href="/wishlist"
+                    className={`site-nav__link${isNavLinkActive(pathname, "/wishlist") ? " site-nav__link--active" : ""}`}
+                    aria-current={isNavLinkActive(pathname, "/wishlist") ? "page" : undefined}
+                >
+                    Yêu thích
+                </Link>
+
                 {authenticated && (
                     roles?.some((r) => ADMIN_ROLE_NAMES.includes(r)) ||
                     permissions?.includes(CATALOG_PERMISSION)

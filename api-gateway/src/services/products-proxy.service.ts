@@ -38,7 +38,7 @@ export class ProductsProxyService {
   }
 
   async getProductById(id: string): Promise<unknown> {
-    return this.forwardGet(`/products/${id}`);
+    return this.forwardGet(`/products/${encodeURIComponent(id)}`);
   }
 
   async getProductBySlug(slug: string): Promise<unknown> {
@@ -61,11 +61,11 @@ export class ProductsProxyService {
     id: string,
     body: Record<string, unknown>,
   ): Promise<unknown> {
-    return this.forwardPatch(`/categories/${id}`, body);
+    return this.forwardPatch(`/categories/${encodeURIComponent(id)}`, body);
   }
 
   async deleteCategory(id: string): Promise<unknown> {
-    return this.forwardDelete(`/categories/${id}`);
+    return this.forwardDelete(`/categories/${encodeURIComponent(id)}`);
   }
 
   async createBrand(body: Record<string, unknown>): Promise<unknown> {
@@ -76,11 +76,11 @@ export class ProductsProxyService {
     id: string,
     body: Record<string, unknown>,
   ): Promise<unknown> {
-    return this.forwardPatch(`/brands/${id}`, body);
+    return this.forwardPatch(`/brands/${encodeURIComponent(id)}`, body);
   }
 
   async deleteBrand(id: string): Promise<unknown> {
-    return this.forwardDelete(`/brands/${id}`);
+    return this.forwardDelete(`/brands/${encodeURIComponent(id)}`);
   }
 
   async createProduct(body: Record<string, unknown>): Promise<unknown> {
@@ -99,7 +99,7 @@ export class ProductsProxyService {
     id: string,
     body: Record<string, unknown>,
   ): Promise<unknown> {
-    const path = `/products/${id}`;
+    const path = `/products/${encodeURIComponent(id)}`;
     try {
       const response = await firstValueFrom(
         this.httpService.patch(`${this.baseUrl}${path}`, body),
@@ -111,7 +111,7 @@ export class ProductsProxyService {
   }
 
   async deleteProduct(id: string): Promise<unknown> {
-    const path = `/products/${id}`;
+    const path = `/products/${encodeURIComponent(id)}`;
     try {
       const response = await firstValueFrom(
         this.httpService.delete(`${this.baseUrl}${path}`),
@@ -126,7 +126,7 @@ export class ProductsProxyService {
     productId: string,
     body: Record<string, unknown>,
   ): Promise<unknown> {
-    const path = `/products/${productId}/variants`;
+    const path = `/products/${encodeURIComponent(productId)}/variants`;
     try {
       const response = await firstValueFrom(
         this.httpService.post(`${this.baseUrl}${path}`, body),
@@ -142,7 +142,9 @@ export class ProductsProxyService {
     variantId: string,
     body: Record<string, unknown>,
   ): Promise<unknown> {
-    const path = `/products/${productId}/variants/${variantId}`;
+    const path = `/products/${encodeURIComponent(productId)}/variants/${encodeURIComponent(
+      variantId,
+    )}`;
     try {
       const response = await firstValueFrom(
         this.httpService.patch(`${this.baseUrl}${path}`, body),
@@ -154,7 +156,9 @@ export class ProductsProxyService {
   }
 
   async deleteVariant(productId: string, variantId: string): Promise<unknown> {
-    const path = `/products/${productId}/variants/${variantId}`;
+    const path = `/products/${encodeURIComponent(productId)}/variants/${encodeURIComponent(
+      variantId,
+    )}`;
     try {
       const response = await firstValueFrom(
         this.httpService.delete(`${this.baseUrl}${path}`),
@@ -171,7 +175,7 @@ export class ProductsProxyService {
     variantId?: string,
     kind?: string,
   ): Promise<unknown> {
-    const path = `/products/${id}/images`;
+    const path = `/products/${encodeURIComponent(id)}/images`;
     const form = new FormData();
     if (variantId) {
       form.append('variantId', variantId);
@@ -200,7 +204,9 @@ export class ProductsProxyService {
     productId: string,
     imageId: string,
   ): Promise<unknown> {
-    const path = `/products/${productId}/images/${imageId}`;
+    const path = `/products/${encodeURIComponent(productId)}/images/${encodeURIComponent(
+      imageId,
+    )}`;
     try {
       const response = await firstValueFrom(
         this.httpService.patch(`${this.baseUrl}${path}`, { isThumbnail: true }),
@@ -212,7 +218,9 @@ export class ProductsProxyService {
   }
 
   async deleteProductImage(productId: string, imageId: string): Promise<unknown> {
-    const path = `/products/${productId}/images/${imageId}`;
+    const path = `/products/${encodeURIComponent(productId)}/images/${encodeURIComponent(
+      imageId,
+    )}`;
     try {
       const response = await firstValueFrom(
         this.httpService.delete(`${this.baseUrl}${path}`),

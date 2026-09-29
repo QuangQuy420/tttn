@@ -2,6 +2,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { AddToCartModal } from "@/components/cart/AddToCartModal";
 import { ImageWithFallback } from "@/components/common/ImageWithFallback";
+import { RatingStars } from "@/components/reviews/RatingStars";
+import { WishlistButton } from "@/components/wishlist/WishlistButton";
 import { formatPriceVnd } from "@/lib/format/price";
 import { formatFrameShapeVi } from "@/lib/labels";
 import type { Product } from "@/types/product";
@@ -30,6 +32,12 @@ export function ProductCard({ product }: ProductCardProps) {
         <div className="product-card__body">
           <h3 className="product-card__name">{product.name}</h3>
           <p className="product-card__shape">{formatFrameShapeVi(product.frameShape)}</p>
+          {product.reviewCount != null && product.reviewCount > 0 && (
+            <p className="product-card__rating">
+              <RatingStars rating={product.avgRating ?? 0} />
+              <span className="product-card__rating-count">({product.reviewCount})</span>
+            </p>
+          )}
           <p className="product-card__price">{formatPriceVnd(product.basePrice)}</p>
         </div>
       </Link>
@@ -49,6 +57,7 @@ export function ProductCard({ product }: ProductCardProps) {
         >
           Thêm vào giỏ hàng
         </button>
+        <WishlistButton productId={product.id} />
       </div>
 
       {isAddToCartOpen && (

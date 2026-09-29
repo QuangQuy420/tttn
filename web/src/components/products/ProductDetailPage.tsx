@@ -6,6 +6,8 @@ import { AddToCartModal } from "@/components/cart/AddToCartModal";
 import { ErrorState } from "@/components/common/ErrorState";
 import { ImageWithFallback } from "@/components/common/ImageWithFallback";
 import { LoadingState } from "@/components/common/LoadingState";
+import { ProductReviews } from "@/components/reviews/ProductReviews";
+import { WishlistButton } from "@/components/wishlist/WishlistButton";
 import { useProductBySlug } from "@/hooks/useProduct";
 import { getColorSwatch } from "@/lib/format/color";
 import { formatPriceVnd } from "@/lib/format/price";
@@ -188,9 +190,12 @@ export function ProductDetailPage({ slug }: ProductDetailPageProps) {
             >
               Thêm vào giỏ hàng
             </button>
+            <WishlistButton productId={product.id} className="wishlist-button--large" />
           </div>
         </div>
       </div>
+
+      <ProductReviews productId={product.id} />
 
       {isAddToCartOpen && (
         <AddToCartModal product={product} onClose={() => setIsAddToCartOpen(false)} />

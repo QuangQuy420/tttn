@@ -20,6 +20,7 @@ import com.tttn.orderservice.mapper.OrderMapper;
 import com.tttn.orderservice.messaging.OrderSagaEventPublisher;
 import com.tttn.orderservice.model.cart.Cart;
 import com.tttn.orderservice.model.cart.CartItem;
+import com.tttn.orderservice.repository.OrderItemRepository;
 import com.tttn.orderservice.repository.OrderRepository;
 import com.tttn.orderservice.service.CartService;
 import com.tttn.orderservice.service.OrderSagaLogService;
@@ -50,6 +51,9 @@ class OrderServiceCheckoutTest {
     private OrderRepository orderRepository;
 
     @Mock
+    private OrderItemRepository orderItemRepository;
+
+    @Mock
     private CartService cartService;
 
     @Mock
@@ -76,6 +80,7 @@ class OrderServiceCheckoutTest {
     void setUp() {
         orderService = new OrderServiceImpl(
                 orderRepository,
+                orderItemRepository,
                 cartService,
                 productClient,
                 orderSagaEventPublisher,

@@ -4,6 +4,8 @@ import { Product } from './product.entity';
 import { ProductVariant } from './product-variant.entity';
 import { ProductImage } from './product-image.entity';
 import { StockReservation } from './stock-reservation.entity';
+import { WishlistItem } from './wishlist-item.entity';
+import { Review } from './review.entity';
 
 export const entities = [
   Brand,
@@ -12,6 +14,8 @@ export const entities = [
   ProductVariant,
   ProductImage,
   StockReservation,
+  WishlistItem,
+  Review,
 ];
 
 export {
@@ -21,4 +25,6 @@ export {
   ProductVariant,
   ProductImage,
   StockReservation,
+  WishlistItem,
+  Review,
 };
