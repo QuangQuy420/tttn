@@ -1,11 +1,12 @@
-import type { ApiResponse } from "@/types/auth";
+import type { ApiResponse, PageParams, Paginated } from "@/types/api";
 import type {
     CreateRoleRequest,
     Permission,
     Role,
     UpdateRoleRequest,
 } from "@/types/user";
-import { apiFetch } from "./client";
+import { apiFetch, apiFetchPage } from "./client";
+import { pageQuery } from "./query";
 
 function authHeaders(token: string): HeadersInit {
     return {
@@ -13,8 +14,11 @@ function authHeaders(token: string): HeadersInit {
     };
 }
 
-export function listRoles(token: string): Promise<ApiResponse<Role[]>> {
-    return apiFetch<ApiResponse<Role[]>>("/roles", {
+export function listRoles(
+    token: string,
+    params: PageParams = {},
+): Promise<Paginated<Role>> {
+    return apiFetchPage<Role>(`/roles${pageQuery(params)}`, {
         method: "GET",
         headers: authHeaders(token),
     });
@@ -52,8 +56,9 @@ export function deleteRole(token: string, id: string): Promise<ApiResponse<null>
 
 export function listPermissions(
     token: string,
-): Promise<ApiResponse<Permission[]>> {
-    return apiFetch<ApiResponse<Permission[]>>("/permissions", {
+    params: PageParams = {},
+): Promise<Paginated<Permission>> {
+    return apiFetchPage<Permission>(`/permissions${pageQuery(params)}`, {
         method: "GET",
         headers: authHeaders(token),
     });

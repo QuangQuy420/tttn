@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Param,
   Post,
+  Query,
   Req,
   UploadedFile,
   UseGuards,
@@ -36,8 +37,11 @@ export class FaceAnalysisController {
 
   @Get('history')
   @UseGuards(JwtGuard)
-  history(@Req() request: Request & { user: AuthenticatedUser }): Promise<unknown> {
-    return this.faceAnalysisProxyService.getHistory(request.user.userId);
+  history(
+    @Query() query: Record<string, unknown>,
+    @Req() request: Request & { user: AuthenticatedUser },
+  ): Promise<unknown> {
+    return this.faceAnalysisProxyService.getHistory(request.user.userId, query);
   }
 
   @Delete('history/:id')

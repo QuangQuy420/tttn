@@ -10,6 +10,7 @@ import { ApiError, removeCartItem, updateCartItem } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth/session";
 import { getColorSwatch } from "@/lib/format/color";
 import { formatPriceVnd } from "@/lib/format/price";
+import { formatCartUnavailableReasonVi } from "@/lib/labels";
 
 // FR1/T16: list cart items, let the user change quantity or remove an item, show the running
 // total, and lead into checkout. Cart CRUD is done here directly (not via AddToCartModal, which
@@ -20,6 +21,10 @@ import { formatPriceVnd } from "@/lib/format/price";
 // which items to pay for, the total only reflects those, and "Tiến hành thanh toán" carries the
 // selected variantIds to /checkout via the query string (CheckoutPage reads them back out;
 // order-service only ever sees the selected subset, see CheckoutPayload.variantIds).
+//
+// AC11: an unavailable item (hidden/deleted product, removed variant, not enough stock) stays in
+// the list with a reason badge, but can't be selected — it is left out of select-all, the
+// selection and the total.
 export function CartPage() {
   const { cart, isLoading, error, refetch } = useCart();
   const [mutatingVariantId, setMutatingVariantId] = useState<string | null>(null);
@@ -80,15 +85,16 @@ export function CartPage() {
   if (error) return <ErrorState message={error} />;
 
   const items = cart?.items ?? [];
+  const availableItems = items.filter((item) => item.available);
 
-  const selectedItems = items.filter((item) => selectedVariantIds.has(item.variantId));
+  const selectedItems = availableItems.filter((item) => selectedVariantIds.has(item.variantId));
   const selectedTotal = selectedItems.reduce((sum, item) => sum + item.subtotal, 0);
   const selectedCount = selectedItems.length;
-  const allSelected = items.length > 0 && selectedCount === items.length;
+  const allSelected = availableItems.length > 0 && selectedCount === availableItems.length;
 
   function toggleSelectAll() {
     setSelectedVariantIds(
-      allSelected ? new Set() : new Set(items.map((item) => item.variantId)),
+      allSelected ? new Set() : new Set(availableItems.map((item) => item.variantId)),
     );
   }
 
@@ -113,6 +119,7 @@ export function CartPage() {
               type="checkbox"
               checked={allSelected}
               onChange={toggleSelectAll}
+              disabled={availableItems.length === 0}
               aria-label="Chọn tất cả sản phẩm"
             />
             Chọn tất cả
@@ -120,12 +127,16 @@ export function CartPage() {
 
           <ul className="cart-page__items">
             {items.map((item) => (
-              <li key={item.variantId} className="cart-item">
+              <li
+                key={item.variantId}
+                className={`cart-item${item.available ? "" : " cart-item--unavailable"}`}
+              >
                 <input
                   type="checkbox"
                   className="cart-item__checkbox"
-                  checked={selectedVariantIds.has(item.variantId)}
+                  checked={item.available && selectedVariantIds.has(item.variantId)}
                   onChange={() => toggleSelected(item.variantId)}
+                  disabled={!item.available}
                   aria-label={`Chọn ${item.productName}`}
                 />
 
@@ -153,6 +164,11 @@ export function CartPage() {
                     Màu: {item.color} · Kích thước: {item.size}
                   </p>
                   <p className="cart-item__price">{formatPriceVnd(item.unitPrice)}</p>
+                  {!item.available && (
+                    <span className="cart-item__unavailable">
+                      {formatCartUnavailableReasonVi(item.unavailableReason, item.availableStock)}
+                    </span>
+                  )}
                 </div>
 
                 <div className="quantity-stepper">
@@ -201,8 +217,8 @@ export function CartPage() {
             )}
             {selectedCount > 0 ? (
               <Link
-                href={`/checkout?variantIds=${Array.from(selectedVariantIds)
-                  .map(encodeURIComponent)
+                href={`/checkout?variantIds=${selectedItems
+                  .map((item) => encodeURIComponent(item.variantId))
                   .join(",")}`}
                 className="btn btn--primary"
               >

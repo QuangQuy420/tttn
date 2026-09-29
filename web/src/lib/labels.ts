@@ -5,6 +5,7 @@ import type {
   MaterialType,
   ProductSort,
 } from "@/types/product";
+import type { CartUnavailableReason } from "@/types/cart";
 import type { OrderStatus } from "@/types/order";
 import type { SagaLogLevel, SagaLogService, SagaLogStage } from "@/types/saga-log";
 
@@ -195,4 +196,22 @@ export const SAGA_LOG_ROW_STATUS_LABELS_VI: Record<SagaLogLevel, string> = {
 
 export function formatSagaLogRowStatusVi(level: SagaLogLevel): string {
   return SAGA_LOG_ROW_STATUS_LABELS_VI[level];
+}
+
+// Why a cart item can't be checked out — shown as a badge on the cart page (AC11).
+export const CART_UNAVAILABLE_REASON_LABELS_VI: Record<CartUnavailableReason, string> = {
+  PRODUCT_UNAVAILABLE: "Sản phẩm đã ngừng bán",
+  VARIANT_REMOVED: "Mẫu này không còn bán",
+  OUT_OF_STOCK: "Hết hàng",
+  INSUFFICIENT_STOCK: "Không đủ hàng",
+};
+
+export function formatCartUnavailableReasonVi(
+  reason: CartUnavailableReason | null,
+  availableStock: number | null,
+): string {
+  if (reason === "INSUFFICIENT_STOCK" && availableStock !== null) {
+    return `Chỉ còn ${availableStock} sản phẩm`;
+  }
+  return reason ? CART_UNAVAILABLE_REASON_LABELS_VI[reason] : "Không khả dụng";
 }

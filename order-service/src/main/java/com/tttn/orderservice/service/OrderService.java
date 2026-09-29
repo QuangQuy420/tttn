@@ -7,8 +7,8 @@ import com.tttn.orderservice.dto.response.AdminOrderSummaryResponse;
 import com.tttn.orderservice.dto.response.CheckoutResponse;
 import com.tttn.orderservice.dto.response.OrderResponse;
 import com.tttn.orderservice.dto.response.OrderSummaryResponse;
-import com.tttn.orderservice.dto.response.PageResponse;
 import com.tttn.orderservice.enums.OrderStatus;
+import org.springframework.data.domain.Page;
 
 import java.util.UUID;
 
@@ -19,11 +19,15 @@ public interface OrderService {
             CheckoutRequest request
     );
 
-    PageResponse<OrderSummaryResponse> getOrders(
+    /**
+     * @param page  1-based page number
+     * @param limit page size, 1..100
+     */
+    Page<OrderSummaryResponse> getOrders(
             UUID userId,
             OrderStatus status,
             int page,
-            int size
+            int limit
     );
 
     OrderResponse getOrderDetail(
@@ -43,10 +47,10 @@ public interface OrderService {
             UpdateOrderStatusRequest request
     );
 
-    PageResponse<OrderSummaryResponse> getAllOrders(
+    Page<OrderSummaryResponse> getAllOrders(
             OrderStatus status,
             int page,
-            int size
+            int limit
     );
 
     OrderResponse getOrderDetailForAdmin(UUID orderId);

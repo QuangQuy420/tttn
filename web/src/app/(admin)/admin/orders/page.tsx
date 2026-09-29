@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { ApiError, listAdminOrders } from "@/lib/api";
 import { ErrorState } from "@/components/common/ErrorState";
 import { LoadingState } from "@/components/common/LoadingState";
+import { Pagination } from "@/components/common/Pagination";
+import { usePageParam } from "@/hooks/usePageParam";
 import { getAccessToken } from "@/lib/auth/session";
 import { formatPriceVnd } from "@/lib/format/price";
 import { formatOrderStatusVi, ORDER_STATUSES } from "@/lib/labels";
@@ -13,14 +15,12 @@ import type { OrderStatus, OrderSummary } from "@/types/order";
 const PAGE_SIZE = 20;
 
 // Admin order list (T12, AC6) — all orders across every customer, with a status filter and
-// pagination. Pagination is 0-indexed (useState(0), displaying page + 1) because order-service's
-// admin list endpoint is 0-indexed, unlike AdminUsersPage's 1-indexed convention — see
-// OrderListPage.tsx for the customer-facing equivalent this mirrors.
+// pagination (1-based `?page=` in the URL) — see OrderListPage.tsx for the customer-facing
+// equivalent this mirrors.
 export default function AdminOrdersPage() {
   const [status, setStatus] = useState<OrderStatus | undefined>(undefined);
-  const [page, setPage] = useState(0);
+  const [page, setPage] = usePageParam();
   const [orders, setOrders] = useState<OrderSummary[]>([]);
-  const [totalElements, setTotalElements] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,11 +41,10 @@ export default function AdminOrdersPage() {
       setIsLoading(true);
       setError(null);
       try {
-        const result = await listAdminOrders(token, { status, page, size: PAGE_SIZE });
+        const result = await listAdminOrders(token, { status, page, limit: PAGE_SIZE });
         if (!cancelled) {
-          setOrders(result.content);
-          setTotalElements(result.totalElements);
-          setTotalPages(result.totalPages);
+          setOrders(result.data);
+          setTotalPages(result.meta.totalPages);
         }
       } catch (err) {
         if (!cancelled) {
@@ -65,7 +64,7 @@ export default function AdminOrdersPage() {
 
   function handleStatusChange(value: string) {
     setStatus(value ? (value as OrderStatus) : undefined);
-    setPage(0);
+    setPage(1);
   }
 
   return (
@@ -128,28 +127,8 @@ export default function AdminOrdersPage() {
           </div>
         )}
 
-        {!isLoading && !error && totalPages > 1 && (
-          <div className="orders-page__pagination">
-            <button
-              type="button"
-              className="btn btn--outline btn--small"
-              onClick={() => setPage((current) => Math.max(0, current - 1))}
-              disabled={page <= 0}
-            >
-              Trang trước
-            </button>
-            <span>
-              Trang {page + 1} / {totalPages} ({totalElements} đơn hàng)
-            </span>
-            <button
-              type="button"
-              className="btn btn--outline btn--small"
-              onClick={() => setPage((current) => Math.min(totalPages - 1, current + 1))}
-              disabled={page >= totalPages - 1}
-            >
-              Trang sau
-            </button>
-          </div>
+        {!isLoading && !error && (
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         )}
       </section>
     </>

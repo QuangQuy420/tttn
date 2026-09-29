@@ -4,13 +4,13 @@ import com.tttn.userservice.dto.request.RoleCreateRequest;
 import com.tttn.userservice.dto.request.RoleUpdateRequest;
 import com.tttn.userservice.dto.response.PermissionResponse;
 import com.tttn.userservice.dto.response.RoleResponse;
+import org.springframework.data.domain.Page;
 
-import java.util.List;
 import java.util.UUID;
 
 public interface RoleService {
 
-    List<RoleResponse> listRoles();
+    Page<RoleResponse> listRoles(int page, int limit);
 
     RoleResponse createRole(RoleCreateRequest request);
 
@@ -18,5 +18,5 @@ public interface RoleService {
 
     void deleteRole(UUID roleId);
 
-    List<PermissionResponse> listPermissions();
+    Page<PermissionResponse> listPermissions(int page, int limit);
 }

@@ -22,8 +22,9 @@ export function useCategories(): UseCategoriesResult {
       setIsLoading(true);
       setError(null);
       try {
-        const result = await getCategories();
-        if (!cancelled) setCategories(result);
+        // Filter/dropdown options: ask for the API max so every option shows up.
+        const result = await getCategories({ limit: 100 });
+        if (!cancelled) setCategories(result.data);
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof ApiError ? err.message : "Không thể tải danh mục.");

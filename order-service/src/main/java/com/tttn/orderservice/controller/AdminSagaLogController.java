@@ -1,5 +1,6 @@
 package com.tttn.orderservice.controller;
 
+import com.tttn.orderservice.dto.response.ApiResponse;
 import com.tttn.orderservice.dto.response.OrderLogSummaryResponse;
 import com.tttn.orderservice.dto.response.OrderSagaLogResponse;
 import com.tttn.orderservice.dto.response.SagaLogDayResponse;
@@ -9,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
@@ -29,23 +31,48 @@ public class AdminSagaLogController {
     private final OrderSagaLogService orderSagaLogService;
 
     @GetMapping("/days")
-    public ResponseEntity<List<SagaLogDayResponse>> getLogDays() {
-        return ResponseEntity.ok(orderSagaLogService.getLogDays());
+    public ResponseEntity<ApiResponse<List<SagaLogDayResponse>>> getLogDays(
+            @RequestParam(defaultValue = "1")
+            int page,
+            @RequestParam(defaultValue = "20")
+            int limit
+    ) {
+        return ResponseEntity.ok(
+                ApiResponse.page(orderSagaLogService.getLogDays(page, limit))
+        );
     }
 
     @GetMapping("/days/{date}")
-    public ResponseEntity<List<OrderLogSummaryResponse>> getOrdersForDay(
-            @PathVariable String date
+    public ResponseEntity<ApiResponse<List<OrderLogSummaryResponse>>> getOrdersForDay(
+            @PathVariable String date,
+            @RequestParam(defaultValue = "1")
+            int page,
+            @RequestParam(defaultValue = "20")
+            int limit
     ) {
         return ResponseEntity.ok(
-                orderSagaLogService.getOrdersForDay(LocalDate.parse(date))
+                ApiResponse.page(
+                        orderSagaLogService.getOrdersForDay(
+                                LocalDate.parse(date),
+                                page,
+                                limit
+                        )
+                )
         );
     }
 
     @GetMapping("/orders/{orderId}")
-    public ResponseEntity<List<OrderSagaLogResponse>> getOrderLogs(
-            @PathVariable UUID orderId
+    public ResponseEntity<ApiResponse<List<OrderSagaLogResponse>>> getOrderLogs(
+            @PathVariable UUID orderId,
+            @RequestParam(defaultValue = "1")
+            int page,
+            @RequestParam(defaultValue = "20")
+            int limit
     ) {
-        return ResponseEntity.ok(orderSagaLogService.getOrderLogs(orderId));
+        return ResponseEntity.ok(
+                ApiResponse.page(
+                        orderSagaLogService.getOrderLogs(orderId, page, limit)
+                )
+        );
     }
 }

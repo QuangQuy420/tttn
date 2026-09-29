@@ -7,19 +7,24 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { CategoriesService } from '../services/categories.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { CategoryResponseDto } from './dto/category-response.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { PaginationQueryDto } from './dto/pagination-query.dto';
+import { Paginated } from '../common/api-response';
 
 @Controller('categories')
 export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}
 
   @Get()
-  findAll(): Promise<CategoryResponseDto[]> {
-    return this.categoriesService.findAll();
+  findAll(
+    @Query() query: PaginationQueryDto,
+  ): Promise<Paginated<CategoryResponseDto>> {
+    return this.categoriesService.findAll(query);
   }
 
   @Get(':id')

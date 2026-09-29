@@ -5,10 +5,14 @@ import { useEffect, useState } from "react";
 import { ApiError, getSagaLogsForDay } from "@/lib/api";
 import { ErrorState } from "@/components/common/ErrorState";
 import { LoadingState } from "@/components/common/LoadingState";
+import { Pagination } from "@/components/common/Pagination";
+import { usePageParam } from "@/hooks/usePageParam";
 import { getAccessToken } from "@/lib/auth/session";
 import { formatIsoDateVi } from "@/lib/format/date";
 import { formatSagaLogLevelVi } from "@/lib/labels";
 import type { OrderLogSummary } from "@/types/saga-log";
+
+const PAGE_SIZE = 20;
 
 interface SagaLogOrdersPageProps {
   date: string;
@@ -19,6 +23,8 @@ interface SagaLogOrdersPageProps {
 // level among them, so an operator can tell at a glance which orders need a closer look.
 export function SagaLogOrdersPage({ date }: SagaLogOrdersPageProps) {
   const [orders, setOrders] = useState<OrderLogSummary[]>([]);
+  const [page, setPage] = usePageParam();
+  const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,8 +44,11 @@ export function SagaLogOrdersPage({ date }: SagaLogOrdersPageProps) {
       setIsLoading(true);
       setError(null);
       try {
-        const result = await getSagaLogsForDay(token, date);
-        if (!cancelled) setOrders(result);
+        const result = await getSagaLogsForDay(token, date, { page, limit: PAGE_SIZE });
+        if (!cancelled) {
+          setOrders(result.data);
+          setTotalPages(result.meta.totalPages);
+        }
       } catch (err) {
         if (!cancelled) {
           setError(
@@ -56,7 +65,7 @@ export function SagaLogOrdersPage({ date }: SagaLogOrdersPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [date]);
+  }, [date, page]);
 
   return (
     <>
@@ -112,6 +121,9 @@ export function SagaLogOrdersPage({ date }: SagaLogOrdersPageProps) {
               </div>
             )}
           </div>
+        )}
+        {!isLoading && !error && (
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         )}
       </section>
     </>

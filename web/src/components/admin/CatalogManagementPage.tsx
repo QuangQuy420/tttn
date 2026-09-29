@@ -5,15 +5,20 @@ import { ApiError } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth/session";
 import { ErrorState } from "@/components/common/ErrorState";
 import { LoadingState } from "@/components/common/LoadingState";
+import { Pagination } from "@/components/common/Pagination";
+import { usePageParam } from "@/hooks/usePageParam";
+import type { PageParams, Paginated } from "@/types/api";
 import type { Brand, CreateBrandPayload } from "@/types/product";
 import type { Category, CreateCategoryPayload } from "@/types/category";
+
+const PAGE_SIZE = 20;
 
 interface ResourceConfig<T extends Brand | Category> {
   title: string;
   searchLabel: string;
   createLabel: string;
   resourceLabel: string;
-  getItems: () => Promise<T[]>;
+  getItems: (params: PageParams) => Promise<Paginated<T>>;
   create: (payload: CreateBrandPayload | CreateCategoryPayload, token: string) => Promise<T>;
   update: (
     id: string,
@@ -30,6 +35,8 @@ export function CatalogManagementPage<T extends Brand | Category>({
 }) {
   const configRef = useRef(config);
   const [items, setItems] = useState<T[]>([]);
+  const [page, setPage] = usePageParam();
+  const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -41,7 +48,9 @@ export function CatalogManagementPage<T extends Brand | Category>({
     setIsLoading(true);
     setLoadError(null);
     try {
-      setItems(await config.getItems());
+      const result = await config.getItems({ page, limit: PAGE_SIZE });
+      setItems(result.data);
+      setTotalPages(result.meta.totalPages);
     } catch (error) {
       setLoadError(error instanceof ApiError ? error.message : `Không thể tải ${config.resourceLabel}.`);
     } finally {
@@ -56,8 +65,11 @@ export function CatalogManagementPage<T extends Brand | Category>({
       setIsLoading(true);
       setLoadError(null);
       try {
-        const result = await configRef.current.getItems();
-        if (!cancelled) setItems(result);
+        const result = await configRef.current.getItems({ page, limit: PAGE_SIZE });
+        if (!cancelled) {
+          setItems(result.data);
+          setTotalPages(result.meta.totalPages);
+        }
       } catch (error) {
         if (!cancelled) {
           setLoadError(
@@ -76,7 +88,7 @@ export function CatalogManagementPage<T extends Brand | Category>({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [page]);
 
   const term = search.trim().toLocaleLowerCase("vi");
   const filteredItems = useMemo(
@@ -161,6 +173,9 @@ export function CatalogManagementPage<T extends Brand | Category>({
             ))}
             {filteredItems.length === 0 && <div className="admin-table__empty">Không tìm thấy {config.resourceLabel} nào phù hợp.</div>}
           </div>
+        )}
+        {!isLoading && !loadError && (
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         )}
       </section>
 

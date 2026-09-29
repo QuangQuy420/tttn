@@ -1,4 +1,4 @@
-export { ApiError, apiFetch } from "./client";
+export { ApiError, apiFetch, apiFetchData, apiFetchPage } from "./client";
 
 export {
   login,
@@ -44,6 +44,7 @@ export {
   addCartItem,
   clearCart,
   getCart,
+  refreshCart,
   removeCartItem,
   updateCartItem,
 } from "./cart";

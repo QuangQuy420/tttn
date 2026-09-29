@@ -25,7 +25,6 @@ import {
   INVENTORY_REPOSITORY,
 } from '../repositories/tokens';
 import { ListProductsQueryDto } from '../routes/dto/list-products-query.dto';
-import { PaginatedResponseDto } from '../routes/dto/paginated-response.dto';
 import {
   ProductImageResponseDto,
   ProductResponseDto,
@@ -36,6 +35,7 @@ import { Product } from '../db/entities/product.entity';
 import { ProductVariant } from '../db/entities/product-variant.entity';
 import { ProductImage } from '../db/entities/product-image.entity';
 import { ProductStatus } from '../db/enums/product-status.enum';
+import { Paginated, paginated } from '../common/api-response';
 
 /** Single image → response mapping, shared by the product DTO and the image endpoints. */
 export function toImageResponse(image: ProductImage): ProductImageResponseDto {
@@ -70,7 +70,7 @@ export class ProductsService {
 
   async findAll(
     query: ListProductsQueryDto,
-  ): Promise<PaginatedResponseDto<ProductResponseDto>> {
+  ): Promise<Paginated<ProductResponseDto>> {
     const filter: ProductListFilter = {
       categoryId: query.categoryId,
       brandId: query.brandId,
@@ -93,12 +93,7 @@ export class ProductsService {
     const { items, total } = await this.productRepository.findAndCount(filter);
 
     if (items.length === 0) {
-      return new PaginatedResponseDto<ProductResponseDto>(
-        [],
-        total,
-        query.page,
-        query.limit,
-      );
+      return paginated<ProductResponseDto>([], total, query.page, query.limit);
     }
 
     const productIds = items.map((product) => product.id);
@@ -111,12 +106,7 @@ export class ProductsService {
       this.toResponseDto(product, variants, images),
     );
 
-    return new PaginatedResponseDto<ProductResponseDto>(
-      dtos,
-      total,
-      query.page,
-      query.limit,
-    );
+    return paginated(dtos, total, query.page, query.limit);
   }
 
   async findOne(id: string): Promise<ProductResponseDto> {

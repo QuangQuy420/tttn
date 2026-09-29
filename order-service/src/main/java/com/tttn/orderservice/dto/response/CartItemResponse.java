@@ -1,5 +1,7 @@
 package com.tttn.orderservice.dto.response;
 
+import com.tttn.orderservice.enums.CartItemUnavailableReason;
+
 import java.math.BigDecimal;
 import java.util.UUID;
 
@@ -16,6 +18,9 @@ public record CartItemResponse(
         BigDecimal extraPrice,
         BigDecimal unitPrice,
         Integer quantity,
-        BigDecimal subtotal
+        BigDecimal subtotal,
+        boolean available,
+        CartItemUnavailableReason unavailableReason,
+        Integer availableStock
 ) {
 }

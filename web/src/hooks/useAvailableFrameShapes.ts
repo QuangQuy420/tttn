@@ -21,7 +21,7 @@ export function useAvailableFrameShapes(): UseAvailableFrameShapesResult {
       try {
         const response = await getProducts({ limit: 100 });
         if (cancelled) return;
-        const distinct = Array.from(new Set(response.items.map((product) => product.frameShape)));
+        const distinct = Array.from(new Set(response.data.map((product) => product.frameShape)));
         setFrameShapes(distinct);
       } catch {
         if (!cancelled) setFrameShapes([]);

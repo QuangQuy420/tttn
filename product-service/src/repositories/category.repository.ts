@@ -5,7 +5,11 @@ import { Category } from '../db/entities/category.entity';
 import { Product } from '../db/entities/product.entity';
 
 export interface ICategoryRepository {
-  findAll(): Promise<Category[]>;
+  /** One page (1-based) ordered by name, plus the total row count. */
+  findPage(
+    page: number,
+    limit: number,
+  ): Promise<{ items: Category[]; total: number }>;
   findBySlug(slug: string): Promise<Category | null>;
   findById(id: string): Promise<Category | null>;
   create(data: Partial<Category>): Promise<Category>;
@@ -20,8 +24,16 @@ export class TypeOrmCategoryRepository implements ICategoryRepository {
     @InjectRepository(Category) private readonly repo: Repository<Category>,
   ) {}
 
-  findAll(): Promise<Category[]> {
-    return this.repo.find({ order: { name: 'ASC' } });
+  async findPage(
+    page: number,
+    limit: number,
+  ): Promise<{ items: Category[]; total: number }> {
+    const [items, total] = await this.repo.findAndCount({
+      order: { name: 'ASC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+    return { items, total };
   }
 
   findBySlug(slug: string): Promise<Category | null> {

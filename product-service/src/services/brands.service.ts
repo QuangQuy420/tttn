@@ -11,6 +11,8 @@ import { BRAND_REPOSITORY } from '../repositories/tokens';
 import { CreateBrandDto } from '../routes/dto/create-brand.dto';
 import { BrandResponseDto } from '../routes/dto/brand-response.dto';
 import { UpdateBrandDto } from '../routes/dto/update-brand.dto';
+import { PaginationQueryDto } from '../routes/dto/pagination-query.dto';
+import { Paginated, paginated } from '../common/api-response';
 
 @Injectable()
 export class BrandsService {
@@ -19,9 +21,19 @@ export class BrandsService {
     private readonly brandRepository: IBrandRepository,
   ) {}
 
-  async findAll(): Promise<BrandResponseDto[]> {
-    const brands = await this.brandRepository.findAll();
-    return brands.map((brand) => this.toResponseDto(brand));
+  async findAll(
+    query: PaginationQueryDto,
+  ): Promise<Paginated<BrandResponseDto>> {
+    const { items, total } = await this.brandRepository.findPage(
+      query.page,
+      query.limit,
+    );
+    return paginated(
+      items.map((brand) => this.toResponseDto(brand)),
+      total,
+      query.page,
+      query.limit,
+    );
   }
 
   async findOne(id: string): Promise<BrandResponseDto> {

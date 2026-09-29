@@ -11,6 +11,7 @@ import { ProductListPage } from "./ProductListPage";
 jest.mock("next/navigation", () => ({
   useRouter: jest.fn(),
   useSearchParams: jest.fn(),
+  usePathname: jest.fn(() => "/"),
 }));
 jest.mock("@/hooks/useProducts", () => ({ useProducts: jest.fn() }));
 jest.mock("@/hooks/useCategories", () => ({ useCategories: jest.fn() }));

@@ -3,10 +3,12 @@ package com.tttn.orderservice.service.impl;
 import com.tttn.orderservice.client.ProductClient;
 import com.tttn.orderservice.dto.request.AddCartItemRequest;
 import com.tttn.orderservice.dto.request.UpdateCartItemRequest;
+import com.tttn.orderservice.dto.response.CartRefreshResponse;
 import com.tttn.orderservice.dto.response.CartResponse;
 import com.tttn.orderservice.dto.response.ProductImageResponse;
 import com.tttn.orderservice.dto.response.ProductResponse;
 import com.tttn.orderservice.dto.response.ProductVariantResponse;
+import com.tttn.orderservice.enums.CartItemUnavailableReason;
 import com.tttn.orderservice.enums.ProductStatus;
 import com.tttn.orderservice.exception.BadRequestException;
 import com.tttn.orderservice.exception.ResourceNotFoundException;
@@ -21,7 +23,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.ValueOperations;
 
 import java.math.BigDecimal;
@@ -45,6 +49,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("CartServiceImpl Unit Tests")
@@ -1500,6 +1505,140 @@ class CartServiceImplTest {
             assertEquals(
                     new BigDecimal("2000000"),
                     response.items().get(0).subtotal()
+            );
+        }
+    }
+
+    @Nested
+    @DisplayName("syncProduct")
+    class SyncProductTests {
+
+        @Test
+        @DisplayName("Cập nhật giá item trong giỏ khi admin đổi giá sản phẩm")
+        void syncProduct_whenPriceChanged_shouldUpdateCartItem() {
+            String cartKey = buildCartKey(userId);
+
+            mockCartKeys(cartKey);
+
+            when(valueOperations.get(cartKey))
+                    .thenReturn(createCartWithOneItem());
+
+            when(cartRedisTemplate.getExpire(cartKey))
+                    .thenReturn(3600L);
+
+            when(productClient.getProductById(productId))
+                    .thenReturn(
+                            createProductWithBasePrice(
+                                    new BigDecimal("1500000")
+                            )
+                    );
+
+            cartService.syncProduct(productId);
+
+            ArgumentCaptor<Cart> cartCaptor =
+                    ArgumentCaptor.forClass(Cart.class);
+
+            verify(valueOperations).set(
+                    eq(cartKey),
+                    cartCaptor.capture(),
+                    eq(Duration.ofSeconds(3600))
+            );
+
+            CartItem item = cartCaptor.getValue().getItems().get(0);
+
+            assertEquals(
+                    new BigDecimal("1700000"),
+                    item.getUnitPrice()
+            );
+            assertTrue(item.getAvailable());
+            assertNull(item.getUnavailableReason());
+        }
+
+        @Test
+        @DisplayName("Đánh dấu item không khả dụng khi sản phẩm không còn PUBLISHED")
+        void syncProduct_whenProductNotPublished_shouldMarkItemUnavailable() {
+            String cartKey = buildCartKey(userId);
+
+            mockCartKeys(cartKey);
+
+            when(valueOperations.get(cartKey))
+                    .thenReturn(createCartWithOneItem());
+
+            when(cartRedisTemplate.getExpire(cartKey))
+                    .thenReturn(3600L);
+
+            when(productClient.getProductById(productId))
+                    .thenReturn(
+                            createProductWithStatus(
+                                    findNonPublishedStatus()
+                            )
+                    );
+
+            cartService.syncProduct(productId);
+
+            ArgumentCaptor<Cart> cartCaptor =
+                    ArgumentCaptor.forClass(Cart.class);
+
+            verify(valueOperations).set(
+                    eq(cartKey),
+                    cartCaptor.capture(),
+                    eq(Duration.ofSeconds(3600))
+            );
+
+            CartItem item = cartCaptor.getValue().getItems().get(0);
+
+            assertFalse(item.getAvailable());
+            assertEquals(
+                    CartItemUnavailableReason.PRODUCT_UNAVAILABLE,
+                    item.getUnavailableReason()
+            );
+        }
+
+        @SuppressWarnings("unchecked")
+        private void mockCartKeys(String cartKey) {
+            Cursor<String> cursor = mock(Cursor.class);
+
+            when(cursor.hasNext()).thenReturn(true, false);
+            when(cursor.next()).thenReturn(cartKey);
+
+            when(cartRedisTemplate.scan(any(ScanOptions.class)))
+                    .thenReturn(cursor);
+        }
+    }
+
+    @Nested
+    @DisplayName("refreshCart")
+    class RefreshCartTests {
+
+        @Test
+        @DisplayName("Trả về changedVariantIds khi giá item thay đổi")
+        void refreshCart_whenPriceChanged_shouldReturnChangedVariantIds() {
+            when(valueOperations.get(buildCartKey(userId)))
+                    .thenReturn(createCartWithOneItem());
+
+            when(productClient.getProductById(productId))
+                    .thenReturn(
+                            createProductWithBasePrice(
+                                    new BigDecimal("1500000")
+                            )
+                    );
+
+            CartRefreshResponse response =
+                    cartService.refreshCart(userId);
+
+            assertEquals(
+                    List.of(variantId),
+                    response.changedVariantIds()
+            );
+            assertEquals(
+                    new BigDecimal("1700000"),
+                    response.cart().items().get(0).unitPrice()
+            );
+
+            verify(valueOperations).set(
+                    eq(buildCartKey(userId)),
+                    any(Cart.class),
+                    eq(CART_TTL)
             );
         }
     }

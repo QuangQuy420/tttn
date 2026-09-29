@@ -85,6 +85,9 @@ export interface CheckoutPayload {
   note?: string;
   paymentMethod: string;
   variantIds: string[];
+  // variantId → unit price the user saw on the checkout page. order-service compares the live
+  // price against it and answers 409 CART_CHANGED on a mismatch.
+  expectedUnitPrices?: Record<string, number>;
 }
 
 // Mirrors CheckoutResponse.
@@ -103,24 +106,11 @@ export interface CancelOrderPayload {
   reason: string;
 }
 
-// Mirrors PageResponse<T> (order-service's own paginated envelope — NOT product-service's flat
-// PaginatedResponse<T> shape in src/types/api.ts; field names differ, see
-// order-service/src/main/java/com/tttn/orderservice/dto/response/PageResponse.java).
-export interface OrderPageResponse<T> {
-  content: T[];
-  page: number;
-  size: number;
-  totalElements: number;
-  totalPages: number;
-  first: boolean;
-  last: boolean;
-}
-
-// Mirrors OrderController.getOrders' query params.
+// Mirrors OrderController.getOrders' query params (`page` is 1-based).
 export interface GetOrdersParams {
   status?: OrderStatus;
   page?: number;
-  size?: number;
+  limit?: number;
 }
 
 // Mirrors AdminOrderSummaryResponse (order-service dto/response/AdminOrderSummaryResponse.java) —

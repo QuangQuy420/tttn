@@ -8,7 +8,7 @@ describe('CategoriesService', () => {
 
   beforeEach(() => {
     categoryRepository = {
-      findAll: jest.fn(),
+      findPage: jest.fn(),
       findBySlug: jest.fn(),
       findById: jest.fn(),
       create: jest.fn(),
@@ -20,32 +20,41 @@ describe('CategoriesService', () => {
   });
 
   it('maps categories to response DTOs', async () => {
-    categoryRepository.findAll.mockResolvedValue([
-      {
-        id: 'cat-1',
-        name: 'Sunglasses',
-        slug: 'sunglasses',
-      } as Category,
-      {
-        id: 'cat-2',
-        name: 'Aviators',
-        slug: 'aviators',
-      } as Category,
-    ]);
+    categoryRepository.findPage.mockResolvedValue({
+      items: [
+        {
+          id: 'cat-1',
+          name: 'Sunglasses',
+          slug: 'sunglasses',
+        } as Category,
+        {
+          id: 'cat-2',
+          name: 'Aviators',
+          slug: 'aviators',
+        } as Category,
+      ],
+      total: 2,
+    });
 
-    const result = await service.findAll();
+    const result = await service.findAll({ page: 1, limit: 20 });
 
-    expect(result).toEqual([
+    expect(result.items).toEqual([
       { id: 'cat-1', name: 'Sunglasses', slug: 'sunglasses' },
       { id: 'cat-2', name: 'Aviators', slug: 'aviators' },
     ]);
+    expect(result.meta).toEqual({
+      page: 1,
+      limit: 20,
+      total: 2,
+      totalPages: 1,
+    });
   });
 
   it('returns an empty array when there are no categories', async () => {
-    categoryRepository.findAll.mockResolvedValue([]);
+    categoryRepository.findPage.mockResolvedValue({ items: [], total: 0 });
 
-    const result = await service.findAll();
+    const result = await service.findAll({ page: 1, limit: 20 });
 
-    expect(result).toEqual([]);
+    expect(result.items).toEqual([]);
   });
 });

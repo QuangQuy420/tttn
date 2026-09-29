@@ -1,4 +1,4 @@
-import type { ApiResponse } from "@/types/auth";
+import type { ApiResponse, PageParams, Paginated } from "@/types/api";
 import type {
     Address,
     ChangePasswordRequest,
@@ -6,7 +6,8 @@ import type {
     UpdateProfileRequest,
     UserProfile,
 } from "@/types/user";
-import { apiFetch } from "./client";
+import { apiFetch, apiFetchPage } from "./client";
+import { pageQuery } from "./query";
 
 function authHeaders(token: string): HeadersInit {
     return {
@@ -47,8 +48,9 @@ export function changePassword(
 
 export function getMyAddresses(
     token: string,
-): Promise<ApiResponse<Address[]>> {
-    return apiFetch<ApiResponse<Address[]>>("/users/me/addresses", {
+    params: PageParams = {},
+): Promise<Paginated<Address>> {
+    return apiFetchPage<Address>(`/users/me/addresses${pageQuery(params)}`, {
         method: "GET",
         headers: authHeaders(token),
     });

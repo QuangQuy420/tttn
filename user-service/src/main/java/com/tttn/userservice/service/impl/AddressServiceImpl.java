@@ -9,11 +9,13 @@ import com.tttn.userservice.exception.ErrorCode;
 import com.tttn.userservice.repository.AddressRepository;
 import com.tttn.userservice.repository.UserRepository;
 import com.tttn.userservice.service.AddressService;
+import com.tttn.userservice.util.PageRequests;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -25,11 +27,11 @@ public class AddressServiceImpl implements AddressService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<AddressResponse> listAddresses(UUID userId) {
-        return addressRepository.findByUserIdOrderByDefaultAddressDescCreatedAtDesc(userId)
-                .stream()
-                .map(this::toResponse)
-                .toList();
+    public Page<AddressResponse> listAddresses(UUID userId, int page, int limit) {
+        return addressRepository.findByUserIdOrderByDefaultAddressDescCreatedAtDesc(
+                userId,
+                PageRequests.of(page, limit, Sort.unsorted())
+        ).map(this::toResponse);
     }
 
     @Override

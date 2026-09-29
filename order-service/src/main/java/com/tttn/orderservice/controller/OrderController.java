@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -22,66 +23,72 @@ public class OrderController {
     private final OrderService orderService;
 
     @PostMapping("/users/{userId}/checkout")
-    public ResponseEntity<CheckoutResponse> checkout(
+    public ResponseEntity<ApiResponse<CheckoutResponse>> checkout(
             @PathVariable UUID userId,
             @Valid @RequestBody CheckoutRequest request
     ) {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(orderService.checkout(userId, request));
+                .body(ApiResponse.ok(orderService.checkout(userId, request)));
     }
 
     @GetMapping("/users/{userId}/orders")
-    public ResponseEntity<PageResponse<OrderSummaryResponse>>
+    public ResponseEntity<ApiResponse<List<OrderSummaryResponse>>>
     getOrders(
             @PathVariable UUID userId,
             @RequestParam(required = false)
             OrderStatus status,
-            @RequestParam(defaultValue = "0")
+            @RequestParam(defaultValue = "1")
             int page,
             @RequestParam(defaultValue = "20")
-            int size
+            int limit
     ) {
         return ResponseEntity.ok(
-                orderService.getOrders(
-                        userId,
-                        status,
-                        page,
-                        size
+                ApiResponse.page(
+                        orderService.getOrders(
+                                userId,
+                                status,
+                                page,
+                                limit
+                        )
                 )
         );
     }
 
     @GetMapping("/users/{userId}/orders/{orderId}")
-    public ResponseEntity<OrderResponse> getOrderDetail(
+    public ResponseEntity<ApiResponse<OrderResponse>> getOrderDetail(
             @PathVariable UUID userId,
             @PathVariable UUID orderId
     ) {
         return ResponseEntity.ok(
-                orderService.getOrderDetail(
-                        userId,
-                        orderId
+                ApiResponse.ok(
+                        orderService.getOrderDetail(
+                                userId,
+                                orderId
+                        )
                 )
         );
     }
 
     @PostMapping("/users/{userId}/orders/{orderId}/cancel")
-    public ResponseEntity<OrderResponse> cancelOrder(
+    public ResponseEntity<ApiResponse<OrderResponse>> cancelOrder(
             @PathVariable UUID userId,
             @PathVariable UUID orderId,
             @Valid @RequestBody CancelOrderRequest request
     ) {
         return ResponseEntity.ok(
-                orderService.cancelOrder(
-                        userId,
-                        orderId,
-                        request
+                ApiResponse.ok(
+                        orderService.cancelOrder(
+                                userId,
+                                orderId,
+                                request
+                        )
                 )
         );
     }
 
     @PatchMapping("/admin/orders/{orderId}/status")
-    public ResponseEntity<OrderResponse> updateStatus(
+    public ResponseEntity<ApiResponse<OrderResponse>> updateStatus(
             @PathVariable UUID orderId,
             @RequestHeader("X-User-Id")
             UUID changedBy,
@@ -89,46 +96,50 @@ public class OrderController {
             UpdateOrderStatusRequest request
     ) {
         return ResponseEntity.ok(
-                orderService.updateOrderStatus(
-                        orderId,
-                        changedBy,
-                        request
+                ApiResponse.ok(
+                        orderService.updateOrderStatus(
+                                orderId,
+                                changedBy,
+                                request
+                        )
                 )
         );
     }
 
     @GetMapping("/admin/orders")
-    public ResponseEntity<PageResponse<OrderSummaryResponse>>
+    public ResponseEntity<ApiResponse<List<OrderSummaryResponse>>>
     getAllOrders(
             @RequestParam(required = false)
             OrderStatus status,
-            @RequestParam(defaultValue = "0")
+            @RequestParam(defaultValue = "1")
             int page,
             @RequestParam(defaultValue = "20")
-            int size
+            int limit
     ) {
         return ResponseEntity.ok(
-                orderService.getAllOrders(
-                        status,
-                        page,
-                        size
+                ApiResponse.page(
+                        orderService.getAllOrders(
+                                status,
+                                page,
+                                limit
+                        )
                 )
         );
     }
 
     @GetMapping("/admin/orders/summary")
-    public ResponseEntity<AdminOrderSummaryResponse> getOrdersSummary() {
+    public ResponseEntity<ApiResponse<AdminOrderSummaryResponse>> getOrdersSummary() {
         return ResponseEntity.ok(
-                orderService.getOrdersSummary()
+                ApiResponse.ok(orderService.getOrdersSummary())
         );
     }
 
     @GetMapping("/admin/orders/{orderId}")
-    public ResponseEntity<OrderResponse> getOrderDetailForAdmin(
+    public ResponseEntity<ApiResponse<OrderResponse>> getOrderDetailForAdmin(
             @PathVariable UUID orderId
     ) {
         return ResponseEntity.ok(
-                orderService.getOrderDetailForAdmin(orderId)
+                ApiResponse.ok(orderService.getOrderDetailForAdmin(orderId))
         );
     }
 }

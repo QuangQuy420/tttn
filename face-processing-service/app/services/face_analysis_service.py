@@ -73,10 +73,16 @@ class FaceAnalysisService:
             imageUrl=image_url,
         )
 
-    async def list_history(self, user_id: uuid.UUID) -> list[AnalyzeResponse]:
-        """Return `user_id`'s past analyses, newest first, mapped to `AnalyzeResponse`."""
-        rows = await self._face_analysis_repo.list_by_user(user_id)
-        return [
+    async def list_history(
+        self, user_id: uuid.UUID, page: int, limit: int
+    ) -> tuple[list[AnalyzeResponse], int]:
+        """Return one page of `user_id`'s past analyses (newest first, mapped to
+        `AnalyzeResponse`) plus the total number of analyses the user has."""
+        total = await self._face_analysis_repo.count_by_user(user_id)
+        rows = await self._face_analysis_repo.list_by_user(
+            user_id, offset=(page - 1) * limit, limit=limit
+        )
+        items = [
             AnalyzeResponse(
                 id=str(row.id),
                 faceShape=row.face_shape,
@@ -86,6 +92,7 @@ class FaceAnalysisService:
             )
             for row in rows
         ]
+        return items, total
 
     async def delete_history_item(self, user_id: uuid.UUID, analysis_id: uuid.UUID) -> None:
         """Delete `analysis_id`, only if it belongs to `user_id`.

@@ -7,6 +7,7 @@ import { ApiError, deleteFaceAnalysisHistory, getFaceAnalysisHistory } from "@/l
 import { ErrorState } from "@/components/common/ErrorState";
 import { ImageWithFallback } from "@/components/common/ImageWithFallback";
 import { LoadingState } from "@/components/common/LoadingState";
+import { Pagination } from "@/components/common/Pagination";
 import { useFaceAnalysis } from "@/hooks/useFaceAnalysis";
 import { useStaticFaceOverlay } from "@/hooks/useStaticFaceOverlay";
 import { getAccessToken } from "@/lib/auth/session";
@@ -31,6 +32,8 @@ const MEASUREMENT_FIELDS: { key: keyof FaceMeasurements; label: string }[] = [
 // unitless (fractions of image dimensions, or ratios of those fractions) and land roughly in the
 // 0-1.5 range in practice.
 const MEASUREMENT_BAR_MAX = 1.5;
+
+const HISTORY_PAGE_SIZE = 10;
 
 // Shared between the current result and each history item — both render the same 7-field
 // measurement grid from a FaceMeasurements object.
@@ -86,6 +89,10 @@ export function FaceAnalysisPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   const [history, setHistory] = useState<FaceAnalysisResult[]>([]);
+  // History is one section of this page (not the page's main list), so its page number lives in
+  // local state rather than the URL.
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyTotalPages, setHistoryTotalPages] = useState(1);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -156,8 +163,14 @@ export function FaceAnalysisPage() {
       setHistoryLoading(true);
       setHistoryError(null);
       try {
-        const items = await getFaceAnalysisHistory(token as string);
-        if (!cancelled) setHistory(items);
+        const result = await getFaceAnalysisHistory(token as string, {
+          page: historyPage,
+          limit: HISTORY_PAGE_SIZE,
+        });
+        if (!cancelled) {
+          setHistory(result.data);
+          setHistoryTotalPages(result.meta.totalPages);
+        }
       } catch (err) {
         if (!cancelled) {
           setHistoryError(err instanceof ApiError ? err.message : "Không thể tải lịch sử phân tích của bạn.");
@@ -170,7 +183,7 @@ export function FaceAnalysisPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [historyPage]);
 
   // Revoke the local object URL once it's no longer the active preview (either replaced by a
   // new selection, or the component unmounts) — otherwise each upload leaks a blob URL.
@@ -518,6 +531,13 @@ export function FaceAnalysisPage() {
               </div>
             ))}
           </div>
+        )}
+        {!historyLoading && !historyError && (
+          <Pagination
+            page={historyPage}
+            totalPages={historyTotalPages}
+            onPageChange={setHistoryPage}
+          />
         )}
       </div>
     </section>

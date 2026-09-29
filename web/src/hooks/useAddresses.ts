@@ -32,7 +32,7 @@ export function useAddresses(): UseAddressesResult {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await getMyAddresses(token);
+      const response = await getMyAddresses(token, { limit: 100 });
       setAddresses(response.data);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Không thể tải danh sách địa chỉ.");
@@ -58,7 +58,7 @@ export function useAddresses(): UseAddressesResult {
       setIsLoading(true);
       setError(null);
       try {
-        const response = await getMyAddresses(token);
+        const response = await getMyAddresses(token, { limit: 100 });
         if (!cancelled) setAddresses(response.data);
       } catch (err) {
         if (!cancelled) {

@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useState } from "react";
 import { ErrorState } from "@/components/common/ErrorState";
 import { LoadingState } from "@/components/common/LoadingState";
+import { Pagination } from "@/components/common/Pagination";
 import { useOrders } from "@/hooks/useOrders";
+import { usePageParam } from "@/hooks/usePageParam";
 import { formatPriceVnd } from "@/lib/format/price";
 import { formatOrderStatusVi, ORDER_STATUSES } from "@/lib/labels";
 import type { OrderStatus } from "@/types/order";
@@ -14,13 +16,13 @@ const PAGE_SIZE = 10;
 // FR3/T18: paginated order history for the logged-in user, with an optional status filter.
 export function OrderListPage() {
   const [status, setStatus] = useState<OrderStatus | undefined>(undefined);
-  const [page, setPage] = useState(0);
+  const [page, setPage] = usePageParam();
 
-  const { orders, totalPages, isLoading, error } = useOrders({ status, page, size: PAGE_SIZE });
+  const { orders, meta, isLoading, error } = useOrders({ status, page, limit: PAGE_SIZE });
 
   function handleStatusChange(value: string) {
     setStatus(value ? (value as OrderStatus) : undefined);
-    setPage(0);
+    setPage(1);
   }
 
   return (
@@ -78,29 +80,7 @@ export function OrderListPage() {
             ))}
           </div>
 
-          {totalPages > 1 && (
-            <div className="orders-page__pagination">
-              <button
-                type="button"
-                className="btn btn--outline btn--small"
-                onClick={() => setPage((current) => Math.max(0, current - 1))}
-                disabled={page <= 0}
-              >
-                Trang trước
-              </button>
-              <span>
-                Trang {page + 1} / {totalPages}
-              </span>
-              <button
-                type="button"
-                className="btn btn--outline btn--small"
-                onClick={() => setPage((current) => Math.min(totalPages - 1, current + 1))}
-                disabled={page >= totalPages - 1}
-              >
-                Trang sau
-              </button>
-            </div>
-          )}
+          {meta && <Pagination page={page} totalPages={meta.totalPages} onPageChange={setPage} />}
         </>
       )}
     </section>

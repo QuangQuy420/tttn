@@ -11,7 +11,8 @@ from app.repositories.product_client import (
     ProductServiceUnavailableError,
 )
 from app.routers.recommend import get_recommendation_service
-from app.schemas.recommend import RecommendRequest, RecommendResponse
+from app.schemas.common import ApiResponse, paginated
+from app.schemas.recommend import RecommendRequest
 
 client = TestClient(app)
 
@@ -21,7 +22,7 @@ class _FakeRecommendationService:
         self._response = response
         self._error = error
 
-    async def recommend(self, request: RecommendRequest) -> RecommendResponse:
+    async def recommend(self, request: RecommendRequest) -> ApiResponse:
         if self._error is not None:
             raise self._error
         return self._response
@@ -43,20 +44,26 @@ def test_health_returns_ok() -> None:
 
 
 def test_recommend_happy_path_returns_the_service_response() -> None:
-    _override_with(_FakeRecommendationService(response=RecommendResponse(items=[])))
+    _override_with(_FakeRecommendationService(response=paginated([], total=0, page=1, limit=20)))
 
     response = client.post("/recommend", json={"faceShape": "OVAL"})
 
     assert response.status_code == 200
-    assert response.json() == {"items": []}
+    assert response.json() == {
+        "success": True,
+        "message": "Thành công",
+        "data": [],
+        "meta": {"page": 1, "limit": 20, "total": 0, "totalPages": 0},
+    }
 
 
 def test_recommend_rejects_an_invalid_face_shape() -> None:
-    _override_with(_FakeRecommendationService(response=RecommendResponse(items=[])))
+    _override_with(_FakeRecommendationService(response=paginated([], total=0, page=1, limit=20)))
 
     response = client.post("/recommend", json={"faceShape": "NOT_A_REAL_SHAPE"})
 
-    assert response.status_code == 422
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "VALIDATION_FAILED"
 
 
 def test_recommend_maps_product_service_timeout_to_504() -> None:
@@ -69,7 +76,7 @@ def test_recommend_maps_product_service_timeout_to_504() -> None:
     response = client.post("/recommend", json={"faceShape": "OVAL"})
 
     assert response.status_code == 504
-    assert "không phản hồi kịp thời" in response.json()["detail"]
+    assert "không phản hồi kịp thời" in response.json()["message"]
 
 
 def test_recommend_maps_product_service_unavailable_to_503() -> None:
@@ -82,4 +89,4 @@ def test_recommend_maps_product_service_unavailable_to_503() -> None:
     response = client.post("/recommend", json={"faceShape": "OVAL"})
 
     assert response.status_code == 503
-    assert "Không thể kết nối" in response.json()["detail"]
+    assert "Không thể kết nối" in response.json()["message"]

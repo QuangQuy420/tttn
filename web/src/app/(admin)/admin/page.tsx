@@ -40,8 +40,8 @@ export default function AdminDashboardPage() {
           getAdminOrdersSummary(token),
         ]);
         if (!cancelled) {
-          setTotalProducts(productsResult.total);
-          setTotalCustomers(usersResult.data.total);
+          setTotalProducts(productsResult.meta.total);
+          setTotalCustomers(usersResult.meta.total);
           setOrdersSummary(summaryResult);
         }
       } catch (err) {

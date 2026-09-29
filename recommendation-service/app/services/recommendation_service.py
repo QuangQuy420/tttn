@@ -29,7 +29,11 @@ from app.repositories.product_client import (
     IProductServiceClient,
     get_product_service_client,
 )
-from app.schemas.recommend import RecommendedProductDto, RecommendRequest, RecommendResponse
+from app.schemas.common import ApiResponse, paginated
+from app.schemas.recommend import RecommendedProductDto, RecommendRequest
+
+# product-service's max `limit` per page — the ranking pool is capped at this many products.
+CANDIDATE_POOL_SIZE = 100
 
 
 class RecommendationService:
@@ -39,7 +43,9 @@ class RecommendationService:
     def __init__(self, product_client: IProductServiceClient) -> None:
         self._product_client = product_client
 
-    async def recommend(self, request: RecommendRequest) -> RecommendResponse:
+    async def recommend(
+        self, request: RecommendRequest
+    ) -> ApiResponse[list[RecommendedProductDto]]:
         score_by_frame_shape: dict[str, float] = {
             frame_shape.value: score
             for frame_shape, score in get_ranked_frame_shapes(request.faceShape)
@@ -50,13 +56,10 @@ class RecommendationService:
             gender_target=request.genderTarget.value if request.genderTarget else None,
             min_price=request.minPrice,
             max_price=request.maxPrice,
-            # Over-fetch a bit before client-side ranking/truncation so a `limit` doesn't
-            # cut off higher-scoring products that product-service happened to return later
-            # in its own (createdAt-based) ordering. product-service caps at 100 per page.
-            # Applied unconditionally (even when the caller passes no `limit` at all) —
-            # otherwise product-service's own default page size (20) would silently cap the
-            # ranking pool instead of being over-fetched.
-            limit=min((request.limit or 20) * 5, 100),
+            # Always fetch the full candidate pool (product-service caps a page at 100) and
+            # rank all of it before paginating, so page N is a stable slice of one ranking
+            # instead of depending on product-service's own (createdAt-based) ordering.
+            limit=CANDIDATE_POOL_SIZE,
         )
 
         scored: list[RecommendedProductDto] = [
@@ -67,10 +70,13 @@ class RecommendationService:
         ]
         scored.sort(key=lambda product: product.score, reverse=True)
 
-        if request.limit is not None:
-            scored = scored[: request.limit]
-
-        return RecommendResponse(items=scored)
+        start = (request.page - 1) * request.limit
+        return paginated(
+            scored[start : start + request.limit],
+            total=len(scored),
+            page=request.page,
+            limit=request.limit,
+        )
 
 
 def get_recommendation_service(

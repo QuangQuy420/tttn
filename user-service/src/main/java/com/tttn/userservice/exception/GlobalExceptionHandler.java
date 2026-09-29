@@ -2,15 +2,19 @@ package com.tttn.userservice.exception;
 
 import com.tttn.userservice.dto.response.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.validation.FieldError;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -18,15 +22,11 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleBusinessException(
             BusinessException exception
     ) {
-        ErrorCode errorCode = exception.getErrorCode();
-
-        return ResponseEntity
-                .status(errorCode.getHttpStatus())
-                .body(ApiResponse.error(errorCode.getMessage()));
+        return toResponse(exception.getErrorCode(), null);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiResponse<Map<String, String>>> handleValidationException(
+    public ResponseEntity<ApiResponse<Void>> handleValidationException(
             MethodArgumentNotValidException exception
     ) {
         Map<String, String> errors = new LinkedHashMap<>();
@@ -40,27 +40,53 @@ public class GlobalExceptionHandler {
                         )
                 );
 
-        return ResponseEntity
-                .badRequest()
-                .body(new ApiResponse<>(
-                        false,
-                        "Dữ liệu đầu vào không hợp lệ",
-                        errors
-                ));
+        return toResponse(ErrorCode.VALIDATION_FAILED, errors);
     }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTypeMismatchException(
+            MethodArgumentTypeMismatchException exception
+    ) {
+        return toResponse(
+                ErrorCode.VALIDATION_FAILED,
+                Map.of(exception.getName(), "Giá trị không hợp lệ")
+        );
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnreadableBodyException(
+            HttpMessageNotReadableException exception
+    ) {
+        return toResponse(ErrorCode.BAD_REQUEST, null);
+    }
+
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingHeaderException(
+            MissingRequestHeaderException exception
+    ) {
+        return toResponse(
+                ErrorCode.BAD_REQUEST,
+                Map.of(exception.getHeaderName(), "Thiếu header bắt buộc")
+        );
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleUnexpectedException(
             Exception exception,
             HttpServletRequest request
     ) {
-        // Khi học có thể tạm giữ printStackTrace để xem lỗi.
-        // Sau này thay bằng logger.
-        exception.printStackTrace();
+        log.error("Unexpected error on {} {}", request.getMethod(), request.getRequestURI(), exception);
 
+        return toResponse(ErrorCode.INTERNAL_SERVER_ERROR, null);
+    }
+
+    private ResponseEntity<ApiResponse<Void>> toResponse(ErrorCode errorCode, Object details) {
         return ResponseEntity
-                .status(ErrorCode.INTERNAL_SERVER_ERROR.getHttpStatus())
+                .status(errorCode.getHttpStatus())
                 .body(ApiResponse.error(
-                        ErrorCode.INTERNAL_SERVER_ERROR.getMessage()
+                        errorCode.getMessage(),
+                        errorCode.name(),
+                        details
                 ));
     }
 }

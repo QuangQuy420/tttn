@@ -3,7 +3,7 @@ import uuid
 from typing import Protocol
 
 from fastapi import Depends
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import FaceAnalysis, FaceShape
@@ -21,8 +21,13 @@ class IFaceAnalysisRepository(Protocol):
     ) -> FaceAnalysis:
         """Persist one analysis result row and return it (with its generated id)."""
 
-    async def list_by_user(self, user_id: uuid.UUID) -> list[FaceAnalysis]:
-        """Return `user_id`'s analysis rows, newest first."""
+    async def list_by_user(
+        self, user_id: uuid.UUID, offset: int, limit: int
+    ) -> list[FaceAnalysis]:
+        """Return one page of `user_id`'s analysis rows, newest first."""
+
+    async def count_by_user(self, user_id: uuid.UUID) -> int:
+        """Return how many analysis rows `user_id` has in total."""
 
     async def get_by_id(self, id: uuid.UUID) -> FaceAnalysis | None:
         """Return the row with this id, or `None` if it doesn't exist."""
@@ -60,13 +65,25 @@ class SqlAlchemyFaceAnalysisRepository:
         await self._session.refresh(row)
         return row
 
-    async def list_by_user(self, user_id: uuid.UUID) -> list[FaceAnalysis]:
+    async def list_by_user(
+        self, user_id: uuid.UUID, offset: int, limit: int
+    ) -> list[FaceAnalysis]:
         result = await self._session.execute(
             select(FaceAnalysis)
             .where(FaceAnalysis.user_id == user_id)
-            .order_by(FaceAnalysis.created_at.desc())
+            .order_by(FaceAnalysis.created_at.desc(), FaceAnalysis.id.desc())
+            .offset(offset)
+            .limit(limit)
         )
         return list(result.scalars().all())
+
+    async def count_by_user(self, user_id: uuid.UUID) -> int:
+        result = await self._session.execute(
+            select(func.count())
+            .select_from(FaceAnalysis)
+            .where(FaceAnalysis.user_id == user_id)
+        )
+        return result.scalar_one()
 
     async def get_by_id(self, id: uuid.UUID) -> FaceAnalysis | None:
         result = await self._session.execute(

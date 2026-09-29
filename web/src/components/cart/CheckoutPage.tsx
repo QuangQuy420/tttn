@@ -2,20 +2,42 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { AddressBook } from "@/components/account/AddressBook";
 import { ErrorState } from "@/components/common/ErrorState";
 import { ImageWithFallback } from "@/components/common/ImageWithFallback";
 import { LoadingState } from "@/components/common/LoadingState";
 import { useAddresses } from "@/hooks/useAddresses";
 import { dispatchCartChange, useCart } from "@/hooks/useCart";
-import { ApiError, checkout } from "@/lib/api";
+import { ApiError, checkout, refreshCart } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth/session";
 import { formatPriceVnd } from "@/lib/format/price";
+import type { CartRefreshResult } from "@/types/cart";
 
 // CheckoutRequest.paymentMethod (order-service) is a free-form @NotBlank String, not an enum —
 // so any non-empty string works. This is the only payment method payment-service supports.
 const PAYMENT_METHODS = [{ value: "CARD", label: "Thanh toán qua thẻ" }];
+
+const CART_CHANGED_MESSAGE = "Giỏ hàng đã thay đổi, vui lòng kiểm tra lại";
+
+function parseVariantIds(value: string): string[] {
+  return value
+    .split(",")
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0);
+}
+
+// True when a refresh changed the price/availability of a selected item, or a selected item is
+// now unavailable — the user must re-check the cart before ordering (AC13).
+function hasSelectedChanges(result: CartRefreshResult, selectedVariantIds: string[]): boolean {
+  const priceOrAvailabilityChanged = result.changedVariantIds.some((id) =>
+    selectedVariantIds.includes(id),
+  );
+  const selectedUnavailable = result.cart.items.some(
+    (item) => selectedVariantIds.includes(item.variantId) && !item.available,
+  );
+  return priceOrAvailabilityChanged || selectedUnavailable;
+}
 
 // FR2/T17: checkout form + order summary from the current cart. Redirects to the new order's
 // detail page on success and clears the cart badge via dispatchCartChange (order-service itself
@@ -29,6 +51,10 @@ const PAYMENT_METHODS = [{ value: "CARD", label: "Thanh toán qua thẻ" }];
 // picks one of their saved addresses via AddressBook (also used, in "manage" mode, on the
 // profile page) — the chosen address's fields are copied into the CheckoutPayload at submit time
 // (order-service still stores a denormalized snapshot per order, unrelated to the address book).
+//
+// AC13/AC14: the cart is re-synced with product-service (refreshCart) on mount and again right
+// before placing the order. If a selected item's price/availability changed — or checkout itself
+// answers 409 CART_CHANGED — the order is not placed and the user is sent back to /cart.
 export function CheckoutPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -40,10 +66,8 @@ export function CheckoutPage() {
     refetch: refetchAddresses,
   } = useAddresses();
 
-  const selectedVariantIds = (searchParams.get("variantIds") ?? "")
-    .split(",")
-    .map((id) => id.trim())
-    .filter((id) => id.length > 0);
+  const variantIdsParam = searchParams.get("variantIds") ?? "";
+  const selectedVariantIds = parseVariantIds(variantIdsParam);
 
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
 
@@ -51,6 +75,42 @@ export function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState(PAYMENT_METHODS[0].value);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(true);
+  const [cartChanged, setCartChanged] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function refreshOnMount() {
+      const token = getAccessToken();
+      if (!token) {
+        if (!cancelled) setIsRefreshing(false);
+        return;
+      }
+
+      try {
+        const result = await refreshCart(token);
+        if (cancelled) return;
+        // The refresh rewrote the stored cart — reload it everywhere (this page, Header badge).
+        dispatchCartChange();
+        if (hasSelectedChanges(result, parseVariantIds(variantIdsParam))) setCartChanged(true);
+      } catch (err) {
+        if (!cancelled) {
+          setSubmitError(
+            err instanceof ApiError ? err.message : "Không thể kiểm tra lại giỏ hàng. Vui lòng thử lại.",
+          );
+        }
+      } finally {
+        if (!cancelled) setIsRefreshing(false);
+      }
+    }
+
+    void refreshOnMount();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [variantIdsParam]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -67,9 +127,31 @@ export function CheckoutPage() {
       return;
     }
 
+    // Unit prices of the selected items as shown on screen, captured before the refresh — the
+    // background cart sync may already have stored a new price, which the refresh alone won't
+    // report as a change.
+    const expectedUnitPrices: Record<string, number> = {};
+    for (const item of cart?.items ?? []) {
+      if (selectedVariantIds.includes(item.variantId)) {
+        expectedUnitPrices[item.variantId] = item.unitPrice;
+      }
+    }
+
     setIsSubmitting(true);
     setSubmitError(null);
     try {
+      const refreshed = await refreshCart(token);
+      const displayedPriceChanged = refreshed.cart.items.some(
+        (item) =>
+          item.variantId in expectedUnitPrices &&
+          item.unitPrice !== expectedUnitPrices[item.variantId],
+      );
+      if (displayedPriceChanged || hasSelectedChanges(refreshed, selectedVariantIds)) {
+        setCartChanged(true);
+        dispatchCartChange();
+        return;
+      }
+
       const result = await checkout(token, {
         receiverName: selectedAddress.receiverName,
         receiverPhone: selectedAddress.receiverPhone,
@@ -77,10 +159,16 @@ export function CheckoutPage() {
         note: note.trim() || undefined,
         paymentMethod,
         variantIds: selectedVariantIds,
+        expectedUnitPrices,
       });
       dispatchCartChange();
       router.push(`/orders/${result.orderId}`);
     } catch (err) {
+      if (err instanceof ApiError && err.code === "CART_CHANGED") {
+        setCartChanged(true);
+        dispatchCartChange();
+        return;
+      }
       setSubmitError(err instanceof ApiError ? err.message : "Đặt hàng thất bại. Vui lòng thử lại.");
     } finally {
       setIsSubmitting(false);
@@ -154,9 +242,19 @@ export function CheckoutPage() {
             </select>
           </label>
 
-          <button type="submit" className="btn btn--primary" disabled={isSubmitting}>
+          <button
+            type="submit"
+            className="btn btn--primary"
+            disabled={isSubmitting || isRefreshing || cartChanged}
+          >
             {isSubmitting ? "Đang đặt hàng..." : "Đặt hàng"}
           </button>
+
+          {cartChanged && (
+            <p role="alert" className="error-state">
+              {CART_CHANGED_MESSAGE}. <Link href="/cart">Quay lại giỏ hàng</Link>
+            </p>
+          )}
 
           {submitError && (
             <p role="alert" className="error-state">

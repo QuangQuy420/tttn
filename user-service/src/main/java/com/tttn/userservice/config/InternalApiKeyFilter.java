@@ -1,6 +1,7 @@
 package com.tttn.userservice.config;
 
 import com.tttn.userservice.dto.response.ApiResponse;
+import com.tttn.userservice.exception.ErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -48,7 +49,11 @@ public class InternalApiKeyFilter extends OncePerRequestFilter {
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.getWriter().write(
                     objectMapper.writeValueAsString(
-                            ApiResponse.error("Yêu cầu nội bộ không hợp lệ")
+                            ApiResponse.error(
+                                    ErrorCode.INVALID_INTERNAL_KEY.getMessage(),
+                                    ErrorCode.INVALID_INTERNAL_KEY.name(),
+                                    null
+                            )
                     )
             );
             return;

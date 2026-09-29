@@ -62,9 +62,10 @@ export class UsersController {
 
     @Get('me/addresses')
     listAddresses(
+        @Query() query: Record<string, unknown>,
         @Headers('authorization') authorization?: string,
     ): Promise<unknown> {
-        return this.usersProxyService.listAddresses(authorization);
+        return this.usersProxyService.listAddresses(query, authorization);
     }
 
     @Post('me/addresses')

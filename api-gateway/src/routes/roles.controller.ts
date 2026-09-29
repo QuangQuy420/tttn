@@ -7,6 +7,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { JwtGuard } from '../auth/jwt.guard';
@@ -31,9 +32,10 @@ export class RolesController {
   @UseGuards(JwtGuard, PermissionsGuard)
   @RequirePermission('role:manage')
   findAll(
+    @Query() query: Record<string, unknown>,
     @Headers('authorization') authorization?: string,
   ): Promise<unknown> {
-    return this.usersProxyService.listRoles(authorization);
+    return this.usersProxyService.listRoles(query, authorization);
   }
 
   @Post()
@@ -76,8 +78,9 @@ export class PermissionsController {
   @UseGuards(JwtGuard, PermissionsGuard)
   @RequirePermission('role:manage')
   findAll(
+    @Query() query: Record<string, unknown>,
     @Headers('authorization') authorization?: string,
   ): Promise<unknown> {
-    return this.usersProxyService.listPermissions(authorization);
+    return this.usersProxyService.listPermissions(query, authorization);
   }
 }

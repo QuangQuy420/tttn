@@ -2,6 +2,7 @@ package com.tttn.orderservice.service;
 
 import com.tttn.orderservice.dto.request.AddCartItemRequest;
 import com.tttn.orderservice.dto.request.UpdateCartItemRequest;
+import com.tttn.orderservice.dto.response.CartRefreshResponse;
 import com.tttn.orderservice.dto.response.CartResponse;
 import com.tttn.orderservice.model.cart.Cart;
 
@@ -38,4 +39,18 @@ public interface CartService {
     void removeItems(UUID userId, List<UUID> variantIds);
 
     Cart getCartEntity(UUID userId);
+
+    /**
+     * Re-applies the latest state of one product (price, name, image, status, stock) to every
+     * cart holding it — called from the {@code product-events} listener. A 404 marks its items
+     * {@code PRODUCT_UNAVAILABLE}; any other product-service failure propagates so the message
+     * is retried instead of wrongly marking items unavailable.
+     */
+    void syncProduct(UUID productId);
+
+    /**
+     * Re-fetches every product in the user's cart and saves the refreshed snapshot, returning
+     * the variants whose price or availability changed.
+     */
+    CartRefreshResponse refreshCart(UUID userId);
 }

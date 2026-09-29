@@ -18,7 +18,6 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ProductsService, toImageResponse } from '../services/products.service';
 import { ProductImagesService } from '../services/product-images.service';
 import { ListProductsQueryDto } from './dto/list-products-query.dto';
-import { PaginatedResponseDto } from './dto/paginated-response.dto';
 import {
   ProductResponseDto,
   ProductImageResponseDto,
@@ -28,6 +27,7 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { UploadProductImageDto } from './dto/upload-product-image.dto';
 import { SetImageThumbnailDto } from './dto/set-image-thumbnail.dto';
 import { ImageKind } from '../db/enums/image-kind.enum';
+import { Paginated } from '../common/api-response';
 
 const ALLOWED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
@@ -42,7 +42,7 @@ export class ProductsController {
   @Get()
   findAll(
     @Query() query: ListProductsQueryDto,
-  ): Promise<PaginatedResponseDto<ProductResponseDto>> {
+  ): Promise<Paginated<ProductResponseDto>> {
     return this.productsService.findAll(query);
   }
 

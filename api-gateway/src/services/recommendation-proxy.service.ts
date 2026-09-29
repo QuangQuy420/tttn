@@ -54,7 +54,7 @@ export class RecommendationProxyService {
   private toGatewayError(error: AxiosError, path: string): HttpException {
     if (error.response) {
       return new HttpException(
-        this.normalizeErrorBody(error.response.data) ?? error.message,
+        error.response.data ?? error.message,
         error.response.status,
       );
     }
@@ -72,26 +72,5 @@ export class RecommendationProxyService {
       'Không thể kết nối tới recommendation-service',
       HttpStatus.SERVICE_UNAVAILABLE,
     );
-  }
-
-  /**
-   * `recommendation-service` (FastAPI) returns errors as `{"detail": "..."}`
-   * by default if it raises `HTTPException(detail=...)` — unlike
-   * `product-service` (Nest), whose exception filter already shapes errors
-   * as `{message: "..."}`, which is the key `web`'s `apiFetch` reads (see
-   * `web/src/lib/api/client.ts`). Without this, a real domain message would
-   * silently get lost and `web` would fall back to a generic status-text
-   * error.
-   */
-  private normalizeErrorBody(data: unknown): unknown {
-    if (
-      data &&
-      typeof data === 'object' &&
-      'detail' in data &&
-      !('message' in data)
-    ) {
-      return { ...data, message: (data as { detail: unknown }).detail };
-    }
-    return data;
   }
 }

@@ -2,7 +2,6 @@ package com.tttn.orderservice.service.impl;
 
 import com.tttn.orderservice.client.ProductClient;
 import com.tttn.orderservice.dto.response.OrderSummaryResponse;
-import com.tttn.orderservice.dto.response.PageResponse;
 import com.tttn.orderservice.entity.Order;
 import com.tttn.orderservice.enums.OrderStatus;
 import com.tttn.orderservice.enums.PaymentStatus;
@@ -19,6 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -126,31 +126,31 @@ class OrderServiceGetOrdersTest {
         when(orderMapper.toSummaryResponse(secondOrder))
                 .thenReturn(secondSummary);
 
-        PageResponse<OrderSummaryResponse> response =
+        Page<OrderSummaryResponse> response =
                 orderService.getOrders(
                         userId,
                         null,
-                        0,
+                        1,
                         10
                 );
 
         assertNotNull(response);
-        assertEquals(2, response.content().size());
-        assertEquals(0, response.page());
-        assertEquals(10, response.size());
-        assertEquals(2, response.totalElements());
-        assertEquals(1, response.totalPages());
-        assertTrue(response.first());
-        assertTrue(response.last());
+        assertEquals(2, response.getContent().size());
+        assertEquals(0, response.getNumber());
+        assertEquals(10, response.getSize());
+        assertEquals(2, response.getTotalElements());
+        assertEquals(1, response.getTotalPages());
+        assertTrue(response.isFirst());
+        assertTrue(response.isLast());
 
         assertEquals(
                 "ORD-001",
-                response.content().get(0).orderCode()
+                response.getContent().get(0).orderCode()
         );
 
         assertEquals(
                 "ORD-002",
-                response.content().get(1).orderCode()
+                response.getContent().get(1).orderCode()
         );
 
         verify(orderRepository).findAllByUserId(
@@ -206,26 +206,26 @@ class OrderServiceGetOrdersTest {
         when(orderMapper.toSummaryResponse(order))
                 .thenReturn(summary);
 
-        PageResponse<OrderSummaryResponse> response =
+        Page<OrderSummaryResponse> response =
                 orderService.getOrders(
                         userId,
                         OrderStatus.CONFIRMED,
-                        1,
+                        2,
                         5
                 );
 
         assertNotNull(response);
-        assertEquals(1, response.content().size());
-        assertEquals(1, response.page());
-        assertEquals(5, response.size());
-        assertEquals(6, response.totalElements());
-        assertEquals(2, response.totalPages());
-        assertFalse(response.first());
-        assertTrue(response.last());
+        assertEquals(1, response.getContent().size());
+        assertEquals(1, response.getNumber());
+        assertEquals(5, response.getSize());
+        assertEquals(6, response.getTotalElements());
+        assertEquals(2, response.getTotalPages());
+        assertFalse(response.isFirst());
+        assertTrue(response.isLast());
 
         assertEquals(
                 OrderStatus.CONFIRMED,
-                response.content().get(0).status()
+                response.getContent().get(0).status()
         );
 
         verify(orderRepository)
@@ -243,7 +243,7 @@ class OrderServiceGetOrdersTest {
     }
 
     @Test
-    @DisplayName("Tạo Pageable với sắp xếp createdAt giảm dần")
+    @DisplayName("Tạo Pageable (page từ 1 → index từ 0) với sắp xếp createdAt giảm dần")
     void getOrders_ShouldCreateCorrectPageable() {
         PageImpl<Order> emptyPage = new PageImpl<>(
                 List.of(),
@@ -266,7 +266,7 @@ class OrderServiceGetOrdersTest {
         orderService.getOrders(
                 userId,
                 null,
-                2,
+                3,
                 20
         );
 
@@ -315,43 +315,45 @@ class OrderServiceGetOrdersTest {
                 any(Pageable.class)
         )).thenReturn(emptyPage);
 
-        PageResponse<OrderSummaryResponse> response =
+        Page<OrderSummaryResponse> response =
                 orderService.getOrders(
                         userId,
                         null,
-                        0,
+                        1,
                         10
                 );
 
         assertNotNull(response);
-        assertNotNull(response.content());
-        assertTrue(response.content().isEmpty());
-        assertEquals(0, response.totalElements());
-        assertEquals(0, response.totalPages());
-        assertTrue(response.first());
-        assertTrue(response.last());
+        assertNotNull(response.getContent());
+        assertTrue(response.getContent().isEmpty());
+        assertEquals(0, response.getTotalElements());
+        assertEquals(0, response.getTotalPages());
+        assertTrue(response.isFirst());
+        assertTrue(response.isLast());
 
         verifyNoInteractions(orderMapper);
     }
 
     @Test
-    @DisplayName("Ném BadRequestException khi page nhỏ hơn 0")
-    void getOrders_WhenPageIsNegative_ShouldThrowBadRequestException() {
+    @DisplayName("Ném BadRequestException khi page nhỏ hơn 1")
+    void getOrders_WhenPageIsLessThanOne_ShouldThrowBadRequestException() {
         BadRequestException exception =
                 assertThrows(
                         BadRequestException.class,
                         () -> orderService.getOrders(
                                 userId,
                                 null,
-                                -1,
+                                0,
                                 10
                         )
                 );
 
         assertEquals(
-                "Trang không được nhỏ hơn 0",
+                "Trang phải lớn hơn hoặc bằng 1",
                 exception.getMessage()
         );
+
+        assertEquals("VALIDATION_FAILED", exception.getCode());
 
         verifyNoInteractions(
                 orderRepository,
@@ -360,7 +362,7 @@ class OrderServiceGetOrdersTest {
     }
 
     @Test
-    @DisplayName("Ném BadRequestException khi size bằng 0")
+    @DisplayName("Ném BadRequestException khi limit bằng 0")
     void getOrders_WhenSizeIsZero_ShouldThrowBadRequestException() {
         BadRequestException exception =
                 assertThrows(
@@ -368,13 +370,13 @@ class OrderServiceGetOrdersTest {
                         () -> orderService.getOrders(
                                 userId,
                                 null,
-                                0,
+                                1,
                                 0
                         )
                 );
 
         assertEquals(
-                "Kích thước trang phải từ 1 đến 100",
+                "Số lượng mỗi trang phải từ 1 đến 100",
                 exception.getMessage()
         );
 
@@ -385,7 +387,7 @@ class OrderServiceGetOrdersTest {
     }
 
     @Test
-    @DisplayName("Ném BadRequestException khi size lớn hơn 100")
+    @DisplayName("Ném BadRequestException khi limit lớn hơn 100")
     void getOrders_WhenSizeGreaterThan100_ShouldThrowBadRequestException() {
         BadRequestException exception =
                 assertThrows(
@@ -393,13 +395,13 @@ class OrderServiceGetOrdersTest {
                         () -> orderService.getOrders(
                                 userId,
                                 null,
-                                0,
+                                1,
                                 101
                         )
                 );
 
         assertEquals(
-                "Kích thước trang phải từ 1 đến 100",
+                "Số lượng mỗi trang phải từ 1 đến 100",
                 exception.getMessage()
         );
 
@@ -410,7 +412,7 @@ class OrderServiceGetOrdersTest {
     }
 
     @Test
-    @DisplayName("Chấp nhận size nhỏ nhất là 1")
+    @DisplayName("Chấp nhận limit nhỏ nhất là 1")
     void getOrders_WhenSizeIsOne_ShouldWork() {
         PageRequest pageable = PageRequest.of(
                 0,
@@ -429,20 +431,20 @@ class OrderServiceGetOrdersTest {
                 any(Pageable.class)
         )).thenReturn(emptyPage);
 
-        PageResponse<OrderSummaryResponse> response =
+        Page<OrderSummaryResponse> response =
                 orderService.getOrders(
                         userId,
                         null,
-                        0,
+                        1,
                         1
                 );
 
         assertNotNull(response);
-        assertEquals(1, response.size());
+        assertEquals(1, response.getSize());
     }
 
     @Test
-    @DisplayName("Chấp nhận size lớn nhất là 100")
+    @DisplayName("Chấp nhận limit lớn nhất là 100")
     void getOrders_WhenSizeIsOneHundred_ShouldWork() {
         PageRequest pageable = PageRequest.of(
                 0,
@@ -461,16 +463,16 @@ class OrderServiceGetOrdersTest {
                 any(Pageable.class)
         )).thenReturn(emptyPage);
 
-        PageResponse<OrderSummaryResponse> response =
+        Page<OrderSummaryResponse> response =
                 orderService.getOrders(
                         userId,
                         null,
-                        0,
+                        1,
                         100
                 );
 
         assertNotNull(response);
-        assertEquals(100, response.size());
+        assertEquals(100, response.getSize());
     }
 
     private Order createOrder(

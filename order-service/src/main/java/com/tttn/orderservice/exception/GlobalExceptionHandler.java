@@ -1,16 +1,17 @@
 package com.tttn.orderservice.exception;
 
-import com.tttn.orderservice.dto.response.ErrorResponse;
-import jakarta.servlet.http.HttpServletRequest;
+import com.tttn.orderservice.dto.response.ApiErrorResponse;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
-import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -18,61 +19,68 @@ import java.util.Map;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleNotFound(
-            ResourceNotFoundException exception,
-            HttpServletRequest request
+    public ResponseEntity<ApiErrorResponse> handleNotFound(
+            ResourceNotFoundException exception
     ) {
         return buildResponse(
                 HttpStatus.NOT_FOUND,
                 exception.getMessage(),
-                request.getRequestURI(),
+                "NOT_FOUND",
                 null
         );
     }
 
     @ExceptionHandler(BadRequestException.class)
-    public ResponseEntity<ErrorResponse> handleBadRequest(
-            BadRequestException exception,
-            HttpServletRequest request
+    public ResponseEntity<ApiErrorResponse> handleBadRequest(
+            BadRequestException exception
     ) {
         return buildResponse(
                 HttpStatus.BAD_REQUEST,
                 exception.getMessage(),
-                request.getRequestURI(),
+                exception.getCode(),
                 null
         );
     }
 
     @ExceptionHandler(ConflictException.class)
-    public ResponseEntity<ErrorResponse> handleConflict(
-            ConflictException exception,
-            HttpServletRequest request
+    public ResponseEntity<ApiErrorResponse> handleConflict(
+            ConflictException exception
     ) {
         return buildResponse(
                 HttpStatus.CONFLICT,
                 exception.getMessage(),
-                request.getRequestURI(),
+                "CONFLICT",
                 null
         );
     }
 
+    @ExceptionHandler(CartChangedException.class)
+    public ResponseEntity<ApiErrorResponse> handleCartChanged(
+            CartChangedException exception
+    ) {
+        return buildResponse(
+                HttpStatus.CONFLICT,
+                exception.getMessage(),
+                "CART_CHANGED",
+                exception.getChangedItems()
+        );
+    }
+
     @ExceptionHandler(ExternalServiceException.class)
-    public ResponseEntity<ErrorResponse> handleExternalService(
-            ExternalServiceException exception,
-            HttpServletRequest request
+    public ResponseEntity<ApiErrorResponse> handleExternalService(
+            ExternalServiceException exception
     ) {
         return buildResponse(
                 HttpStatus.BAD_GATEWAY,
                 exception.getMessage(),
-                request.getRequestURI(),
+                "EXTERNAL_SERVICE_ERROR",
                 null
         );
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidation(
-            MethodArgumentNotValidException exception,
-            HttpServletRequest request
+    public ResponseEntity<ApiErrorResponse> handleValidation(
+            MethodArgumentNotValidException exception
     ) {
         Map<String, String> errors = new LinkedHashMap<>();
 
@@ -88,15 +96,14 @@ public class GlobalExceptionHandler {
         return buildResponse(
                 HttpStatus.BAD_REQUEST,
                 "Dữ liệu gửi lên không hợp lệ",
-                request.getRequestURI(),
+                "VALIDATION_FAILED",
                 errors
         );
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
-    public ResponseEntity<ErrorResponse> handleConstraintViolation(
-            ConstraintViolationException exception,
-            HttpServletRequest request
+    public ResponseEntity<ApiErrorResponse> handleConstraintViolation(
+            ConstraintViolationException exception
     ) {
         Map<String, String> errors = new LinkedHashMap<>();
 
@@ -111,52 +118,84 @@ public class GlobalExceptionHandler {
         return buildResponse(
                 HttpStatus.BAD_REQUEST,
                 "Tham số không hợp lệ",
-                request.getRequestURI(),
+                "VALIDATION_FAILED",
+                errors
+        );
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiErrorResponse> handleTypeMismatch(
+            MethodArgumentTypeMismatchException exception
+    ) {
+        Map<String, String> errors = new LinkedHashMap<>();
+        errors.put(exception.getName(), "Giá trị không hợp lệ");
+
+        return buildResponse(
+                HttpStatus.BAD_REQUEST,
+                "Tham số không hợp lệ: " + exception.getName(),
+                "VALIDATION_FAILED",
                 errors
         );
     }
 
     @ExceptionHandler(MissingRequestHeaderException.class)
-    public ResponseEntity<ErrorResponse> handleMissingRequestHeader(
-            MissingRequestHeaderException exception,
-            HttpServletRequest request
+    public ResponseEntity<ApiErrorResponse> handleMissingRequestHeader(
+            MissingRequestHeaderException exception
     ) {
         return buildResponse(
                 HttpStatus.BAD_REQUEST,
                 "Thiếu header bắt buộc: " + exception.getHeaderName(),
-                request.getRequestURI(),
+                "BAD_REQUEST",
                 null
         );
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleUnexpected(
-            Exception exception,
-            HttpServletRequest request
+    public ResponseEntity<ApiErrorResponse> handleUnexpected(
+            Exception exception
     ) {
+        // Spring MVC's own 4xx exceptions (unknown route, wrong method, unreadable body, ...)
+        // carry their status — keep it instead of turning them into a 500.
+        if (exception instanceof ErrorResponse errorResponse
+                && errorResponse.getStatusCode().is4xxClientError()) {
+            HttpStatusCode status = errorResponse.getStatusCode();
+
+            return buildResponse(
+                    status,
+                    status.value() == HttpStatus.NOT_FOUND.value()
+                            ? "Không tìm thấy đường dẫn yêu cầu"
+                            : "Yêu cầu không hợp lệ",
+                    codeFor(status),
+                    null
+            );
+        }
+
         return buildResponse(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "Đã xảy ra lỗi trong hệ thống",
-                request.getRequestURI(),
+                "INTERNAL_ERROR",
                 null
         );
     }
 
-    private ResponseEntity<ErrorResponse> buildResponse(
-            HttpStatus status,
-            String message,
-            String path,
-            Map<String, String> validationErrors
-    ) {
-        ErrorResponse response = new ErrorResponse(
-                LocalDateTime.now(),
-                status.value(),
-                status.getReasonPhrase(),
-                message,
-                path,
-                validationErrors
-        );
+    private String codeFor(HttpStatusCode status) {
+        return switch (status.value()) {
+            case 401 -> "UNAUTHORIZED";
+            case 403 -> "FORBIDDEN";
+            case 404 -> "NOT_FOUND";
+            case 409 -> "CONFLICT";
+            default -> "BAD_REQUEST";
+        };
+    }
 
-        return ResponseEntity.status(status).body(response);
+    private ResponseEntity<ApiErrorResponse> buildResponse(
+            HttpStatusCode status,
+            String message,
+            String code,
+            Object details
+    ) {
+        return ResponseEntity
+                .status(status)
+                .body(ApiErrorResponse.of(message, code, details));
     }
 }

@@ -44,7 +44,10 @@ public class CartMapper {
                 item.getExtraPrice(),
                 item.getUnitPrice(),
                 item.getQuantity(),
-                item.getSubtotal()
+                item.getSubtotal(),
+                !Boolean.FALSE.equals(item.getAvailable()),
+                item.getUnavailableReason(),
+                item.getAvailableStock()
         );
     }
 }

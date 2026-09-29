@@ -1,5 +1,5 @@
+import type { ApiResponse } from "@/types/api";
 import type {
-  ApiResponse,
   ForgotPasswordRequest,
   LoginData,
   LoginRequest,

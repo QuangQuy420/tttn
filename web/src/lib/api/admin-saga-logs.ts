@@ -7,7 +7,9 @@
 // order:manage as the existing admin-orders routes.
 
 import type { OrderLogSummary, OrderSagaLog, SagaLogDay } from "@/types/saga-log";
-import { apiFetch } from "./client";
+import type { PageParams, Paginated } from "@/types/api";
+import { apiFetchPage } from "./client";
+import { pageQuery } from "./query";
 
 function authHeaders(token: string): HeadersInit {
   return {
@@ -15,23 +17,40 @@ function authHeaders(token: string): HeadersInit {
   };
 }
 
-export function getSagaLogDays(token: string): Promise<SagaLogDay[]> {
-  return apiFetch<SagaLogDay[]>("/admin/saga-logs/days", {
+export function getSagaLogDays(
+  token: string,
+  params: PageParams = {},
+): Promise<Paginated<SagaLogDay>> {
+  return apiFetchPage<SagaLogDay>(`/admin/saga-logs/days${pageQuery(params)}`, {
     method: "GET",
     headers: authHeaders(token),
   });
 }
 
-export function getSagaLogsForDay(token: string, date: string): Promise<OrderLogSummary[]> {
-  return apiFetch<OrderLogSummary[]>(`/admin/saga-logs/days/${encodeURIComponent(date)}`, {
-    method: "GET",
-    headers: authHeaders(token),
-  });
+export function getSagaLogsForDay(
+  token: string,
+  date: string,
+  params: PageParams = {},
+): Promise<Paginated<OrderLogSummary>> {
+  return apiFetchPage<OrderLogSummary>(
+    `/admin/saga-logs/days/${encodeURIComponent(date)}${pageQuery(params)}`,
+    {
+      method: "GET",
+      headers: authHeaders(token),
+    },
+  );
 }
 
-export function getOrderSagaLogs(token: string, orderId: string): Promise<OrderSagaLog[]> {
-  return apiFetch<OrderSagaLog[]>(`/admin/saga-logs/orders/${encodeURIComponent(orderId)}`, {
-    method: "GET",
-    headers: authHeaders(token),
-  });
+export function getOrderSagaLogs(
+  token: string,
+  orderId: string,
+  params: PageParams = {},
+): Promise<Paginated<OrderSagaLog>> {
+  return apiFetchPage<OrderSagaLog>(
+    `/admin/saga-logs/orders/${encodeURIComponent(orderId)}${pageQuery(params)}`,
+    {
+      method: "GET",
+      headers: authHeaders(token),
+    },
+  );
 }

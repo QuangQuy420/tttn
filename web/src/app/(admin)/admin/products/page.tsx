@@ -6,6 +6,8 @@ import { ApiError, deleteProduct } from "@/lib/api";
 import { ErrorState } from "@/components/common/ErrorState";
 import { ImageWithFallback } from "@/components/common/ImageWithFallback";
 import { LoadingState } from "@/components/common/LoadingState";
+import { Pagination } from "@/components/common/Pagination";
+import { usePageParam } from "@/hooks/usePageParam";
 import { useProducts } from "@/hooks/useProducts";
 import { getAccessToken } from "@/lib/auth/session";
 import { formatFrameShapeVi } from "@/lib/labels";
@@ -18,7 +20,8 @@ export default function AdminProductsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const { products, isLoading, error, refetch } = useProducts({ includeAllStatuses: true });
+  const [page, setPage] = usePageParam();
+  const { products, meta, isLoading, error, refetch } = useProducts({ includeAllStatuses: true, page });
 
   const term = searchInput.trim().toLowerCase();
   const filteredProducts = useMemo(
@@ -26,16 +29,17 @@ export default function AdminProductsPage() {
     [products, term],
   );
 
+  // "Tổng sản phẩm" is the whole catalog (meta.total); the on-sale split only covers the page
+  // currently loaded, since the list is paginated.
   const stats = useMemo(() => {
-    const total = products.length;
     const onSale = products.filter((p) => p.status === "PUBLISHED").length;
-    const outOfStock = total - onSale;
+    const outOfStock = products.length - onSale;
     return [
-      { label: "Tổng sản phẩm", value: total },
+      { label: "Tổng sản phẩm", value: meta?.total ?? products.length },
       { label: "Đang bán", value: onSale },
       { label: "Hết hàng", value: outOfStock },
     ];
-  }, [products]);
+  }, [products, meta]);
 
   async function handleDelete(id: string, name: string) {
     if (!window.confirm(`Xoá sản phẩm "${name}"? Hành động này không thể hoàn tác.`)) return;
@@ -177,6 +181,9 @@ export default function AdminProductsPage() {
               </div>
             )}
           </div>
+        )}
+        {!isLoading && !error && meta && (
+          <Pagination page={page} totalPages={meta.totalPages} onPageChange={setPage} />
         )}
       </section>
     </>

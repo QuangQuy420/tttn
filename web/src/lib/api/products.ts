@@ -1,4 +1,4 @@
-import type { PaginatedResponse } from "@/types/api";
+import type { PageParams, Paginated } from "@/types/api";
 import type {
   Category,
   CreateCategoryPayload,
@@ -16,7 +16,8 @@ import type {
   UpdateProductPayload,
   UpdateVariantPayload,
 } from "@/types/product";
-import { apiFetch } from "./client";
+import { apiFetch, apiFetchData, apiFetchPage } from "./client";
+import { pageQuery } from "./query";
 
 function authHeaders(token: string): HeadersInit {
   return {
@@ -26,7 +27,7 @@ function authHeaders(token: string): HeadersInit {
 
 export function getProducts(
   params: ProductListParams = {},
-): Promise<PaginatedResponse<Product>> {
+): Promise<Paginated<Product>> {
   const query = new URLSearchParams();
   if (params.categoryId) query.set("categoryId", params.categoryId);
   if (params.brandId) query.set("brandId", params.brandId);
@@ -46,28 +47,26 @@ export function getProducts(
   if (params.includeAllStatuses) query.set("includeAllStatuses", "true");
 
   const queryString = query.toString();
-  return apiFetch<PaginatedResponse<Product>>(
-    `/products${queryString ? `?${queryString}` : ""}`,
-  );
+  return apiFetchPage<Product>(`/products${queryString ? `?${queryString}` : ""}`);
 }
 
 export function getProductById(id: string): Promise<Product> {
-  return apiFetch<Product>(`/products/${encodeURIComponent(id)}`);
+  return apiFetchData<Product>(`/products/${encodeURIComponent(id)}`);
 }
 
 export function getProductBySlug(slug: string): Promise<Product> {
-  return apiFetch<Product>(`/products/slug/${encodeURIComponent(slug)}`);
+  return apiFetchData<Product>(`/products/slug/${encodeURIComponent(slug)}`);
 }
 
-export function getCategories(): Promise<Category[]> {
-  return apiFetch<Category[]>("/categories");
+export function getCategories(params: PageParams = {}): Promise<Paginated<Category>> {
+  return apiFetchPage<Category>(`/categories${pageQuery(params)}`);
 }
 
 export function createCategory(
   payload: CreateCategoryPayload,
   token: string,
 ): Promise<Category> {
-  return apiFetch<Category>("/categories", {
+  return apiFetchData<Category>("/categories", {
     method: "POST",
     headers: authHeaders(token),
     body: JSON.stringify(payload),
@@ -79,7 +78,7 @@ export function updateCategory(
   payload: UpdateCategoryPayload,
   token: string,
 ): Promise<Category> {
-  return apiFetch<Category>(`/categories/${encodeURIComponent(id)}`, {
+  return apiFetchData<Category>(`/categories/${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: authHeaders(token),
     body: JSON.stringify(payload),
@@ -97,7 +96,7 @@ export function createProduct(
   payload: CreateProductPayload,
   token: string,
 ): Promise<Product> {
-  return apiFetch<Product>("/products", {
+  return apiFetchData<Product>("/products", {
     method: "POST",
     headers: authHeaders(token),
     body: JSON.stringify(payload),
@@ -109,7 +108,7 @@ export function updateProduct(
   payload: UpdateProductPayload,
   token: string,
 ): Promise<Product> {
-  return apiFetch<Product>(`/products/${encodeURIComponent(id)}`, {
+  return apiFetchData<Product>(`/products/${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: authHeaders(token),
     body: JSON.stringify(payload),
@@ -130,7 +129,7 @@ export function createVariant(
   payload: CreateVariantPayload,
   token: string,
 ): Promise<ProductVariant> {
-  return apiFetch<ProductVariant>(`/products/${encodeURIComponent(productId)}/variants`, {
+  return apiFetchData<ProductVariant>(`/products/${encodeURIComponent(productId)}/variants`, {
     method: "POST",
     headers: authHeaders(token),
     body: JSON.stringify(payload),
@@ -143,7 +142,7 @@ export function updateVariant(
   payload: UpdateVariantPayload,
   token: string,
 ): Promise<ProductVariant> {
-  return apiFetch<ProductVariant>(
+  return apiFetchData<ProductVariant>(
     `/products/${encodeURIComponent(productId)}/variants/${encodeURIComponent(variantId)}`,
     {
       method: "PATCH",
@@ -183,7 +182,7 @@ export function uploadProductImage(
   if (variantId) form.append("variantId", variantId);
   if (kind) form.append("kind", kind);
   form.append("file", file);
-  return apiFetch<ProductImage>(`/products/${encodeURIComponent(id)}/images`, {
+  return apiFetchData<ProductImage>(`/products/${encodeURIComponent(id)}/images`, {
     method: "POST",
     headers: authHeaders(token),
     body: form,
@@ -195,7 +194,7 @@ export function setProductImageThumbnail(
   imageId: string,
   token: string,
 ): Promise<ProductImage> {
-  return apiFetch<ProductImage>(
+  return apiFetchData<ProductImage>(
     `/products/${encodeURIComponent(productId)}/images/${encodeURIComponent(imageId)}`,
     {
       method: "PATCH",

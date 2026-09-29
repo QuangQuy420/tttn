@@ -40,7 +40,12 @@ describe('ProductsProxyService', () => {
 
   describe('getProducts', () => {
     it('forwards to GET /products with the query params and returns the body', async () => {
-      const body = { items: [{ id: '1', name: 'Aviator' }], total: 1 };
+      const body = {
+        success: true,
+        message: 'Thành công',
+        data: [{ id: '1', name: 'Aviator' }],
+        meta: { page: 1, limit: 20, total: 1, totalPages: 1 },
+      };
       httpService.get.mockReturnValue(of(axiosResponse(body)));
 
       const result = await service.getProducts({ page: '1', frameShape: 'AVIATOR' });
@@ -55,7 +60,7 @@ describe('ProductsProxyService', () => {
 
   describe('getProductById', () => {
     it('forwards to GET /products/:id and returns the body', async () => {
-      const body = { id: '1', name: 'Aviator' };
+      const body = { success: true, message: 'Thành công', data: { id: '1', name: 'Aviator' } };
       httpService.get.mockReturnValue(of(axiosResponse(body)));
 
       const result = await service.getProductById('1');
@@ -67,27 +72,37 @@ describe('ProductsProxyService', () => {
       expect(result).toEqual(body);
     });
 
-    it('passes through a downstream 404 as an HttpException with the same status', async () => {
+    it('passes through a downstream 404 envelope as an HttpException with the same status', async () => {
+      const envelope = {
+        success: false,
+        message: 'Không tìm thấy sản phẩm',
+        error: { code: 'NOT_FOUND', details: null },
+      };
       const axiosError = {
         isAxiosError: true,
         message: 'Request failed with status code 404',
         response: {
           status: 404,
-          data: { message: 'Product not found' },
+          data: envelope,
         },
       } as AxiosError;
       httpService.get.mockReturnValue(throwError(() => axiosError));
 
       await expect(service.getProductById('missing')).rejects.toMatchObject({
         status: HttpStatus.NOT_FOUND,
-        response: { message: 'Product not found' },
+        response: envelope,
       });
     });
   });
 
   describe('getCategories', () => {
     it('forwards to GET /categories and returns the body', async () => {
-      const body = [{ id: '1', name: 'Sunglasses' }];
+      const body = {
+        success: true,
+        message: 'Thành công',
+        data: [{ id: '1', name: 'Sunglasses' }],
+        meta: { page: 1, limit: 20, total: 1, totalPages: 1 },
+      };
       httpService.get.mockReturnValue(of(axiosResponse(body)));
 
       const result = await service.getCategories({});
@@ -113,7 +128,7 @@ describe('ProductsProxyService', () => {
     }
 
     it('appends kind to the multipart form when given and forwards to POST /products/:id/images', async () => {
-      const body = { id: 'img-1', kind: 'TRY_ON' };
+      const body = { success: true, message: 'Thành công', data: { id: 'img-1', kind: 'TRY_ON' } };
       httpService.post.mockReturnValue(of(axiosResponse(body)));
 
       const result = await service.uploadProductImage('p1', file, undefined, 'TRY_ON');

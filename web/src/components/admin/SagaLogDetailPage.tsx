@@ -5,9 +5,13 @@ import { useEffect, useState } from "react";
 import { ApiError, getOrderSagaLogs } from "@/lib/api";
 import { ErrorState } from "@/components/common/ErrorState";
 import { LoadingState } from "@/components/common/LoadingState";
+import { Pagination } from "@/components/common/Pagination";
+import { usePageParam } from "@/hooks/usePageParam";
 import { getAccessToken } from "@/lib/auth/session";
 import { formatSagaLogRowStatusVi, formatSagaLogServiceVi, formatSagaLogStageVi } from "@/lib/labels";
 import type { OrderSagaLog } from "@/types/saga-log";
+
+const PAGE_SIZE = 20;
 
 interface SagaLogDetailPageProps {
   orderId: string;
@@ -30,6 +34,8 @@ interface SagaLogDetailPageProps {
 // the plan scoped).
 export function SagaLogDetailPage({ orderId, date }: SagaLogDetailPageProps) {
   const [logs, setLogs] = useState<OrderSagaLog[]>([]);
+  const [page, setPage] = usePageParam();
+  const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,8 +55,11 @@ export function SagaLogDetailPage({ orderId, date }: SagaLogDetailPageProps) {
       setIsLoading(true);
       setError(null);
       try {
-        const result = await getOrderSagaLogs(token, orderId);
-        if (!cancelled) setLogs(result);
+        const result = await getOrderSagaLogs(token, orderId, { page, limit: PAGE_SIZE });
+        if (!cancelled) {
+          setLogs(result.data);
+          setTotalPages(result.meta.totalPages);
+        }
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof ApiError ? err.message : "Không thể tải nhật ký đơn hàng.");
@@ -65,7 +74,7 @@ export function SagaLogDetailPage({ orderId, date }: SagaLogDetailPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [orderId]);
+  }, [orderId, page]);
 
   const sortedLogs = [...logs].sort(
     (a, b) => new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime(),
@@ -131,6 +140,9 @@ export function SagaLogDetailPage({ orderId, date }: SagaLogDetailPageProps) {
               <div className="admin-table__empty">Chưa có nhật ký nào cho đơn hàng này.</div>
             )}
           </article>
+        )}
+        {!isLoading && !error && (
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         )}
       </section>
     </>

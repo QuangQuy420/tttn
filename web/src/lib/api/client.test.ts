@@ -1,4 +1,4 @@
-import { ApiError, apiFetch } from "./client";
+import { ApiError, apiFetch, apiFetchData, apiFetchPage } from "./client";
 
 const originalBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 const originalFetch = global.fetch;
@@ -50,18 +50,23 @@ describe("apiFetch", () => {
     expect(result).toBeUndefined();
   });
 
-  it("throws an ApiError with the downstream message when the response is not ok", async () => {
+  it("throws an ApiError with the envelope's message and error code when the response is not ok", async () => {
     const mockFetch = jest.fn().mockResolvedValue({
       ok: false,
       status: 404,
       statusText: "Not Found",
-      json: async () => ({ message: "Product not found" }),
+      json: async () => ({
+        success: false,
+        message: "Không tìm thấy sản phẩm",
+        error: { code: "NOT_FOUND", details: null },
+      }),
     });
     global.fetch = mockFetch as unknown as typeof fetch;
 
     await expect(apiFetch("/products/missing")).rejects.toMatchObject({
-      message: "Product not found",
+      message: "Không tìm thấy sản phẩm",
       status: 404,
+      code: "NOT_FOUND",
     });
   });
 
@@ -97,5 +102,72 @@ describe("apiFetch", () => {
 
     await expect(apiFetch("/products")).rejects.toBeInstanceOf(ApiError);
     expect(mockFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("envelope helpers", () => {
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_API_BASE_URL = "http://localhost:8080/api";
+  });
+
+  afterEach(() => {
+    process.env.NEXT_PUBLIC_API_BASE_URL = originalBaseUrl;
+    global.fetch = originalFetch;
+    jest.restoreAllMocks();
+  });
+
+  it("apiFetchData unwraps the envelope's data", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, message: "OK", data: { id: "1", name: "Aviator" } }),
+    }) as unknown as typeof fetch;
+
+    const result = await apiFetchData<{ id: string; name: string }>("/products/1");
+
+    expect(result).toEqual({ id: "1", name: "Aviator" });
+  });
+
+  it("apiFetchPage returns data and meta from a list envelope", async () => {
+    const meta = { page: 2, limit: 1, total: 3, totalPages: 3 };
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, message: "OK", data: [{ id: "2" }], meta }),
+    }) as unknown as typeof fetch;
+
+    const result = await apiFetchPage<{ id: string }>("/products?page=2&limit=1");
+
+    expect(result).toEqual({ data: [{ id: "2" }], meta });
+  });
+
+  it("apiFetchPage throws an ApiError when the list envelope has no meta", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, message: "OK", data: [] }),
+    }) as unknown as typeof fetch;
+
+    await expect(apiFetchPage("/products")).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it("exposes error.code and error.details from an error envelope (CART_CHANGED)", async () => {
+    const details = { changedVariantIds: ["v1"] };
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+      statusText: "Conflict",
+      json: async () => ({
+        success: false,
+        message: "Giỏ hàng đã thay đổi",
+        error: { code: "CART_CHANGED", details },
+      }),
+    }) as unknown as typeof fetch;
+
+    await expect(apiFetchData("/orders")).rejects.toMatchObject({
+      status: 409,
+      code: "CART_CHANGED",
+      details,
+    });
   });
 });

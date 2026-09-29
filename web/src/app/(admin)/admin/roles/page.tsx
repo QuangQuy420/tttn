@@ -11,8 +11,12 @@ import {
 } from "@/lib/api";
 import { ErrorState } from "@/components/common/ErrorState";
 import { LoadingState } from "@/components/common/LoadingState";
+import { Pagination } from "@/components/common/Pagination";
+import { usePageParam } from "@/hooks/usePageParam";
 import { getAccessToken } from "@/lib/auth/session";
 import type { Permission, Role } from "@/types/user";
+
+const PAGE_SIZE = 20;
 
 // Roles admin page (T21, AC1) — list/create/edit/delete a role with a permission checkbox
 // grid, modeled on admin/products/page.tsx's search+table layout. The create/edit form is
@@ -21,6 +25,8 @@ import type { Permission, Role } from "@/types/user";
 // not to need its own page the way the product form does.
 export default function AdminRolesPage() {
     const [roles, setRoles] = useState<Role[]>([]);
+    const [page, setPage] = usePageParam();
+    const [totalPages, setTotalPages] = useState(1);
     const [permissions, setPermissions] = useState<Permission[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
@@ -48,10 +54,12 @@ export default function AdminRolesPage() {
 
         try {
             const [rolesResponse, permissionsResponse] = await Promise.all([
-                listRoles(token),
-                listPermissions(token),
+                listRoles(token, { page, limit: PAGE_SIZE }),
+                // Permission checkbox grid: ask for the API max so every permission shows up.
+                listPermissions(token, { limit: 100 }),
             ]);
             setRoles(rolesResponse.data);
+            setTotalPages(rolesResponse.meta.totalPages);
             setPermissions(permissionsResponse.data);
         } catch (err) {
             setLoadError(
@@ -80,11 +88,12 @@ export default function AdminRolesPage() {
 
             try {
                 const [rolesResponse, permissionsResponse] = await Promise.all([
-                    listRoles(token),
-                    listPermissions(token),
+                    listRoles(token, { page, limit: PAGE_SIZE }),
+                    listPermissions(token, { limit: 100 }),
                 ]);
                 if (!cancelled) {
                     setRoles(rolesResponse.data);
+                    setTotalPages(rolesResponse.meta.totalPages);
                     setPermissions(permissionsResponse.data);
                 }
             } catch (err) {
@@ -105,7 +114,7 @@ export default function AdminRolesPage() {
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [page]);
 
     const term = searchInput.trim().toLowerCase();
     const filteredRoles = useMemo(
@@ -241,6 +250,9 @@ export default function AdminRolesPage() {
                             </div>
                         )}
                     </div>
+                )}
+                {!isLoading && !loadError && (
+                    <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
                 )}
             </section>
 

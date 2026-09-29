@@ -4,20 +4,18 @@ import {
   IsBoolean,
   IsEnum,
   IsIn,
-  IsInt,
   IsNumber,
   IsOptional,
   IsPositive,
   IsString,
   IsUUID,
-  Max,
-  Min,
 } from 'class-validator';
 import { FrameShape } from '../../db/enums/frame-shape.enum';
 import { GenderTarget } from '../../db/enums/gender-target.enum';
 import { ProductStatus } from '../../db/enums/product-status.enum';
 import { FaceShape } from '../../db/enums/face-shape.enum';
 import { MaterialType } from '../../db/enums/material-type.enum';
+import { PaginationQueryDto } from './pagination-query.dto';
 
 export const PRODUCT_SORT_OPTIONS = [
   'newest',
@@ -26,7 +24,7 @@ export const PRODUCT_SORT_OPTIONS = [
 ] as const;
 export type ProductSort = (typeof PRODUCT_SORT_OPTIONS)[number];
 
-export class ListProductsQueryDto {
+export class ListProductsQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsUUID()
   categoryId?: string;
@@ -100,17 +98,4 @@ export class ListProductsQueryDto {
   @IsOptional()
   @IsIn(PRODUCT_SORT_OPTIONS)
   sort: ProductSort = 'newest';
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  page: number = 1;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  limit: number = 20;
 }

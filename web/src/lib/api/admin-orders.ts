@@ -8,11 +8,11 @@ import type {
   AdminOrdersSummary,
   GetOrdersParams,
   Order,
-  OrderPageResponse,
   OrderStatus,
   OrderSummary,
 } from "@/types/order";
-import { apiFetch } from "./client";
+import type { Paginated } from "@/types/api";
+import { apiFetchData, apiFetchPage } from "./client";
 
 function authHeaders(token: string): HeadersInit {
   return {
@@ -23,14 +23,14 @@ function authHeaders(token: string): HeadersInit {
 export function listAdminOrders(
   token: string,
   params: GetOrdersParams = {},
-): Promise<OrderPageResponse<OrderSummary>> {
+): Promise<Paginated<OrderSummary>> {
   const query = new URLSearchParams();
   if (params.status) query.set("status", params.status);
   if (params.page !== undefined) query.set("page", String(params.page));
-  if (params.size !== undefined) query.set("size", String(params.size));
+  if (params.limit !== undefined) query.set("limit", String(params.limit));
 
   const queryString = query.toString();
-  return apiFetch<OrderPageResponse<OrderSummary>>(
+  return apiFetchPage<OrderSummary>(
     `/admin/orders${queryString ? `?${queryString}` : ""}`,
     {
       method: "GET",
@@ -40,14 +40,14 @@ export function listAdminOrders(
 }
 
 export function getAdminOrderDetail(token: string, id: string): Promise<Order> {
-  return apiFetch<Order>(`/admin/orders/${encodeURIComponent(id)}`, {
+  return apiFetchData<Order>(`/admin/orders/${encodeURIComponent(id)}`, {
     method: "GET",
     headers: authHeaders(token),
   });
 }
 
 export function getAdminOrdersSummary(token: string): Promise<AdminOrdersSummary> {
-  return apiFetch<AdminOrdersSummary>("/admin/orders/summary", {
+  return apiFetchData<AdminOrdersSummary>("/admin/orders/summary", {
     method: "GET",
     headers: authHeaders(token),
   });
@@ -59,7 +59,7 @@ export function updateOrderStatusAdmin(
   status: OrderStatus,
   note?: string,
 ): Promise<Order> {
-  return apiFetch<Order>(`/admin/orders/${encodeURIComponent(id)}/status`, {
+  return apiFetchData<Order>(`/admin/orders/${encodeURIComponent(id)}/status`, {
     method: "PATCH",
     headers: authHeaders(token),
     body: JSON.stringify(note ? { status, note } : { status }),

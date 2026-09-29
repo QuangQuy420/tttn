@@ -118,3 +118,6 @@ application code yet. The publish side was verified manually via the RabbitMQ ma
   queue are simply dropped — expected RabbitMQ behavior for an unbound topic exchange, not a bug.
   A real consumer (e.g. in `recommendation-service`) is a separate, larger effort once that
   service has application code.
+  *Update (2026-09-29):* `order-service` now consumes `product.updated`/`product.deleted`
+  through its quorum queue `product-events.order-service` to keep Redis carts in sync — see
+  `infra/contracts/product-events.md`.

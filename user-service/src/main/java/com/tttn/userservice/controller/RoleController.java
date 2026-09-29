@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -42,14 +43,16 @@ public class RoleController {
             @RequestHeader(
                     value = "Authorization",
                     required = false
-            ) String authorizationHeader
+            ) String authorizationHeader,
+            @RequestParam(value = "page", defaultValue = "1") int page,
+            @RequestParam(value = "limit", defaultValue = "20") int limit
     ) {
         requirePermission(authorizationHeader);
 
         return ResponseEntity.ok(
-                ApiResponse.success(
+                ApiResponse.page(
                         "Lấy danh sách vai trò thành công",
-                        roleService.listRoles()
+                        roleService.listRoles(page, limit)
                 )
         );
     }
@@ -116,14 +119,16 @@ public class RoleController {
             @RequestHeader(
                     value = "Authorization",
                     required = false
-            ) String authorizationHeader
+            ) String authorizationHeader,
+            @RequestParam(value = "page", defaultValue = "1") int page,
+            @RequestParam(value = "limit", defaultValue = "20") int limit
     ) {
         requirePermission(authorizationHeader);
 
         return ResponseEntity.ok(
-                ApiResponse.success(
+                ApiResponse.page(
                         "Lấy danh sách quyền thành công",
-                        roleService.listPermissions()
+                        roleService.listPermissions(page, limit)
                 )
         );
     }

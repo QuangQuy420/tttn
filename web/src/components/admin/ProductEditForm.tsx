@@ -142,8 +142,14 @@ export function ProductEditForm({ product }: ProductEditFormProps) {
     let cancelled = false;
     async function loadOptions() {
       try {
-        const [categoryList, brandList] = await Promise.all([getCategories(), getBrands()]);
+        // Select options: ask for the API max so every category/brand shows up.
+        const [categoryPage, brandPage] = await Promise.all([
+          getCategories({ limit: 100 }),
+          getBrands({ limit: 100 }),
+        ]);
         if (cancelled) return;
+        const categoryList = categoryPage.data;
+        const brandList = brandPage.data;
         setCategories(categoryList);
         setBrands(brandList);
         // Default the selects to the first available option once loaded, for the create form.
