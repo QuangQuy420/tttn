@@ -22,6 +22,23 @@ class Settings(BaseSettings):
     # timeouts/unreachability explicitly, don't let it become an unhandled 500).
     PRODUCT_SERVICE_TIMEOUT_SECONDS: float = 5.0
 
+    # recommendation_db (behavior event store, see app/db/) — async URL, e.g.
+    # `postgresql+asyncpg://app:app@postgres:5432/recommendation_db`.
+    DATABASE_URL: str
+
+    # RabbitMQ behavior-events consumer (see app/repositories/behavior_event_consumer.py).
+    RABBITMQ_URL: str
+    # Tests set this to False so `with TestClient(app)` never tries to reach RabbitMQ.
+    BEHAVIOR_CONSUMER_ENABLED: bool = True
+    # Quorum-queue `x-delivery-limit` — a message redelivered this many times is
+    # dead-lettered to `behavior-events.dlq`. Changing it later means deleting the queue.
+    BEHAVIOR_QUEUE_DELIVERY_LIMIT: int = 10
+    BEHAVIOR_PREFETCH: int = 20
+
+    # Shared secret for `/internal/*` endpoints (`X-Internal-Key` header) — same value as
+    # `infra/.env` `INTERNAL_API_KEY`.
+    INTERNAL_API_KEY: str
+
 
 @lru_cache
 def get_settings() -> Settings:

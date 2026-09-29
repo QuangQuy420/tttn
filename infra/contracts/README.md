@@ -9,6 +9,7 @@ contracts/
   product-service.openapi.yaml   # product-service REST API (OpenAPI 3)
   order-checkout-saga.md         # order-saga-events exchange (checkout saga, RabbitMQ)
   product-events.md              # product-events exchange (catalog changes → cart sync, RabbitMQ)
+  behavior-events.md             # behavior-events exchange (user behavior → recommendation-service, RabbitMQ)
 ```
 
 Other services do not publish an OpenAPI file here yet.
@@ -69,4 +70,5 @@ On the query string, except `POST /recommend` (in the request body). An invalid 
   Docker healthchecks depend on it.
 - `204 No Content` responses have no body.
 - Multipart upload *requests* keep their form shape (the response is still wrapped).
-- RabbitMQ message bodies (`order-checkout-saga.md`, `product-events.md`) are not wrapped.
+- RabbitMQ message bodies (`order-checkout-saga.md`, `product-events.md`, `behavior-events.md`)
+  are not wrapped.
