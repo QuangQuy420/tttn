@@ -1663,6 +1663,28 @@ main {
   border-radius: 3px;
 }
 
+.face-analysis__method-badge {
+  display: inline-block;
+  margin-top: 0.375rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(43, 36, 32, 0.08);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+}
+
+.face-analysis__probabilities {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.face-analysis__prob-row {
+  min-width: 0;
+}
+
 .face-analysis__history-list {
   display: flex;
   flex-direction: column;

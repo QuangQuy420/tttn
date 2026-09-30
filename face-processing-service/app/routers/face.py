@@ -29,6 +29,8 @@ from app.services.face_analysis_service import (
     get_face_analysis_service,
 )
 from app.services.face_shape_service import (
+    FacePoseError,
+    FaceTooSmallError,
     InvalidImageError,
     MultipleFacesDetectedError,
     NoFaceDetectedError,
@@ -96,6 +98,10 @@ async def analyze(
     except MultipleFacesDetectedError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except InvalidImageError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except FacePoseError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except FaceTooSmallError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return ok(result)
 

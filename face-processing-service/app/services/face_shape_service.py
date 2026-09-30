@@ -14,16 +14,27 @@ are unchanged.
 The landmarker also needs `libEGL`/`libGLESv2` at the OS level (beyond the `libgl1`/
 `libglib2.0-0` already in the Dockerfile for OpenCV) — verified by directly running
 the built image; see `Dockerfile` for the added `libgles2 libegl1` packages.
+
+Since plan 08 the face shape comes from an injected `FaceShapeClassifier` (ML model or the
+rules below); features use the same `app/ml/face_features.py` code as training.
 """
+from __future__ import annotations
+
 import os
 import threading
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import cv2
 import mediapipe as mp
 import numpy as np
 
 from app.db.models import FaceShape
-from app.schemas.face import FaceMeasurements
+from app.ml import face_features
+from app.schemas.face import FaceMeasurements, FaceQuality
+
+if TYPE_CHECKING:
+    from app.services.face_classifier import ClassificationResult, FaceShapeClassifier
 
 # --- MediaPipe Face Landmarker model asset ---
 # Downloaded at Docker build time (see Dockerfile) from Google's model repository.
@@ -39,6 +50,10 @@ _JAW_LEFT = 172  # left jaw (gonion-adjacent)
 _JAW_RIGHT = 397  # right jaw (mirror of 172)
 _CHIN = 152  # chin tip (bottom of face)
 _FOREHEAD_TOP = 10  # top of forehead / hairline-adjacent point (top of MediaPipe's face oval)
+
+_UNUSABLE_FACE_MESSAGE = (
+    "Không thể phân tích khuôn mặt trong ảnh — vui lòng chụp lại rõ mặt, nhìn thẳng."
+)
 
 _MAX_NUM_FACES = 2  # detect up to 2 so we can distinguish "0" vs "1" vs ">1" faces
 
@@ -59,7 +74,18 @@ class InvalidImageError(FaceAnalysisError):
     pass
 
 
+class FacePoseError(FaceAnalysisError):
+    pass
+
+
+class FaceTooSmallError(FaceAnalysisError):
+    pass
+
+
 _landmarker_lock = threading.Lock()
+# `analyze_face` runs in a threadpool; one `FaceLandmarker.detect` at a time since MediaPipe
+# does not guarantee the shared instance is thread-safe.
+_detect_lock = threading.Lock()
 _landmarker: mp.tasks.vision.FaceLandmarker | None = None
 
 
@@ -76,6 +102,7 @@ def _get_landmarker() -> "mp.tasks.vision.FaceLandmarker":
                     running_mode=mp.tasks.vision.RunningMode.IMAGE,
                     num_faces=_MAX_NUM_FACES,
                     min_face_detection_confidence=0.5,
+                    output_facial_transformation_matrixes=True,
                 )
                 _landmarker = mp.tasks.vision.FaceLandmarker.create_from_options(options)
     return _landmarker
@@ -90,27 +117,27 @@ def _decode_image(image_bytes: bytes) -> np.ndarray:
     return image
 
 
-def _distance(a, b) -> float:
-    return float(np.hypot(a.x - b.x, a.y - b.y))
+def _distance(points: np.ndarray, a: int, b: int) -> float:
+    return float(np.linalg.norm(points[a] - points[b]))
 
 
-def _extract_measurements(landmarks) -> FaceMeasurements:
-    """Compute face-shape measurements from one face's landmark list.
+def _extract_measurements(points: np.ndarray, image_width: int) -> FaceMeasurements:
+    """Compute face-shape measurements from one face's pixel landmarks (`to_pixels` output).
 
-    All distances are in MediaPipe's normalized landmark space (fraction of image
-    width/height) — there is no physical (mm) scale available from a single 2D photo,
-    so only *ratios* between these measurements are meaningful, not absolute values.
+    Distances are measured in pixels (so width and height use the same unit — no aspect-ratio
+    skew) and then divided by the image width, so they stay "fractions of the image". There
+    is no physical (mm) scale in a single 2D photo; only the *ratios* are meaningful.
     """
-    face_length = _distance(landmarks[_FOREHEAD_TOP], landmarks[_CHIN])
-    forehead_width = _distance(landmarks[_FOREHEAD_LEFT], landmarks[_FOREHEAD_RIGHT])
-    cheekbone_width = _distance(landmarks[_CHEEKBONE_LEFT], landmarks[_CHEEKBONE_RIGHT])
-    jaw_width = _distance(landmarks[_JAW_LEFT], landmarks[_JAW_RIGHT])
+    face_length = _distance(points, _FOREHEAD_TOP, _CHIN)
+    forehead_width = _distance(points, _FOREHEAD_LEFT, _FOREHEAD_RIGHT)
+    cheekbone_width = _distance(points, _CHEEKBONE_LEFT, _CHEEKBONE_RIGHT)
+    jaw_width = _distance(points, _JAW_LEFT, _JAW_RIGHT)
 
     return FaceMeasurements(
-        face_length=face_length,
-        forehead_width=forehead_width,
-        cheekbone_width=cheekbone_width,
-        jaw_width=jaw_width,
+        face_length=face_length / image_width,
+        forehead_width=forehead_width / image_width,
+        cheekbone_width=cheekbone_width / image_width,
+        jaw_width=jaw_width / image_width,
         length_to_width_ratio=face_length / cheekbone_width,
         cheekbone_to_jaw_ratio=jaw_width / cheekbone_width,
         forehead_to_jaw_ratio=forehead_width / jaw_width,
@@ -190,17 +217,34 @@ def classify_face_shape(measurements: FaceMeasurements) -> tuple[FaceShape, floa
     return shape, round(confidence, 2)
 
 
-def analyze_face(image_bytes: bytes) -> tuple[FaceMeasurements, FaceShape, float]:
-    """Full pipeline: decode image -> detect landmarks -> measure -> classify.
+@dataclass(frozen=True)
+class FaceAnalysisOutcome:
+    measurements: FaceMeasurements
+    result: ClassificationResult
+    quality: FaceQuality
 
-    Raises `NoFaceDetectedError` / `MultipleFacesDetectedError` / `InvalidImageError`
-    for the respective domain error cases (per coder.md §3 — no generic 500s).
+
+def analyze_face(
+    image_bytes: bytes,
+    classifier: FaceShapeClassifier,
+    max_yaw_deg: float,
+    min_cheek_px: float,
+) -> FaceAnalysisOutcome:
+    """Full pipeline: decode image -> detect landmarks -> head-pose check -> features -> classify.
+
+    CPU-bound and synchronous — callers run it in a threadpool. Raises
+    `NoFaceDetectedError` / `MultipleFacesDetectedError` / `InvalidImageError` /
+    `FacePoseError` / `FaceTooSmallError` for the respective domain error cases (no generic
+    500s).
     """
     image = _decode_image(image_bytes)
+    height, width = image.shape[:2]
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image_rgb)
 
-    result = _get_landmarker().detect(mp_image)
+    landmarker = _get_landmarker()
+    with _detect_lock:
+        result = landmarker.detect(mp_image)
 
     num_faces = len(result.face_landmarks) if result.face_landmarks else 0
     if num_faces == 0:
@@ -210,7 +254,30 @@ def analyze_face(image_bytes: bytes) -> tuple[FaceMeasurements, FaceShape, float
             "Phát hiện nhiều khuôn mặt — vui lòng tải lên ảnh chỉ có đúng 1 khuôn mặt."
         )
 
-    landmarks = result.face_landmarks[0]
-    measurements = _extract_measurements(landmarks)
-    face_shape, confidence = classify_face_shape(measurements)
-    return measurements, face_shape, confidence
+    landmarks_xy = np.array([(lm.x, lm.y) for lm in result.face_landmarks[0]], dtype=np.float64)
+    points = face_features.to_pixels(landmarks_xy, width, height)
+
+    # Same `small_face` filter as the training data (`extract_landmarks.py`).
+    if _distance(points, _CHEEKBONE_LEFT, _CHEEKBONE_RIGHT) < min_cheek_px:
+        raise FaceTooSmallError("Khuôn mặt quá nhỏ trong ảnh — vui lòng chụp gần hơn.")
+
+    try:
+        yaw, pitch, roll = face_features.head_pose_from_matrix(
+            result.facial_transformation_matrixes[0]
+        )
+    except ValueError as exc:
+        raise InvalidImageError(_UNUSABLE_FACE_MESSAGE) from exc
+    if abs(yaw) > max_yaw_deg:
+        raise FacePoseError(
+            "Khuôn mặt đang quay nghiêng quá nhiều — vui lòng nhìn thẳng vào camera và chụp lại."
+        )
+    quality = FaceQuality(yaw=round(yaw, 1), pitch=round(pitch, 1), roll=round(roll, 1))
+
+    # Degenerate landmarks (zero widths/lengths) → 400, not a generic 500.
+    try:
+        measurements = _extract_measurements(points, width)
+        features = face_features.compute_features(face_features.normalize(points))
+    except (ValueError, ZeroDivisionError) as exc:
+        raise InvalidImageError(_UNUSABLE_FACE_MESSAGE) from exc
+    classification = classifier.predict(features, measurements)
+    return FaceAnalysisOutcome(measurements=measurements, result=classification, quality=quality)

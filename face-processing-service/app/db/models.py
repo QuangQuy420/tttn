@@ -10,7 +10,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, Float, String, func
+from sqlalchemy import DateTime, Enum, Float, Index, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -42,3 +42,16 @@ class FaceAnalysis(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    # Which classifier produced the result — null for rows created before plan 08.
+    model_version: Mapped[str | None] = mapped_column(String(64))
+    method: Mapped[str | None] = mapped_column(String(16))
+    # {FaceShape value: probability} for all 6 shapes.
+    probabilities: Mapped[dict | None] = mapped_column(JSONB)
+
+
+# Serves the "latest analysis of a user" query (`/internal/users/{id}/latest-analysis`).
+Index(
+    "ix_face_analyses_user_created",
+    FaceAnalysis.user_id,
+    FaceAnalysis.created_at.desc(),
+)
