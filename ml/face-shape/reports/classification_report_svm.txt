@@ -1,0 +1,14 @@
+SVM (RBF) (test)
+
+              precision    recall  f1-score   support
+
+        OVAL      0.329     0.363     0.345       135
+       ROUND      0.537     0.537     0.537       136
+      SQUARE      0.770     0.754     0.762       138
+       HEART      0.397     0.383     0.390       141
+     DIAMOND      0.000     0.000     0.000        19
+      OBLONG      0.759     0.833     0.794       132
+
+    accuracy                          0.556       701
+   macro avg      0.465     0.478     0.471       701
+weighted avg      0.542     0.556     0.549       701

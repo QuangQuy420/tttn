@@ -1,6 +1,6 @@
 """Shared CLI + config + path helpers for the face-shape dataset pipeline steps.
 
-Every step is run as `python -m faceshape.<step> --config config.yaml --data-dir data` from
+Every step is run as `python -m faceshape.<stage>.<step> --config config.yaml --data-dir data` from
 `ml/face-shape/` with `PYTHONPATH=../../face-processing-service:src` (see the Makefile).
 `--data-dir` is the data root; `make sample` points it at `data/sample` so the sample run
 never overwrites the full outputs.
@@ -78,6 +78,11 @@ class DataPaths:
     @property
     def splits_csv(self) -> Path:
         return self.processed / "splits.csv"
+
+    @property
+    def models(self) -> Path:
+        """Calibrated models written by `make train` (plan 07), read by evaluate/export."""
+        return self.root / "models"
 
 
 def build_parser(description: str) -> argparse.ArgumentParser:

@@ -4,6 +4,10 @@ python-multipart
 mediapipe==1.0.1
 opencv-python-headless
 numpy
+# Must equal ml/face-shape/requirements.txt pins: model.joblib only loads with the exact
+# scikit-learn/joblib it was saved with.
+scikit-learn==1.9.1
+joblib==1.6.0
 pillow
 boto3
 pydantic-settings

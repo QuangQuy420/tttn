@@ -1,0 +1,106 @@
+{
+  "algo": "rule_v1_literature",
+  "name": "Rule v1 (literature)",
+  "n_test": 701,
+  "accuracy": 0.02710413694721826,
+  "macro_precision": 0.00451735615786971,
+  "macro_recall": 0.16666666666666666,
+  "macro_f1": 0.008796296296296297,
+  "weighted_f1": 0.0014304961166587415,
+  "per_class": {
+    "OVAL": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 135
+    },
+    "ROUND": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 136
+    },
+    "SQUARE": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 138
+    },
+    "HEART": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 141
+    },
+    "DIAMOND": {
+      "precision": 0.02710413694721826,
+      "recall": 1.0,
+      "f1": 0.05277777777777778,
+      "support": 19
+    },
+    "OBLONG": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "support": 132
+    }
+  },
+  "labels": [
+    "OVAL",
+    "ROUND",
+    "SQUARE",
+    "HEART",
+    "DIAMOND",
+    "OBLONG"
+  ],
+  "confusion": [
+    [
+      0,
+      0,
+      0,
+      0,
+      135,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      136,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      138,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      141,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      19,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      0,
+      132,
+      0
+    ]
+  ]
+}

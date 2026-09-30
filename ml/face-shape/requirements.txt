@@ -11,10 +11,19 @@ imagehash>=4.3
 # and set identity.backend: face_recognition in config.yaml.
 insightface>=0.7.3
 onnxruntime>=1.16
-scikit-learn>=1.3
+# Plan 07: pinned to the SAME versions as face-processing-service/requirements.txt - an exported
+# model.joblib only loads with the exact scikit-learn/joblib (and xgboost) it was saved with.
+scikit-learn==1.9.1
+joblib==1.6.0
+xgboost==3.2.0
 matplotlib>=3.8
 kaggle>=1.6
 roboflow>=1.1
 requests>=2.31
 tqdm>=4.66
 pyyaml>=6.0
+# Plan 07: the Rule v0 baseline imports face-processing-service's face_shape_service, which imports
+# app.db (SQLAlchemy async) and app.schemas (pydantic). Import only - no database is needed.
+sqlalchemy[asyncio]>=2.0
+pydantic>=2
+pydantic-settings>=2

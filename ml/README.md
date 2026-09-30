@@ -103,21 +103,29 @@ shortfall and the rejection reasons (see Q3 in the plan if `yaw_exceeded` reject
 
 ## Steps
 
-Every step is also a module: `python -m faceshape.<step> --config config.yaml --data-dir data`
-(`--help` lists the options).
+Every step is also a module: `python -m faceshape.<stage>.<step> --config config.yaml --data-dir data`
+(`--help` lists the options). Code layout under `face-shape/src/faceshape/`:
+
+| folder | what lives there |
+|---|---|
+| `common.py` | shared config / `DataPaths` / CLI helpers used by every step |
+| `dataset/` | collect + clean the dataset (plan 06): `download`, `manifest`, `contact_sheet`, `dedup`, `identity`, `sample`, `split`, `dataset_card` |
+| `features/` | landmarks -> geometric features: `extract_landmarks`, `build_features` |
+| `training/` | model training (plan 07): `shared` (dataset loading, estimators, best-model helpers), `tune`, `calibrate`, `export` |
+| `evaluation/` | scoring on test + experiments: `baselines` (rule-based), `evaluate`, `ablation` |
 
 | make target | module | output (under `data/`) |
 |---|---|---|
 | `model` | - | `.cache/face_landmarker.task` (same `float16/1` model as the service Dockerfile) |
-| `download` | `download` | `raw/niten19/`, `raw/<kaggle_extra dir>/`, `raw/roboflow/<slug>/` |
-| `manifest` | `manifest` | `interim/sources.csv`, `interim/manifest_rejections.csv` |
-| `review` | `contact_sheet` | `interim/review/<CLASS>.html` (see `face-shape/docs/labeling-checklist.md`) |
-| `dedup` | `dedup` | `interim/dedup.csv` |
-| `identity` | `identity` | `interim/identity.csv`, `interim/identity_calibration.json` |
-| `landmarks` | `extract_landmarks` | `interim/landmarks.npz`, `interim/rejections.csv` |
-| `features` | `build_features` | `processed/features.parquet` |
-| `split` | `split` | `processed/splits.csv` |
-| `card` | `dataset_card` | `reports/dataset_card.md`, `reports/class_balance.png` (committed) |
+| `download` | `dataset.download` | `raw/niten19/`, `raw/<kaggle_extra dir>/`, `raw/roboflow/<slug>/` |
+| `manifest` | `dataset.manifest` | `interim/sources.csv`, `interim/manifest_rejections.csv` |
+| `review` | `dataset.contact_sheet` | `interim/review/<CLASS>.html` (see `face-shape/docs/labeling-checklist.md`) |
+| `dedup` | `dataset.dedup` | `interim/dedup.csv` |
+| `identity` | `dataset.identity` | `interim/identity.csv`, `interim/identity_calibration.json` |
+| `landmarks` | `features.extract_landmarks` | `interim/landmarks.npz`, `interim/rejections.csv` |
+| `features` | `features.build_features` | `processed/features.parquet` |
+| `split` | `dataset.split` | `processed/splits.csv` |
+| `card` | `dataset.dataset_card` | `reports/dataset_card.md`, `reports/class_balance.png` (committed) |
 
 - `make all` runs every step in order; you can also re-run a single step (e.g. `make split`).
 - `make sample` builds the full manifest, then runs the later steps on a seeded, class-stratified
