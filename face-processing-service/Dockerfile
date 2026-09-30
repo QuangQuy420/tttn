@@ -18,6 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # MediaPipe FaceLandmarker model asset — downloaded at build time (not at request time) so
 # there's no runtime network dependency / missing-file surprise on first request.
+# ml/face-shape (`make model`) downloads the same URL — keep both in sync (train/serve parity).
 RUN mkdir -p models && curl -fsSL -o models/face_landmarker.task \
     https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task
 

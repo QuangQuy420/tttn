@@ -46,3 +46,7 @@ CLAUDE.md
 .images
 .agents
 AGENTS.md
+# ML pipeline artifacts (images, landmarks, parquet, model cache) - reports/ stays tracked
+ml/**/data/
+ml/**/.cache/
+ml/**/*.parquet
