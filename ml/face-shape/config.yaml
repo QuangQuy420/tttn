@@ -1,0 +1,108 @@
+# Face-shape dataset pipeline config (plan 06). Paths are relative to ml/face-shape/.
+# Data files live under the --data-dir root (default: data/, `make sample`: data/sample/).
+
+paths:
+  # Downloaded by `make model` (same float16/1 URL as face-processing-service/Dockerfile).
+  model: .cache/face_landmarker.task
+
+sources:
+  kaggle:
+    slug: niten19/face-shape-dataset
+    dir: niten19  # -> <data-dir>/raw/niten19/
+    source_url: https://www.kaggle.com/datasets/niten19/face-shape-dataset
+    license: "unclear (scraped celebrity images) - research use only"
+
+  # Extra Kaggle datasets that only add DIAMOND images (decided 2026-09-30: no public source has
+  # ~1,000 clean Diamond images, so we pool the small ones). Neither states a license -> research use only.
+  kaggle_extra:
+    - slug: minhquangbui/face-shapes
+      dir: minhquangbui  # -> <data-dir>/raw/minhquangbui/ (64 diamond images)
+      source_url: https://www.kaggle.com/datasets/minhquangbui/face-shapes
+      license: "not stated - research use only"
+      keep_classes: [DIAMOND]
+    - slug: lucifierx/face-shape-classification
+      dir: lucifierx  # -> <data-dir>/raw/lucifierx/ (12 diamond images)
+      source_url: https://www.kaggle.com/datasets/lucifierx/face-shape-classification
+      license: "not stated - research use only"
+      keep_classes: [DIAMOND]
+
+  # Roboflow Universe classification projects (CC BY 4.0), downloaded in "folder" format into
+  # <data-dir>/raw/roboflow/<slug>/. TODO(confirm): the workspace/project slugs below come from the
+  # Universe URLs in the plan, but the version numbers have NOT been checked. Open each URL, check
+  # the class names + the latest version, and set `version` (an integer). While `version` is null
+  # the API download is skipped; a manual "Folder Structure" export (zip or extracted) placed in
+  # <data-dir>/raw/roboflow/<slug>/ is still used.
+  # Pick a version exported WITHOUT augmentations (flip/rotate/etc.): augmented copies are the same
+  # face and would inflate the class counts (dedup catches mirrored copies, not every augmentation).
+  roboflow:
+    - slug: face-shape-real
+      workspace: face-detection-beautysense
+      project: face-shape-real-lagcm
+      version: 4  # checked 2026-09-30: 800 images, no augmentation, auto-orient only (no resize)
+      source_url: https://universe.roboflow.com/face-detection-beautysense/face-shape-real-lagcm
+      license: CC BY 4.0
+      # Only DIAMOND is imported: niten19 already has 1,000 images for each of the other 5 classes.
+      keep_classes: [DIAMOND]
+    # Excluded (decided 2026-09-30): plant-id/shape-face-oumca (https://universe.roboflow.com/plant-id/shape-face-oumca).
+    # Every version (v3-v9) is stretched to 640x640, which distorts the length/width geometry the
+    # features measure, and the original aspect ratio cannot be recovered.
+
+# Source label (matched case-insensitively) -> canonical class. Labels listed in `drop_labels`
+# are removed; any other unknown label is also removed and logged as `unknown_label`.
+class_map:
+  Heart: HEART
+  Oblong: OBLONG
+  Rectangle: OBLONG
+  Rectangular: OBLONG
+  Oval: OVAL
+  Round: ROUND
+  Square: SQUARE
+  Diamond: DIAMOND
+  Round Face Shape: ROUND  # roboflow/face-shape-real
+  Rectangle Face Shape: OBLONG  # roboflow/face-shape-real
+drop_labels: [kids, men, women, triangle, inverted triangle, inverted face shape, pear]
+classes: [OVAL, ROUND, SQUARE, HEART, DIAMOND, OBLONG]
+
+dedup:
+  hash_size: 8  # 64-bit dHash / pHash
+  # Two images are near-duplicates when BOTH the dHash and the pHash Hamming distances are <= this.
+  max_hamming: 8
+
+identity:
+  # Q1: insightface (buffalo_l, ArcFace 512-d) by default; switch to face_recognition (dlib, 128-d)
+  # if insightface does not install on WSL (`pip install face_recognition`).
+  backend: insightface
+  det_size: 640
+  # Agglomerative clustering (average linkage) cosine-distance threshold per backend: a number, or
+  # `auto` to use the threshold calibrated on the null distribution of random pairs (below).
+  # Default stays at the common ArcFace value 0.5; compare it with the suggested threshold that
+  # `make identity` logs (and the dataset card shows) before switching to auto.
+  distance_threshold:
+    insightface: 0.5
+    face_recognition: 0.18  # ~ Euclidean 0.6 on dlib encodings (d^2 / 2)
+  null_pairs: 20000  # random image pairs (mostly different people) for the calibration
+  calibration_percentile: 1.0  # suggested threshold = this percentile of the random-pair distances
+
+landmarks:
+  min_detection_confidence: 0.5
+  min_cheek_px: 80  # reject `small_face` below this cheekbone width (px)
+  max_yaw_deg: 20  # Q3: relax to 25 (and note it in the dataset card) if > 15% of images are rejected
+  yaw_warn_fraction: 0.15
+
+features:
+  align_roll: true
+
+split:
+  seed: 42
+  # Try seeds 42..42+balance_trials-1 and keep the split whose per-class shares are closest to
+  # 70/15/15 (label counts only - never model results). 1 = plain single seed.
+  balance_trials: 20
+  val_size: 0.15
+  test_size: 0.15
+
+sample:
+  seed: 42
+  sample_size: 100
+
+card:
+  diamond_min: 200
