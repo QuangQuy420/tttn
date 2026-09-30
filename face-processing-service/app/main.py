@@ -11,7 +11,9 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.repositories.image_storage_repository import get_image_storage_repository
 from app.routers.face import router as face_router
+from app.routers.internal import router as internal_router
 from app.schemas.common import ApiError, ApiErrorDetail
+from app.services.face_classifier import get_face_shape_classifier
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +45,7 @@ _DEFAULT_MESSAGES: dict[int, str] = {
 app = FastAPI(title="face-processing-service")
 
 app.include_router(face_router)
+app.include_router(internal_router)
 
 
 def _error_response(status_code: int, message: str, code: str, details: Any = None) -> JSONResponse:
@@ -115,6 +118,8 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 @app.on_event("startup")
 async def on_startup() -> None:
-    """Ensure the private `face-images` bucket exists before serving traffic."""
+    """Load the face-shape classifier (a bad/missing model raises `ModelLoadError` here, so
+    the service fails at boot) and ensure the private `face-images` bucket exists."""
+    get_face_shape_classifier()
     image_storage = get_image_storage_repository()
     image_storage.ensure_bucket()

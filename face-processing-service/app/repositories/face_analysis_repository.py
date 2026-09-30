@@ -18,6 +18,9 @@ class IFaceAnalysisRepository(Protocol):
         face_shape: FaceShape,
         measurements: dict,
         confidence: float,
+        model_version: str | None = None,
+        method: str | None = None,
+        probabilities: dict | None = None,
     ) -> FaceAnalysis:
         """Persist one analysis result row and return it (with its generated id)."""
 
@@ -31,6 +34,9 @@ class IFaceAnalysisRepository(Protocol):
 
     async def get_by_id(self, id: uuid.UUID) -> FaceAnalysis | None:
         """Return the row with this id, or `None` if it doesn't exist."""
+
+    async def get_latest_by_user(self, user_id: uuid.UUID) -> FaceAnalysis | None:
+        """Return `user_id`'s newest analysis row, or `None` if they have none."""
 
     async def delete(self, id: uuid.UUID, user_id: uuid.UUID) -> bool:
         """Delete the row with this id, scoped to `user_id`. Returns whether a row was
@@ -52,6 +58,9 @@ class SqlAlchemyFaceAnalysisRepository:
         face_shape: FaceShape,
         measurements: dict,
         confidence: float,
+        model_version: str | None = None,
+        method: str | None = None,
+        probabilities: dict | None = None,
     ) -> FaceAnalysis:
         row = FaceAnalysis(
             user_id=user_id,
@@ -59,6 +68,9 @@ class SqlAlchemyFaceAnalysisRepository:
             face_shape=face_shape,
             measurements=measurements,
             confidence=confidence,
+            model_version=model_version,
+            method=method,
+            probabilities=probabilities,
         )
         self._session.add(row)
         await self._session.commit()
@@ -88,6 +100,15 @@ class SqlAlchemyFaceAnalysisRepository:
     async def get_by_id(self, id: uuid.UUID) -> FaceAnalysis | None:
         result = await self._session.execute(
             select(FaceAnalysis).where(FaceAnalysis.id == id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_latest_by_user(self, user_id: uuid.UUID) -> FaceAnalysis | None:
+        result = await self._session.execute(
+            select(FaceAnalysis)
+            .where(FaceAnalysis.user_id == user_id)
+            .order_by(FaceAnalysis.created_at.desc())
+            .limit(1)
         )
         return result.scalar_one_or_none()
 

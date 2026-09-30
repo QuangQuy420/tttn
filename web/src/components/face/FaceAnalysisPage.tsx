@@ -16,7 +16,8 @@ import { track } from "@/lib/tracking/tracker";
 import { pickTryOnImage } from "@/lib/productImages";
 import { FaceCameraCapture } from "./FaceCameraCapture";
 import { RecommendationPreview } from "./RecommendationPreview";
-import type { FaceAnalysisResult, FaceMeasurements } from "@/types/face";
+import type { FaceAnalysisResult, FaceMeasurements, FaceShapeProbabilities } from "@/types/face";
+import type { FaceShapeTag } from "@/types/product";
 import type { RecommendedProduct } from "@/types/recommendation";
 
 const MEASUREMENT_FIELDS: { key: keyof FaceMeasurements; label: string }[] = [
@@ -49,6 +50,35 @@ function MeasurementsGrid({ measurements }: { measurements: FaceMeasurements }) 
             <div className="face-analysis__measurement-row">
               <span className="face-analysis__measurement-label">{label}</span>
               <span className="face-analysis__measurement-value">{value.toFixed(3)}</span>
+            </div>
+            <div className="face-analysis__measurement-bar">
+              <div className="face-analysis__measurement-bar-fill" style={{ width: `${pct}%` }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const TOP_PROBABILITIES_COUNT = 3;
+
+// Top-3 face shapes from the ML classifier's probabilities, highest first. Bars reuse the
+// measurement bar styles; probabilities are already 0-1, so no scale constant is needed.
+function TopProbabilities({ probabilities }: { probabilities: FaceShapeProbabilities }) {
+  const top = (Object.entries(probabilities) as [FaceShapeTag, number][])
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, TOP_PROBABILITIES_COUNT);
+
+  return (
+    <div className="face-analysis__probabilities">
+      {top.map(([shape, probability]) => {
+        const pct = Math.round(probability * 100);
+        return (
+          <div key={shape} className="face-analysis__prob-row">
+            <div className="face-analysis__measurement-row">
+              <span className="face-analysis__measurement-label">{formatFaceShapeVi(shape)}</span>
+              <span className="face-analysis__measurement-value">{pct}%</span>
             </div>
             <div className="face-analysis__measurement-bar">
               <div className="face-analysis__measurement-bar-fill" style={{ width: `${pct}%` }} />
@@ -444,6 +474,15 @@ export function FaceAnalysisPage() {
             <div className="face-analysis__result-shape">
               <p className="face-analysis__result-label">Dáng khuôn mặt</p>
               <p className="face-analysis__result-value">{formatFaceShapeVi(activeResult.faceShape)}</p>
+              {/* Older history rows have no method — show no badge for them. */}
+              {activeResult.method === "ml" && (
+                <span className="face-analysis__method-badge">
+                  {activeResult.modelVersion ? `ML · ${activeResult.modelVersion}` : "ML"}
+                </span>
+              )}
+              {activeResult.method === "rule" && (
+                <span className="face-analysis__method-badge">Quy tắc</span>
+              )}
             </div>
             <div className="face-analysis__result-confidence">
               <p className="face-analysis__result-label">Độ tin cậy</p>
@@ -477,6 +516,13 @@ export function FaceAnalysisPage() {
                 Độ tin cậy còn thấp — hãy thử 1 ảnh chụp thẳng, đủ sáng, không đội mũ hay đeo kính
                 để có kết quả chính xác hơn.
               </span>
+            </div>
+          )}
+
+          {activeResult.method === "ml" && activeResult.probabilities && (
+            <div className="face-analysis__card">
+              <p className="face-analysis__section-label">Top 3 dáng mặt</p>
+              <TopProbabilities probabilities={activeResult.probabilities} />
             </div>
           )}
 

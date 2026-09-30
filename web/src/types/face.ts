@@ -15,10 +15,28 @@ export interface FaceMeasurements {
   forehead_to_jaw_ratio: number;
 }
 
+// Probability per face shape from the ML classifier (6 shapes, sum ≈ 1).
+export type FaceShapeProbabilities = Partial<Record<FaceShapeTag, number>>;
+
+// Head pose angles in degrees, only returned by /analyze (null in history).
+export interface FaceQuality {
+  yaw: number;
+  pitch: number;
+  roll: number;
+}
+
+export type FaceClassifierMethod = "ml" | "rule";
+
+// probabilities/method/modelVersion/quality were added with the ML classifier — older history
+// rows have them null (or missing), so they are all optional.
 export interface FaceAnalysisResult {
   id: string;
   faceShape: FaceShapeTag;
   measurements: FaceMeasurements;
   confidence: number;
   imageUrl: string;
+  probabilities?: FaceShapeProbabilities | null;
+  method?: FaceClassifierMethod | null;
+  modelVersion?: string | null;
+  quality?: FaceQuality | null;
 }
