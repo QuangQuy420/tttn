@@ -27,7 +27,7 @@ TRAIN_ARGS = --config $(CONFIG) --data-dir $(DATA) --out-dir $(REPORTS)
 CV_ARG = $(if $(CV_FOLDS),--cv-folds $(CV_FOLDS))
 
 .PHONY: model download manifest review dedup identity landmarks features split card all sample \
-	train evaluate ablation export
+	train calibrate evaluate ablation export
 
 model:
 	@mkdir -p .cache
@@ -72,7 +72,11 @@ sample: model download manifest
 # Plan 07: tune (grouped CV on train+val) + calibrate (fit on train, calibrate on val).
 train:
 	$(RUN).training.tune $(TRAIN_ARGS) $(CV_ARG)
-	$(RUN).training.calibrate $(TRAIN_ARGS)
+	$(RUN).training.calibrate $(TRAIN_ARGS) $(CV_ARG)
+
+# Calibrate only (tuning.json kept): re-run after a calibration change without re-tuning.
+calibrate:
+	$(RUN).training.calibrate $(TRAIN_ARGS) $(CV_ARG)
 
 # The only step that reads the test split: one pass per final method.
 evaluate:

@@ -4,11 +4,12 @@ Methods: Rule v0 (production), Rule v1 (literature / fitted on train), and the c
 from `make train`. Each method predicts the test rows exactly once. All metrics use
 `labels = config classes` and `zero_division=0`. Writes per method `<out-dir>/metrics_<algo>.json`,
 `classification_report_<algo>.txt` and `confusion_<algo>.png` (counts + row-normalized), plus the
-cross-method table `<out-dir>/summary.md`. The best model is chosen by CV macro-F1 (Q1), never by
-these test numbers.
+cross-method table `<out-dir>/summary.md`. The best model is chosen by CV macro-F1 (Q1,
+`training.selection`), never by these test numbers. When the archived v1 metrics exist in
+`<out-dir>/v1-fs-20260930/`, the summary adds a v1 -> v2 comparison (plan 2026-10-05).
 
-`--summary-only` rebuilds `summary.md` from the saved `metrics_<algo>.json` + `tuning.json` without
-loading any model or predicting on test again.
+`--summary-only` rebuilds `summary.md` from the saved `metrics_<algo>.json` + `tuning.json` +
+`calibration.json` without loading any model or predicting on test again.
 """
 from __future__ import annotations
 
@@ -23,7 +24,20 @@ import pandas as pd
 from faceshape.evaluation.baselines import PROTOTYPE_FEATURES, CurrentRuleBaseline, PrototypeRuleBaseline
 from faceshape.training.calibrate import multiclass_brier
 from faceshape.common import DataPaths, build_parser, fail, parse, require_file
-from faceshape.training.shared import ALGO_NAMES, best_algo, class_names, label_order, load_dataset, load_tuning, model_path, xy
+from faceshape.training.shared import (
+    ALGO_NAMES,
+    class_names,
+    label_order,
+    load_calibration,
+    load_dataset,
+    load_tuning,
+    model_path,
+    select_best,
+    xy,
+)
+
+# Archived reports of the first test pass (fs-20260930-svm, unweighted calibration).
+V1_DIR = "v1-fs-20260930"
 
 
 def _test_landmarks(paths: DataPaths, image_ids: list[str]) -> np.ndarray:
@@ -108,14 +122,53 @@ def _predicted_counts(m: dict[str, Any], classes: list[str]) -> dict[str, int]:
     return {c: int(counts.get(c, 0)) for c in classes}
 
 
-def _summary(results: dict[str, dict[str, Any]], tuning: dict[str, Any], best: str, classes: list[str],
-             n_persons: int, fitted: PrototypeRuleBaseline, root: Path, regenerated: bool = False) -> str:
+def _load_v1(out_dir: Path, algos: list[str]) -> dict[str, dict[str, Any]]:
+    """Archived v1 metrics of the trained algorithms (empty when `<out-dir>/v1-fs-20260930/` is absent)."""
+    paths = {algo: out_dir / V1_DIR / f"metrics_{algo}.json" for algo in algos}
+    return {algo: json.loads(path.read_text(encoding="utf-8")) for algo, path in paths.items() if path.is_file()}
+
+
+def _v1_section(v1: dict[str, dict[str, Any]], results: dict[str, dict[str, Any]], classes: list[str]) -> list[str]:
+    """v1 -> v2 table per trained algorithm (both test passes) + the second-pass note."""
+    rows = []
+    for algo, old in v1.items():
+        new = results[algo]
+        rows.append([
+            ALGO_NAMES[algo], _fmt(old["macro_f1"]), _fmt(new["macro_f1"]),
+            _fmt(old["per_class"]["DIAMOND"]["f1"]), _fmt(new["per_class"]["DIAMOND"]["f1"]),
+            str(_predicted_counts(old, classes)["DIAMOND"]), str(_predicted_counts(new, classes)["DIAMOND"]),
+            _fmt(old.get("test_brier"), 4), _fmt(new.get("test_brier"), 4),
+        ])
+    return [
+        "## v1 -> v2",
+        "",
+        f"v1 = the archived first test pass in `{V1_DIR}/` (unweighted sigmoid calibration, selection by "
+        "uncalibrated tuning CV, exported as fs-20260930-svm); v2 = this run.",
+        "",
+        _md_table(
+            ["method", "v1 macro F1", "v2 macro F1", "v1 DIAMOND F1", "v2 DIAMOND F1", "v1 DIAMOND predicted",
+             "v2 DIAMOND predicted", "v1 test Brier", "v2 test Brier"],
+            rows,
+        ),
+        "",
+        "- This is the second test pass. v1 (fs-20260930-svm) was evaluated once on 2026-09-30; v2 changes only "
+        "the calibration weights and the selection rule - a decision-rule defect, not tuning on test. Grids, "
+        "features and splits are unchanged.",
+        "",
+    ]
+
+
+def _summary(results: dict[str, dict[str, Any]], tuning: dict[str, Any], calibration: dict[str, Any], selection: str,
+             best: str, classes: list[str], n_persons: int, fitted: PrototypeRuleBaseline, root: Path,
+             v1: dict[str, dict[str, Any]], regenerated: bool = False) -> str:
+    calibrated_cv = {algo: res.get("cv_macro_f1_calibrated") for algo, res in calibration["algos"].items()}
+    weight = calibration.get("sample_weight")
     rows = []
     for algo, m in results.items():
         name = ALGO_NAMES[algo] + (" **(best)**" if algo == best else "")
         rows.append([
             name, _fmt(m["accuracy"]), _fmt(m["macro_precision"]), _fmt(m["macro_recall"]), _fmt(m["macro_f1"]),
-            _fmt(m["weighted_f1"]), _fmt(m.get("cv_macro_f1")), _fmt(m.get("test_brier")),
+            _fmt(m["weighted_f1"]), _fmt(m.get("cv_macro_f1")), _fmt(calibrated_cv.get(algo)), _fmt(m.get("test_brier")),
         ])
     per_class = [[ALGO_NAMES[a], *(_fmt(m["per_class"][c]["f1"]) for c in classes)] for a, m in results.items()]
     first = next(iter(results.values()))
@@ -128,10 +181,22 @@ def _summary(results: dict[str, dict[str, Any]], tuning: dict[str, Any], best: s
     diamond_notes = []
     if no_diamond:
         diamond_notes.append(
-            f"- **{', '.join(no_diamond)} (calibrated) never predicts DIAMOND on test.** Sigmoid calibration is "
-            "fitted on val with its real class frequencies, which cancels the `class_weight` balancing of the "
-            "model; the model was chosen by uncalibrated CV macro-F1, but the deployed decision is the argmax "
-            "of the calibrated probabilities. The decision rule (e.g. prior correction) is deferred to plan 08."
+            f"- **{', '.join(no_diamond)} (calibrated) never predicts DIAMOND on test**: the argmax of its "
+            "calibrated probabilities never ranks DIAMOND first."
+        )
+    if weight == "balanced":
+        diamond_notes.append(
+            "- Calibration is fitted on val with balanced sample weights (weight per class = n / (k * n_c)), so "
+            "the sigmoid keeps the class balancing of the models instead of re-learning val's real class "
+            "frequencies (unweighted, as in v1, it cancelled `class_weight` and the calibrated SVM never predicted "
+            "DIAMOND). The calibrated probabilities are therefore \"balanced-prior\": comparable across classes, "
+            "not real-world class frequencies."
+        )
+    else:
+        diamond_notes.append(
+            "- Calibration is fitted on val without sample weights (`training.calibration_weight: null`, v1 "
+            "behaviour): the sigmoid re-learns val's real class frequencies, which cancels the `class_weight` "
+            "balancing of the models."
         )
     if "rule_v1_literature" in predicted:
         lit = predicted["rule_v1_literature"]
@@ -144,6 +209,18 @@ def _summary(results: dict[str, dict[str, Any]], tuning: dict[str, Any], best: s
         )
     generated_by = "`make evaluate`" + (" (summary regenerated from the saved `metrics_*.json`, no new test pass)" if regenerated else "")
     not_done = [f"- {res['name']}: {res['status']}." for res in tuning["algos"].values() if res.get("status") != "trained"]
+    if selection == "calibrated_cv":
+        best_line = (
+            f"- Best model = highest CV macro-F1 of the calibrated pipeline (fit + calibrate) on train+val "
+            f"({calibration['cv_folds']}-fold StratifiedGroupKFold by person, seed {calibration['seed']}): "
+            f"**{ALGO_NAMES[best]}** - the same model that is exported. Test numbers were not used to choose it."
+        )
+    else:
+        best_line = (
+            f"- Best model = highest (uncalibrated) tuning CV macro-F1 on train+val ({tuning['cv_folds']}-fold "
+            f"StratifiedGroupKFold by person, seed {tuning['seed']}): **{ALGO_NAMES[best]}**. Test numbers were "
+            "not used to choose it."
+        )
 
     lines = [
         "# Face-shape classifiers - test results (E1)",
@@ -157,14 +234,16 @@ def _summary(results: dict[str, dict[str, Any]], tuning: dict[str, Any], best: s
         "## Overall",
         "",
         _md_table(
-            ["method", "accuracy", "macro precision", "macro recall", "macro F1", "weighted F1", "CV macro F1", "test Brier"],
+            ["method", "accuracy", "macro precision", "macro recall", "macro F1", "weighted F1", "CV macro F1",
+             "CV macro F1 (calibrated)", "test Brier"],
             rows,
         ),
         "",
-        f"- Best model = highest CV macro-F1 on train+val ({tuning['cv_folds']}-fold StratifiedGroupKFold by person, "
-        f"seed {tuning['seed']}): **{ALGO_NAMES[best]}**. Test numbers were not used to choose it.",
-        "- Trained models are the calibrated versions (fit on train, sigmoid calibration on val); "
-        "test Brier = mean one-vs-rest Brier score on test. Rule methods have no CV score or probabilities.",
+        best_line,
+        f"- Trained models are the calibrated versions (fit on train, {calibration['method']} calibration on val, "
+        f"sample_weight={weight}); test Brier = mean one-vs-rest Brier score on test. CV macro F1 = uncalibrated "
+        "tuning score; CV macro F1 (calibrated) = person-grouped CV of the whole fit + calibrate pipeline "
+        "(`calibration.json`). Rule methods have no CV score or probabilities.",
         "- Rule v0 runs the production code on normalized MediaPipe coordinates (its aspect-ratio issue "
         "included); Rule v1 and the trained models use the corrected pixel-space features.",
         *not_done,
@@ -187,6 +266,7 @@ def _summary(results: dict[str, dict[str, Any]], tuning: dict[str, Any], best: s
         "",
         *diamond_notes,
         "",
+        *(_v1_section(v1, results, classes) if v1 else []),
         "## Rule v1 prototypes",
         "",
         "Literature prototypes (face-metrics, MIT) - defined on other landmarks, so their scale can differ from "
@@ -204,11 +284,12 @@ def _summary(results: dict[str, dict[str, Any]], tuning: dict[str, Any], best: s
     return "\n".join(lines)
 
 
-def _write_saved_summary(out_dir: Path, paths: DataPaths, tuning: dict[str, Any], best: str, classes: list[str],
-                        fitted: PrototypeRuleBaseline) -> None:
+def _write_saved_summary(out_dir: Path, paths: DataPaths, tuning: dict[str, Any], calibration: dict[str, Any],
+                        selection: str, best: str, classes: list[str], fitted: PrototypeRuleBaseline) -> None:
     """`--summary-only`: summary.md from the saved metrics files; test labels/features are not read."""
     algos = ["rule_v0", "rule_v1_literature", "rule_v1_fitted"]
-    algos += [a for a, res in tuning["algos"].items() if res.get("status") == "trained"]
+    trained = [a for a, res in tuning["algos"].items() if res.get("status") == "trained"]
+    algos += trained
     results = {}
     for algo in algos:
         path = out_dir / f"metrics_{algo}.json"
@@ -218,7 +299,11 @@ def _write_saved_summary(out_dir: Path, paths: DataPaths, tuning: dict[str, Any]
     splits = pd.read_csv(paths.splits_csv, dtype=str)
     n_persons = int(splits.loc[splits["split"] == "test", "person_id"].nunique())
     summary = out_dir / "summary.md"
-    summary.write_text(_summary(results, tuning, best, classes, n_persons, fitted, paths.root, regenerated=True), encoding="utf-8")
+    v1 = _load_v1(out_dir, trained)
+    summary.write_text(
+        _summary(results, tuning, calibration, selection, best, classes, n_persons, fitted, paths.root, v1, regenerated=True),
+        encoding="utf-8",
+    )
     print(f"Rebuilt {summary} from the saved metrics (no test prediction).")
 
 
@@ -236,11 +321,13 @@ def main() -> None:
     classes: list[str] = config["classes"]
     order = label_order(config)
     tuning = load_tuning(args.out_dir)
-    best = best_algo(tuning)
+    calibration = load_calibration(args.out_dir)
+    selection = str(config["training"].get("selection", "tuning_cv"))
+    best = select_best(config, args.out_dir)
 
     train_df = load_dataset(paths, ("train",))
     if args.summary_only:
-        _write_saved_summary(args.out_dir, paths, tuning, best, classes, PrototypeRuleBaseline.fitted(train_df))
+        _write_saved_summary(args.out_dir, paths, tuning, calibration, selection, best, classes, PrototypeRuleBaseline.fitted(train_df))
         return
     test_df = load_dataset(paths, ("test",))
     X_test, y_test = xy(test_df)
@@ -276,8 +363,11 @@ def main() -> None:
 
     summary = args.out_dir / "summary.md"
     n_persons = int(test_df["person_id"].nunique())
-    summary.write_text(_summary(results, tuning, best, classes, n_persons, fitted, paths.root), encoding="utf-8")
-    print(f"Best model by CV macro-F1: {ALGO_NAMES[best]}. Wrote {summary} and metrics/confusion per method.")
+    v1 = _load_v1(args.out_dir, [a for a in results if a in tuning["algos"]])
+    summary.write_text(
+        _summary(results, tuning, calibration, selection, best, classes, n_persons, fitted, paths.root, v1), encoding="utf-8"
+    )
+    print(f"Best model ({selection}): {ALGO_NAMES[best]}. Wrote {summary} and metrics/confusion per method.")
 
 
 if __name__ == "__main__":

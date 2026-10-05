@@ -1,7 +1,7 @@
 """Unit tests for the face-shape classifiers (`app/services/face_classifier.py`) and for
 `FaceAnalysisService.analyze_and_store` wiring them in (plan 08).
 
-Main flow only. The ML tests use the committed `fs-20260930-svm` export; no MediaPipe
+Main flow only. The ML tests use the committed `fs-20261005-svm` export; no MediaPipe
 model or real photo is needed (`analyze_face` is replaced by a stub in the service test).
 """
 import asyncio
@@ -25,7 +25,7 @@ from app.services.face_classifier import (
 )
 from app.services.face_shape_service import FaceAnalysisOutcome, classify_face_shape
 
-MODEL_VERSION = "fs-20260930-svm"
+MODEL_VERSION = "fs-20261005-svm"
 
 _LEGACY = FaceMeasurements(
     face_length=0.4,
@@ -68,6 +68,15 @@ def test_ml_classifier_returns_calibrated_probabilities() -> None:
     assert sum(result.probabilities.values()) == pytest.approx(1.0, abs=1e-3)
     assert result.confidence == max(result.probabilities.values())
     assert result.face_shape == max(result.probabilities, key=result.probabilities.__getitem__)
+
+
+def test_ml_classifier_still_loads_previous_model_version_for_rollback() -> None:
+    result = load_classifier(
+        _settings(FACE_SHAPE_CLASSIFIER="ml", FACE_SHAPE_MODEL_VERSION="fs-20260930-svm")
+    ).predict(_FEATURES, _LEGACY)
+
+    assert result.model_version == "fs-20260930-svm"
+    assert sum(result.probabilities.values()) == pytest.approx(1.0, abs=1e-3)
 
 
 def test_ml_classifier_with_missing_model_version_fails_to_load() -> None:

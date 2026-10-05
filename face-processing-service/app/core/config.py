@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     # Face-shape classifier: "ml" = trained model under models/face_shape/<version>/,
     # "rule" = the old threshold rules (fallback, never touches the model folder).
     FACE_SHAPE_CLASSIFIER: Literal["ml", "rule"] = "ml"
-    FACE_SHAPE_MODEL_VERSION: str = "fs-20260930-svm"
+    FACE_SHAPE_MODEL_VERSION: str = "fs-20261005-svm"
     # Photos with |yaw| above this (degrees) are rejected — the face is turned sideways.
     FACE_MAX_YAW_DEG: float = 25.0
     # Photos whose cheekbone width (234 <-> 454, pixels) is below this are rejected — same

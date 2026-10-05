@@ -1,22 +1,22 @@
 # Face-shape classifiers - test results (E1)
 
-Generated 2026-09-30 from `data` by `make evaluate` (summary regenerated from the saved `metrics_*.json`, no new test pass). Numbers come from the pipeline outputs; do not edit by hand.
+Generated 2026-10-05 from `data` by `make evaluate`. Numbers come from the pipeline outputs; do not edit by hand.
 
 Test set: 701 images, 94 persons, identity-disjoint from train/val (`processed/splits.csv`). Each method predicted the test set exactly once.
 
 ## Overall
 
-| method | accuracy | macro precision | macro recall | macro F1 | weighted F1 | CV macro F1 | test Brier |
-|---|---|---|---|---|---|---|---|
-| Rule v0 (production) | 0.194 | 0.082 | 0.182 | 0.111 | 0.124 | - | - |
-| Rule v1 (literature) | 0.027 | 0.005 | 0.167 | 0.009 | 0.001 | - | - |
-| Rule v1 (fitted) | 0.461 | 0.416 | 0.426 | 0.408 | 0.462 | - | - |
-| SVM (RBF) **(best)** | 0.556 | 0.465 | 0.478 | 0.471 | 0.549 | 0.516 | 0.096 |
-| Random Forest | 0.535 | 0.520 | 0.467 | 0.475 | 0.538 | 0.482 | 0.098 |
-| XGBoost | 0.536 | 0.489 | 0.468 | 0.472 | 0.537 | 0.490 | 0.101 |
+| method | accuracy | macro precision | macro recall | macro F1 | weighted F1 | CV macro F1 | CV macro F1 (calibrated) | test Brier |
+|---|---|---|---|---|---|---|---|---|
+| Rule v0 (production) | 0.194 | 0.082 | 0.182 | 0.111 | 0.124 | - | - | - |
+| Rule v1 (literature) | 0.027 | 0.005 | 0.167 | 0.009 | 0.001 | - | - | - |
+| Rule v1 (fitted) | 0.461 | 0.416 | 0.426 | 0.408 | 0.462 | - | - | - |
+| SVM (RBF) **(best)** | 0.541 | 0.486 | 0.495 | 0.485 | 0.544 | 0.516 | 0.486 | 0.101 |
+| Random Forest | 0.509 | 0.470 | 0.468 | 0.460 | 0.519 | 0.482 | 0.469 | 0.101 |
+| XGBoost | 0.516 | 0.481 | 0.466 | 0.465 | 0.530 | 0.490 | 0.480 | 0.105 |
 
-- Best model = highest CV macro-F1 on train+val (5-fold StratifiedGroupKFold by person, seed 42): **SVM (RBF)**. Test numbers were not used to choose it.
-- Trained models are the calibrated versions (fit on train, sigmoid calibration on val); test Brier = mean one-vs-rest Brier score on test. Rule methods have no CV score or probabilities.
+- Best model = highest CV macro-F1 of the calibrated pipeline (fit + calibrate) on train+val (5-fold StratifiedGroupKFold by person, seed 42): **SVM (RBF)** - the same model that is exported. Test numbers were not used to choose it.
+- Trained models are the calibrated versions (fit on train, sigmoid calibration on val, sample_weight=balanced); test Brier = mean one-vs-rest Brier score on test. CV macro F1 = uncalibrated tuning score; CV macro F1 (calibrated) = person-grouped CV of the whole fit + calibrate pipeline (`calibration.json`). Rule methods have no CV score or probabilities.
 - Rule v0 runs the production code on normalized MediaPipe coordinates (its aspect-ratio issue included); Rule v1 and the trained models use the corrected pixel-space features.
 
 ## F1 per class
@@ -26,9 +26,9 @@ Test set: 701 images, 94 persons, identity-disjoint from train/val (`processed/s
 | Rule v0 (production) | 0.368 | 0.269 | 0.000 | 0.000 | 0.031 | 0.000 |
 | Rule v1 (literature) | 0.000 | 0.000 | 0.000 | 0.000 | 0.053 | 0.000 |
 | Rule v1 (fitted) | 0.297 | 0.562 | 0.736 | 0.237 | 0.080 | 0.539 |
-| SVM (RBF) | 0.345 | 0.537 | 0.762 | 0.390 | 0.000 | 0.794 |
-| Random Forest | 0.302 | 0.615 | 0.787 | 0.359 | 0.091 | 0.695 |
-| XGBoost | 0.309 | 0.562 | 0.755 | 0.400 | 0.080 | 0.728 |
+| SVM (RBF) | 0.325 | 0.536 | 0.768 | 0.372 | 0.121 | 0.790 |
+| Random Forest | 0.273 | 0.620 | 0.779 | 0.283 | 0.098 | 0.705 |
+| XGBoost | 0.302 | 0.580 | 0.756 | 0.355 | 0.067 | 0.729 |
 
 - **DIAMOND has only 19 test images** (and few persons); its per-class numbers have a wide margin of error and should not be over-read.
 - Landmark-feature models in the literature reach roughly 50-70% accuracy; numbers reported on the original niten19 split are inflated by duplicate and identity leakage, so this identity-aware test set is expected to score lower.
@@ -42,12 +42,24 @@ Column sums of each method's test confusion matrix (`metrics_<method>.json`).
 | Rule v0 (production) | 235 | 354 | 0 | 0 | 111 | 1 |
 | Rule v1 (literature) | 0 | 0 | 0 | 0 | 701 | 0 |
 | Rule v1 (fitted) | 114 | 145 | 161 | 87 | 81 | 113 |
-| SVM (RBF) | 149 | 136 | 135 | 136 | 0 | 145 |
-| Random Forest | 156 | 150 | 116 | 149 | 3 | 127 |
-| XGBoost | 137 | 156 | 119 | 154 | 6 | 129 |
+| SVM (RBF) | 136 | 129 | 133 | 112 | 47 | 144 |
+| Random Forest | 121 | 161 | 111 | 113 | 63 | 132 |
+| XGBoost | 110 | 164 | 116 | 118 | 70 | 123 |
 
-- **SVM (RBF) (calibrated) never predicts DIAMOND on test.** Sigmoid calibration is fitted on val with its real class frequencies, which cancels the `class_weight` balancing of the model; the model was chosen by uncalibrated CV macro-F1, but the deployed decision is the argmax of the calibrated probabilities. The decision rule (e.g. prior correction) is deferred to plan 08.
+- Calibration is fitted on val with balanced sample weights (weight per class = n / (k * n_c)), so the sigmoid keeps the class balancing of the models instead of re-learning val's real class frequencies (unweighted, as in v1, it cancelled `class_weight` and the calibrated SVM never predicted DIAMOND). The calibrated probabilities are therefore "balanced-prior": comparable across classes, not real-world class frequencies.
 - Rule v1 (literature) predicts DIAMOND for 701 of 701 test images, because the literature prototype scales (e.g. forehead_cheek ~0.92) do not match our features (~0.72).
+
+## v1 -> v2
+
+v1 = the archived first test pass in `v1-fs-20260930/` (unweighted sigmoid calibration, selection by uncalibrated tuning CV, exported as fs-20260930-svm); v2 = this run.
+
+| method | v1 macro F1 | v2 macro F1 | v1 DIAMOND F1 | v2 DIAMOND F1 | v1 DIAMOND predicted | v2 DIAMOND predicted | v1 test Brier | v2 test Brier |
+|---|---|---|---|---|---|---|---|---|
+| SVM (RBF) | 0.471 | 0.485 | 0.000 | 0.121 | 0 | 47 | 0.0960 | 0.1013 |
+| Random Forest | 0.475 | 0.460 | 0.091 | 0.098 | 3 | 63 | 0.0978 | 0.1015 |
+| XGBoost | 0.472 | 0.465 | 0.080 | 0.067 | 6 | 70 | 0.1006 | 0.1053 |
+
+- This is the second test pass. v1 (fs-20260930-svm) was evaluated once on 2026-09-30; v2 changes only the calibration weights and the selection rule - a decision-rule defect, not tuning on test. Grids, features and splits are unchanged.
 
 ## Rule v1 prototypes
 

@@ -114,6 +114,13 @@ training:
   # `make ... CV_FOLDS=2` overrides it (the sample has too few DIAMOND persons for 5 folds).
   cv_folds: 5
   calibration: sigmoid  # Q3: sigmoid (Platt) rather than isotonic - small data
+  # Plan 2026-10-05: sample weights of the sigmoid fit on val. Sigmoid fitted on val's real class
+  # frequencies (DIAMOND ~3%) cancels the model's class_weight balancing, so the calibrated SVM never
+  # predicted DIAMOND. `balanced` = weight n / (k * n_c) per class; `null` reproduces v1 (fs-20260930-svm).
+  calibration_weight: balanced
+  # Final-model selection: `calibrated_cv` = person-grouped CV macro-F1 of the whole "fit + calibrate"
+  # pipeline (calibration.json, what is deployed); `tuning_cv` = v1 rule (uncalibrated tuning CV).
+  selection: calibrated_cv
   max_model_mb: 5  # roadmap C1: export fails above this
   # Where `make export` writes <version>/model.joblib + model_card.json (`EXPORT_DIR=` overrides it).
   export_dir: ../../face-processing-service/models/face_shape

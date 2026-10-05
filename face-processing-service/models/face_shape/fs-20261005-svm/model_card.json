@@ -1,0 +1,139 @@
+{
+  "version": "fs-20261005-svm",
+  "created_at": "2026-10-05T04:01:08+00:00",
+  "algorithm": "SVM (RBF)",
+  "estimator": "CalibratedClassifierCV(FrozenEstimator(Pipeline), method=sigmoid)",
+  "calibration": {
+    "method": "sigmoid",
+    "sample_weight": "balanced"
+  },
+  "selection": "calibrated_cv",
+  "best_params": {
+    "clf__C": 10,
+    "clf__gamma": 0.01
+  },
+  "classes": [
+    "DIAMOND",
+    "HEART",
+    "OBLONG",
+    "OVAL",
+    "ROUND",
+    "SQUARE"
+  ],
+  "feature_names": [
+    "lw_ratio",
+    "lw_ratio_ext",
+    "upper_face_ratio",
+    "jaw_height_ratio",
+    "forehead_cheek",
+    "temple_cheek",
+    "jaw_cheek",
+    "jaw2_cheek",
+    "chin_jaw",
+    "forehead_jaw",
+    "jaw_angle_l",
+    "jaw_angle_r",
+    "jaw_angle_mean",
+    "chin_angle",
+    "lower_face_ratio",
+    "mid_face_ratio",
+    "contour_curvature",
+    "width_profile_slope",
+    "ipd_cheek",
+    "symmetry"
+  ],
+  "feature_schema_version": "1",
+  "metrics": {
+    "cv_macro_f1": 0.5156808701354592,
+    "cv_macro_f1_calibrated": 0.4864819286913698,
+    "cv_macro_f1_calibrated_std": 0.07419233142227294,
+    "cv_folds": 5,
+    "test_accuracy": 0.5406562054208274,
+    "test_macro_f1": 0.4851181124608621,
+    "test_brier": 0.1013405302180816,
+    "n_test": 701,
+    "per_class": {
+      "OVAL": {
+        "precision": 0.3235294117647059,
+        "recall": 0.32592592592592595,
+        "f1": 0.3247232472324723,
+        "support": 135
+      },
+      "ROUND": {
+        "precision": 0.5503875968992248,
+        "recall": 0.5220588235294118,
+        "f1": 0.5358490566037736,
+        "support": 136
+      },
+      "SQUARE": {
+        "precision": 0.7819548872180451,
+        "recall": 0.7536231884057971,
+        "f1": 0.7675276752767528,
+        "support": 138
+      },
+      "HEART": {
+        "precision": 0.41964285714285715,
+        "recall": 0.3333333333333333,
+        "f1": 0.3715415019762846,
+        "support": 141
+      },
+      "DIAMOND": {
+        "precision": 0.0851063829787234,
+        "recall": 0.21052631578947367,
+        "f1": 0.12121212121212122,
+        "support": 19
+      },
+      "OBLONG": {
+        "precision": 0.7569444444444444,
+        "recall": 0.8257575757575758,
+        "f1": 0.7898550724637681,
+        "support": 132
+      }
+    }
+  },
+  "training_data_summary": {
+    "counts": {
+      "test": {
+        "DIAMOND": 19,
+        "HEART": 141,
+        "OBLONG": 132,
+        "OVAL": 135,
+        "ROUND": 136,
+        "SQUARE": 138
+      },
+      "train": {
+        "DIAMOND": 117,
+        "HEART": 703,
+        "OBLONG": 656,
+        "OVAL": 677,
+        "ROUND": 680,
+        "SQUARE": 688
+      },
+      "val": {
+        "DIAMOND": 19,
+        "HEART": 141,
+        "OBLONG": 131,
+        "OVAL": 136,
+        "ROUND": 136,
+        "SQUARE": 138
+      }
+    },
+    "n_images": 4923,
+    "n_persons": 642,
+    "persons_per_split": {
+      "test": 94,
+      "train": 457,
+      "val": 91
+    }
+  },
+  "library_versions": {
+    "python": "3.11.15",
+    "sklearn": "1.9.1",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "joblib": "1.6.0",
+    "xgboost": "3.2.0",
+    "mediapipe": "1.0.1"
+  },
+  "model_size_mb": 0.388
+}

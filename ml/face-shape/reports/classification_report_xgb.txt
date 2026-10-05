@@ -2,13 +2,13 @@ XGBoost (test)
 
               precision    recall  f1-score   support
 
-        OVAL      0.307     0.311     0.309       135
-       ROUND      0.526     0.603     0.562       136
-      SQUARE      0.815     0.703     0.755       138
-       HEART      0.383     0.418     0.400       141
-     DIAMOND      0.167     0.053     0.080        19
-      OBLONG      0.736     0.720     0.728       132
+        OVAL      0.336     0.274     0.302       135
+       ROUND      0.530     0.640     0.580       136
+      SQUARE      0.828     0.696     0.756       138
+       HEART      0.390     0.326     0.355       141
+     DIAMOND      0.043     0.158     0.067        19
+      OBLONG      0.756     0.705     0.729       132
 
-    accuracy                          0.536       701
-   macro avg      0.489     0.468     0.472       701
-weighted avg      0.542     0.536     0.537       701
+    accuracy                          0.516       701
+   macro avg      0.481     0.466     0.465       701
+weighted avg      0.553     0.516     0.530       701

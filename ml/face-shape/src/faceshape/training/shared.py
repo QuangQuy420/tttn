@@ -142,10 +142,37 @@ def model_path(paths: DataPaths, algo: str) -> Path:
     return paths.models / f"{algo}_calibrated.joblib"
 
 
-def best_algo(tuning: dict[str, Any]) -> str:
-    """Q1: the final model is the trained algorithm with the highest CV macro-F1 (never test)."""
-    scores = {algo: res["cv_macro_f1"] for algo, res in tuning["algos"].items() if res.get("cv_macro_f1") is not None}
+def calibration_path(out_dir: Path) -> Path:
+    return out_dir / "calibration.json"
+
+
+def load_calibration(out_dir: Path) -> dict[str, Any]:
+    path = calibration_path(out_dir)
+    require_file(path, "Run `make train` first.")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def best_algo(tuning: dict[str, Any], calibration: dict[str, Any] | None = None, selection: str = "tuning_cv") -> str:
+    """Q1: the final model is the trained algorithm with the highest CV macro-F1 (never test).
+
+    `selection == "calibrated_cv"` (plan 2026-10-05) uses the grouped CV macro-F1 of "fit + calibrate"
+    from calibration.json; `tuning_cv` uses the uncalibrated tuning CV score (v1)."""
+    trained = [algo for algo, res in tuning["algos"].items() if res.get("status") == "trained"]
+    if selection == "calibrated_cv":
+        entries = (calibration or {}).get("algos", {})
+        if any(entries.get(algo, {}).get("cv_macro_f1_calibrated") is None for algo in trained):
+            fail("calibration.json has no cv_macro_f1_calibrated for every trained algorithm. Run `make train` first.")
+        scores = {algo: entries[algo]["cv_macro_f1_calibrated"] for algo in trained}
+    else:
+        scores = {algo: res["cv_macro_f1"] for algo, res in tuning["algos"].items() if res.get("cv_macro_f1") is not None}
     scores = {algo: s for algo, s in scores.items() if np.isfinite(s)}
     if not scores:
-        fail("No trained algorithm has a finite CV macro-F1 in tuning.json.")
+        fail(f"No trained algorithm has a finite CV macro-F1 ({selection}).")
     return max(scores, key=scores.get)
+
+
+def select_best(config: dict[str, Any], out_dir: Path) -> str:
+    """Final model per `training.selection` - the same rule for evaluate, ablation and export."""
+    selection = str(config["training"].get("selection", "tuning_cv"))
+    calibration = load_calibration(out_dir) if selection == "calibrated_cv" else None
+    return best_algo(load_tuning(out_dir), calibration, selection)
