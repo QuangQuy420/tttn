@@ -11,8 +11,6 @@
 """
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 import numpy as np
 import pandas as pd
 
@@ -37,8 +35,8 @@ class CurrentRuleBaseline:
 
         labels = []
         for face in landmarks:
-            points = [SimpleNamespace(x=float(p[0]), y=float(p[1])) for p in face]
-            shape, _ = classify_face_shape(_extract_measurements(points))
+            # Normalized x, y with image_width=1: the distances stay in normalized space (as in production v1).
+            shape, _ = classify_face_shape(_extract_measurements(np.asarray(face[:, :2], dtype=float), 1))
             labels.append(shape.value)
         return np.asarray(labels)
 

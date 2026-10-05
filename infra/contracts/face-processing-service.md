@@ -22,7 +22,7 @@ response envelope (see `README.md`). Added in `.planning/2026-09-29-08-face-shap
   "probabilities": { "DIAMOND": 0.03, "HEART": 0.03, "OBLONG": 0.09,
                      "OVAL": 0.01, "ROUND": 0.27, "SQUARE": 0.57 },  // all 6 shapes, sum ≈ 1
   "method": "ml|rule",
-  "modelVersion": "fs-20260930-svm", // "rule-v0" when method = rule
+  "modelVersion": "fs-20261005-svm", // "rule-v0" when method = rule
   "quality": { "yaw": 3.2, "pitch": -5.1, "roll": 0.8 }  // degrees; only on POST /analyze, null in history
 }
 ```
@@ -55,7 +55,7 @@ Newest analysis of one user. Consumer: `recommendation-service` (plan 11, FaceFi
     "probabilities": { "DIAMOND": 0.03, "HEART": 0.03, "OBLONG": 0.09,
                        "OVAL": 0.01, "ROUND": 0.27, "SQUARE": 0.57 },  // null for pre-plan-08 rows
     "method": "ml",                 // null for pre-plan-08 rows
-    "modelVersion": "fs-20260930-svm", // null for pre-plan-08 rows
+    "modelVersion": "fs-20261005-svm", // null for pre-plan-08 rows
     "createdAt": "2026-09-30T10:00:00Z"
   } }
 ```

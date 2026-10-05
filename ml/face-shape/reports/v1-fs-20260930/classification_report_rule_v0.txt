@@ -1,0 +1,14 @@
+Rule v0 (production) (test)
+
+              precision    recall  f1-score   support
+
+        OVAL      0.289     0.504     0.368       135
+       ROUND      0.186     0.485     0.269       136
+      SQUARE      0.000     0.000     0.000       138
+       HEART      0.000     0.000     0.000       141
+     DIAMOND      0.018     0.105     0.031        19
+      OBLONG      0.000     0.000     0.000       132
+
+    accuracy                          0.194       701
+   macro avg      0.082     0.182     0.111       701
+weighted avg      0.092     0.194     0.124       701

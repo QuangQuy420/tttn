@@ -44,7 +44,7 @@ def _row(user_id: uuid.UUID) -> SimpleNamespace:
         created_at=dt.datetime(2026, 9, 30, 10, 0, tzinfo=dt.timezone.utc),
         probabilities={"OVAL": 0.7, "ROUND": 0.1, "SQUARE": 0.05, "HEART": 0.05, "DIAMOND": 0.05, "OBLONG": 0.05},
         method="ml",
-        model_version="fs-20260930-svm",
+        model_version="fs-20261005-svm",
     )
 
 
@@ -115,7 +115,7 @@ def test_list_analyses_returns_model_fields(client: TestClient) -> None:
 
     item = response.json()["data"][0]
     assert item["method"] == "ml"
-    assert item["modelVersion"] == "fs-20260930-svm"
+    assert item["modelVersion"] == "fs-20261005-svm"
     assert item["probabilities"]["OVAL"] == 0.7
     assert item["quality"] is None
 
@@ -168,7 +168,7 @@ def test_latest_analysis_returns_newest_row(
     assert data["userId"] == str(USER_ID)
     assert data["faceShape"] == "OVAL"
     assert data["method"] == "ml"
-    assert data["modelVersion"] == "fs-20260930-svm"
+    assert data["modelVersion"] == "fs-20261005-svm"
     assert data["probabilities"]["OVAL"] == 0.7
 
 

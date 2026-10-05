@@ -1,0 +1,23 @@
+{
+  "method": "sigmoid",
+  "evaluated_on": "val",
+  "n_val": 701,
+  "algos": {
+    "svm": {
+      "status": "calibrated",
+      "brier_before": null,
+      "brier_after": 0.09617072158468849,
+      "note": "SVC(probability=False) has no probabilities before calibration (decision_function only)."
+    },
+    "rf": {
+      "status": "calibrated",
+      "brier_before": 0.10034853847257534,
+      "brier_after": 0.09793150463139043
+    },
+    "xgb": {
+      "status": "calibrated",
+      "brier_before": 0.0950422678142786,
+      "brier_after": 0.09440837355876625
+    }
+  }
+}

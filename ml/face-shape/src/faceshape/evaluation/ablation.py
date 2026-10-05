@@ -1,6 +1,6 @@
 """Step `make ablation`: feature/normalization ablations of the best algorithm (AC8).
 
-The best algorithm (highest CV macro-F1 in `tuning.json`) keeps its best params; every variant is
+The best algorithm (`training.selection`, same rule as evaluate/export - `shared.select_best`) keeps its best params; every variant is
 scored with the same person-grouped CV on train+val (macro-F1). The test split is never read.
 Variants: full features (baseline); (a) no roll alignment - features recomputed in memory from
 `interim/landmarks.npz` with `align_roll=False` (the real parquet is not touched); (b) without the
@@ -20,7 +20,6 @@ from faceshape.features.build_features import features_for
 from faceshape.common import DataPaths, build_parser, parse, require_file
 from faceshape.training.shared import (
     ALGO_NAMES,
-    best_algo,
     build_estimator,
     cv_folds,
     cv_splitter,
@@ -29,6 +28,7 @@ from faceshape.training.shared import (
     label_order,
     load_dataset,
     load_tuning,
+    select_best,
 )
 
 LW_FEATURES = ("lw_ratio", "lw_ratio_ext")
@@ -79,7 +79,7 @@ def main() -> None:
     n_folds = cv_folds(config, args.cv_folds)
     order = label_order(config)
     tuning = load_tuning(args.out_dir)
-    algo = best_algo(tuning)
+    algo = select_best(config, args.out_dir)
     params = tuning["algos"][algo]["best_params"]
 
     df = load_dataset(paths, ("train", "val"))
@@ -114,7 +114,7 @@ def main() -> None:
         f"Generated {date.today().isoformat()} from `{paths.root}` by `make ablation`. Numbers come from the "
         "pipeline outputs; do not edit by hand.",
         "",
-        f"Algorithm: **{ALGO_NAMES[algo]}** (best by CV macro-F1) with its tuned params `{params}`. "
+        f"Algorithm: **{ALGO_NAMES[algo]}** (selected by `training.selection`: {config['training'].get('selection', 'tuning_cv')}) with its tuned params `{params}`. "
         f"Score: macro-F1 mean +/- std over {n_folds}-fold StratifiedGroupKFold by person on train+val "
         f"(seed {seed}); the test split is not used.",
         "",

@@ -1,7 +1,7 @@
 """Step `make export`: copy the calibrated best model into the service (AC11, AC12).
 
 Writes `<export-dir>/<version>/model.joblib` (the `CalibratedClassifierCV` of the best algorithm by
-CV macro-F1 - only sklearn/xgboost objects) and `model_card.json`. Version = `fs-YYYYMMDD-<algo>`.
+`training.selection` - only sklearn/xgboost objects) and `model_card.json`. Version = `fs-YYYYMMDD-<algo>`.
 Metrics come from `metrics_<algo>.json` written by `make evaluate` (the test set is not re-run).
 Fails when `model.joblib` is larger than `training.max_model_mb`. `--export-dir` overrides
 `training.export_dir` (the sample run writes to `data/sample/export`).
@@ -19,7 +19,7 @@ import pandas as pd
 
 from app.ml.face_features import FEATURE_NAMES, FEATURE_SCHEMA_VERSION
 from faceshape.common import DataPaths, build_parser, fail, parse, require_file
-from faceshape.training.shared import ALGO_NAMES, best_algo, class_names, label_order, load_tuning, model_path
+from faceshape.training.shared import ALGO_NAMES, class_names, label_order, load_calibration, load_tuning, model_path, select_best
 
 _LIBRARIES = {"sklearn": "scikit-learn", "numpy": "numpy", "scipy": "scipy", "joblib": "joblib", "xgboost": "xgboost", "mediapipe": "mediapipe"}
 
@@ -56,7 +56,8 @@ def main() -> None:
     cfg = config["training"]
     export_dir = args.export_dir or Path(cfg["export_dir"])
     tuning = load_tuning(args.out_dir)
-    algo = best_algo(tuning)
+    algo = select_best(config, args.out_dir)
+    calibration = load_calibration(args.out_dir)["algos"][algo]
     metrics_path = args.out_dir / f"metrics_{algo}.json"
     require_file(metrics_path, "Run `make evaluate` first.")
     metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
@@ -81,12 +82,16 @@ def main() -> None:
         "created_at": now.isoformat(timespec="seconds"),
         "algorithm": ALGO_NAMES[algo],
         "estimator": f"CalibratedClassifierCV(FrozenEstimator({type(model.estimator.estimator).__name__}), method={cfg['calibration']})",
+        "calibration": {"method": cfg["calibration"], "sample_weight": cfg.get("calibration_weight")},
+        "selection": cfg.get("selection", "tuning_cv"),
         "best_params": tuning["algos"][algo]["best_params"],
         "classes": class_names(model, label_order(config)),
         "feature_names": list(FEATURE_NAMES),
         "feature_schema_version": FEATURE_SCHEMA_VERSION,
         "metrics": {
             "cv_macro_f1": tuning["algos"][algo]["cv_macro_f1"],
+            "cv_macro_f1_calibrated": calibration.get("cv_macro_f1_calibrated"),
+            "cv_macro_f1_calibrated_std": calibration.get("cv_macro_f1_calibrated_std"),
             "cv_folds": tuning["cv_folds"],
             "test_accuracy": metrics["accuracy"],
             "test_macro_f1": metrics["macro_f1"],

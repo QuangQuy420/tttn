@@ -1,8 +1,8 @@
 # Ablation (E1)
 
-Generated 2026-09-30 from `data` by `make ablation`. Numbers come from the pipeline outputs; do not edit by hand.
+Generated 2026-10-05 from `data` by `make ablation`. Numbers come from the pipeline outputs; do not edit by hand.
 
-Algorithm: **SVM (RBF)** (best by CV macro-F1) with its tuned params `{'clf__C': 10, 'clf__gamma': 0.01}`. Score: macro-F1 mean +/- std over 5-fold StratifiedGroupKFold by person on train+val (seed 42); the test split is not used.
+Algorithm: **SVM (RBF)** (selected by `training.selection`: calibrated_cv) with its tuned params `{'clf__C': 10, 'clf__gamma': 0.01}`. Score: macro-F1 mean +/- std over 5-fold StratifiedGroupKFold by person on train+val (seed 42); the test split is not used.
 
 | variant | images | features | CV macro F1 | std | delta vs full |
 |---|---|---|---|---|---|
