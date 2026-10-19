@@ -1,0 +1,38 @@
+{
+  "method": "sigmoid",
+  "sample_weight": "balanced",
+  "evaluated_on": "val",
+  "n_val": 701,
+  "cv_folds": 5,
+  "seed": 42,
+  "algos": {
+    "svm": {
+      "status": "calibrated",
+      "brier_before": null,
+      "brier_after": 0.10719392542355416,
+      "note": "SVC(probability=False) has no probabilities before calibration (decision_function only).",
+      "cv_macro_f1_calibrated": 0.4948699556949424,
+      "cv_macro_f1_calibrated_std": 0.04729815766248024,
+      "cv_diamond_predicted": 82,
+      "cv_folds_skipped": 0
+    },
+    "rf": {
+      "status": "calibrated",
+      "brier_before": 0.10349590806790271,
+      "brier_after": 0.10718699031347793,
+      "cv_macro_f1_calibrated": 0.4835304825998758,
+      "cv_macro_f1_calibrated_std": 0.04053617940536294,
+      "cv_diamond_predicted": 129,
+      "cv_folds_skipped": 0
+    },
+    "xgb": {
+      "status": "calibrated",
+      "brier_before": 0.12674782363077006,
+      "brier_after": 0.11062613730000508,
+      "cv_macro_f1_calibrated": 0.4784941429063546,
+      "cv_macro_f1_calibrated_std": 0.03126769413939676,
+      "cv_diamond_predicted": 68,
+      "cv_folds_skipped": 0
+    }
+  }
+}

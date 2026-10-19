@@ -2,7 +2,7 @@
 
 For each tuned algorithm: fit its best params on **train**, then
 `CalibratedClassifierCV(FrozenEstimator(fitted), method=training.calibration)` fitted on **val**
-(sklearn 1.9 removed `cv="prefit"`). Saves `<data-dir>/models/<algo>_calibrated.joblib`, a
+(sklearn 1.9 removed `cv="prefit"`). Saves `<models-dir>/<algo>_calibrated.joblib`, a
 reliability diagram `<out-dir>/calibration_<algo>.png` and `<out-dir>/calibration.json` with the
 multiclass Brier score (mean of the one-vs-rest Brier scores) before/after calibration on val.
 The calibrator is fitted on val too, so the val "after" numbers are optimistic; evaluate.py
@@ -152,7 +152,8 @@ def _plot_reliability(curves: dict[str, tuple[np.ndarray, np.ndarray]], title: s
 
 def main() -> None:
     parser = build_parser("Refit the tuned models on train and calibrate them on val.")
-    parser.add_argument("--out-dir", type=Path, default=Path("reports"), help="report folder (default: reports)")
+    parser.add_argument("--out-dir", type=Path, required=True, help="report folder (reports/runs/<run>)")
+    parser.add_argument("--models-dir", type=Path, required=True, help="model folder (data/runs/<run>/models)")
     parser.add_argument("--cv-folds", type=int, default=None, help="override training.cv_folds")
     args, config, paths = parse(parser)
     import joblib
@@ -172,7 +173,7 @@ def main() -> None:
     groups = df["person_id"].to_numpy()
     print(f"Refit on train ({len(y_train)}), calibrate ({method}, sample_weight={weight}) on val ({len(y_val)}).")
 
-    paths.models.mkdir(parents=True, exist_ok=True)
+    args.models_dir.mkdir(parents=True, exist_ok=True)
     report: dict[str, Any] = {
         "method": method, "sample_weight": weight, "evaluated_on": "val", "n_val": len(y_val),
         "cv_folds": n_folds, "seed": seed, "algos": {},
@@ -186,7 +187,7 @@ def main() -> None:
         model.fit(X_train, y_fit, **fit_params(algo, y_fit))
 
         calibrated = calibrate(model, X_val, encode_target(algo, y_val, order), method, weight)
-        joblib.dump(calibrated, model_path(paths, algo))
+        joblib.dump(calibrated, model_path(args.models_dir, algo))
 
         names = class_names(calibrated, order)
         after = calibrated.predict_proba(X_val)
@@ -215,7 +216,7 @@ def main() -> None:
 
     out = args.out_dir / "calibration.json"
     out.write_text(json.dumps(report, indent=2), encoding="utf-8")
-    print(f"Wrote {out}, calibration_<algo>.png and {paths.models}/<algo>_calibrated.joblib.")
+    print(f"Wrote {out}, calibration_<algo>.png and {args.models_dir}/<algo>_calibrated.joblib.")
 
 
 if __name__ == "__main__":

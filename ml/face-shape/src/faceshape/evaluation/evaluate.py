@@ -5,8 +5,8 @@ from `make train`. Each method predicts the test rows exactly once. All metrics 
 `labels = config classes` and `zero_division=0`. Writes per method `<out-dir>/metrics_<algo>.json`,
 `classification_report_<algo>.txt` and `confusion_<algo>.png` (counts + row-normalized), plus the
 cross-method table `<out-dir>/summary.md`. The best model is chosen by CV macro-F1 (Q1,
-`training.selection`), never by these test numbers. When the archived v1 metrics exist in
-`<out-dir>/v1-fs-20260930/`, the summary adds a v1 -> v2 comparison (plan 2026-10-05).
+`training.selection`), never by these test numbers. With `--v1-dir` (the archived v1 run, e.g.
+`reports/runs/v1-full-real-20260930`), the summary adds a v1 -> v2 comparison (plan 2026-10-05).
 
 `--summary-only` rebuilds `summary.md` from the saved `metrics_<algo>.json` + `tuning.json` +
 `calibration.json` without loading any model or predicting on test again.
@@ -35,10 +35,6 @@ from faceshape.training.shared import (
     select_best,
     xy,
 )
-
-# Archived reports of the first test pass (fs-20260930-svm, unweighted calibration).
-V1_DIR = "v1-fs-20260930"
-
 
 def _test_landmarks(paths: DataPaths, image_ids: list[str]) -> np.ndarray:
     require_file(paths.landmarks_npz, "Run `make landmarks` first.")
@@ -122,13 +118,18 @@ def _predicted_counts(m: dict[str, Any], classes: list[str]) -> dict[str, int]:
     return {c: int(counts.get(c, 0)) for c in classes}
 
 
-def _load_v1(out_dir: Path, algos: list[str]) -> dict[str, dict[str, Any]]:
-    """Archived v1 metrics of the trained algorithms (empty when `<out-dir>/v1-fs-20260930/` is absent)."""
-    paths = {algo: out_dir / V1_DIR / f"metrics_{algo}.json" for algo in algos}
-    return {algo: json.loads(path.read_text(encoding="utf-8")) for algo, path in paths.items() if path.is_file()}
+def _load_v1(v1_dir: Path | None, algos: list[str]) -> dict[str, dict[str, Any]]:
+    """Archived v1 metrics of the trained algorithms in `--v1-dir` (empty when no `--v1-dir` is given)."""
+    if v1_dir is None:
+        return {}
+    paths = {algo: v1_dir / f"metrics_{algo}.json" for algo in algos}
+    v1 = {algo: json.loads(path.read_text(encoding="utf-8")) for algo, path in paths.items() if path.is_file()}
+    if not v1:
+        fail(f"--v1-dir {v1_dir} has no metrics_<algo>.json of the trained algorithms.")
+    return v1
 
 
-def _v1_section(v1: dict[str, dict[str, Any]], results: dict[str, dict[str, Any]], classes: list[str]) -> list[str]:
+def _v1_section(v1: dict[str, dict[str, Any]], v1_dir: Path, results: dict[str, dict[str, Any]], classes: list[str]) -> list[str]:
     """v1 -> v2 table per trained algorithm (both test passes) + the second-pass note."""
     rows = []
     for algo, old in v1.items():
@@ -142,8 +143,8 @@ def _v1_section(v1: dict[str, dict[str, Any]], results: dict[str, dict[str, Any]
     return [
         "## v1 -> v2",
         "",
-        f"v1 = the archived first test pass in `{V1_DIR}/` (unweighted sigmoid calibration, selection by "
-        "uncalibrated tuning CV, exported as fs-20260930-svm); v2 = this run.",
+        f"v1 = the archived first test pass in `{v1_dir.as_posix()}/` (unweighted sigmoid calibration, selection by "
+        "uncalibrated tuning CV, exported as v1-full-real-20260930-svm); v2 = this run.",
         "",
         _md_table(
             ["method", "v1 macro F1", "v2 macro F1", "v1 DIAMOND F1", "v2 DIAMOND F1", "v1 DIAMOND predicted",
@@ -151,7 +152,7 @@ def _v1_section(v1: dict[str, dict[str, Any]], results: dict[str, dict[str, Any]
             rows,
         ),
         "",
-        "- This is the second test pass. v1 (fs-20260930-svm) was evaluated once on 2026-09-30; v2 changes only "
+        "- This is the second test pass. v1 (v1-full-real-20260930-svm) was evaluated once on 2026-09-30; v2 changes only "
         "the calibration weights and the selection rule - a decision-rule defect, not tuning on test. Grids, "
         "features and splits are unchanged.",
         "",
@@ -160,7 +161,7 @@ def _v1_section(v1: dict[str, dict[str, Any]], results: dict[str, dict[str, Any]
 
 def _summary(results: dict[str, dict[str, Any]], tuning: dict[str, Any], calibration: dict[str, Any], selection: str,
              best: str, classes: list[str], n_persons: int, fitted: PrototypeRuleBaseline, root: Path,
-             v1: dict[str, dict[str, Any]], regenerated: bool = False) -> str:
+             v1: dict[str, dict[str, Any]], v1_dir: Path | None, regenerated: bool = False) -> str:
     calibrated_cv = {algo: res.get("cv_macro_f1_calibrated") for algo, res in calibration["algos"].items()}
     weight = calibration.get("sample_weight")
     rows = []
@@ -266,7 +267,7 @@ def _summary(results: dict[str, dict[str, Any]], tuning: dict[str, Any], calibra
         "",
         *diamond_notes,
         "",
-        *(_v1_section(v1, results, classes) if v1 else []),
+        *(_v1_section(v1, v1_dir, results, classes) if v1 and v1_dir else []),
         "## Rule v1 prototypes",
         "",
         "Literature prototypes (face-metrics, MIT) - defined on other landmarks, so their scale can differ from "
@@ -285,7 +286,8 @@ def _summary(results: dict[str, dict[str, Any]], tuning: dict[str, Any], calibra
 
 
 def _write_saved_summary(out_dir: Path, paths: DataPaths, tuning: dict[str, Any], calibration: dict[str, Any],
-                        selection: str, best: str, classes: list[str], fitted: PrototypeRuleBaseline) -> None:
+                        selection: str, best: str, classes: list[str], fitted: PrototypeRuleBaseline,
+                        v1_dir: Path | None) -> None:
     """`--summary-only`: summary.md from the saved metrics files; test labels/features are not read."""
     algos = ["rule_v0", "rule_v1_literature", "rule_v1_fitted"]
     trained = [a for a, res in tuning["algos"].items() if res.get("status") == "trained"]
@@ -299,9 +301,10 @@ def _write_saved_summary(out_dir: Path, paths: DataPaths, tuning: dict[str, Any]
     splits = pd.read_csv(paths.splits_csv, dtype=str)
     n_persons = int(splits.loc[splits["split"] == "test", "person_id"].nunique())
     summary = out_dir / "summary.md"
-    v1 = _load_v1(out_dir, trained)
+    v1 = _load_v1(v1_dir, trained)
     summary.write_text(
-        _summary(results, tuning, calibration, selection, best, classes, n_persons, fitted, paths.root, v1, regenerated=True),
+        _summary(results, tuning, calibration, selection, best, classes, n_persons, fitted, paths.root, v1, v1_dir,
+                 regenerated=True),
         encoding="utf-8",
     )
     print(f"Rebuilt {summary} from the saved metrics (no test prediction).")
@@ -309,12 +312,16 @@ def _write_saved_summary(out_dir: Path, paths: DataPaths, tuning: dict[str, Any]
 
 def main() -> None:
     parser = build_parser("Evaluate every final method once on the test split.")
-    parser.add_argument("--out-dir", type=Path, default=Path("reports"), help="report folder (default: reports)")
+    parser.add_argument("--out-dir", type=Path, required=True, help="report folder (reports/runs/<run>)")
+    parser.add_argument("--models-dir", type=Path, default=None, help="model folder (data/runs/<run>/models)")
+    parser.add_argument("--v1-dir", type=Path, default=None, help="archived v1 run folder; adds the v1 -> v2 table to summary.md")
     parser.add_argument(
         "--summary-only", action="store_true",
         help="rebuild summary.md from the saved metrics_<algo>.json (no model loading, no test prediction)",
     )
     args, config, paths = parse(parser)
+    if args.models_dir is None and not args.summary_only:
+        parser.error("--models-dir is required (unless --summary-only)")
     import joblib
     from sklearn.metrics import classification_report
 
@@ -327,7 +334,8 @@ def main() -> None:
 
     train_df = load_dataset(paths, ("train",))
     if args.summary_only:
-        _write_saved_summary(args.out_dir, paths, tuning, calibration, selection, best, classes, PrototypeRuleBaseline.fitted(train_df))
+        _write_saved_summary(args.out_dir, paths, tuning, calibration, selection, best, classes, PrototypeRuleBaseline.fitted(train_df),
+                            args.v1_dir)
         return
     test_df = load_dataset(paths, ("test",))
     X_test, y_test = xy(test_df)
@@ -341,7 +349,7 @@ def main() -> None:
     for algo, res in tuning["algos"].items():
         if res.get("status") != "trained":
             continue
-        path = model_path(paths, algo)
+        path = model_path(args.models_dir, algo)
         require_file(path, "Run `make train` first.")
         model = joblib.load(path)
         names = class_names(model, order)
@@ -363,9 +371,10 @@ def main() -> None:
 
     summary = args.out_dir / "summary.md"
     n_persons = int(test_df["person_id"].nunique())
-    v1 = _load_v1(args.out_dir, [a for a in results if a in tuning["algos"]])
+    v1 = _load_v1(args.v1_dir, [a for a in results if a in tuning["algos"]])
     summary.write_text(
-        _summary(results, tuning, calibration, selection, best, classes, n_persons, fitted, paths.root, v1), encoding="utf-8"
+        _summary(results, tuning, calibration, selection, best, classes, n_persons, fitted, paths.root, v1, args.v1_dir),
+        encoding="utf-8",
     )
     print(f"Best model ({selection}): {ALGO_NAMES[best]}. Wrote {summary} and metrics/confusion per method.")
 

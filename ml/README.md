@@ -55,32 +55,32 @@ The Makefile loads `.env` (git-ignored) automatically, so no `export` is needed.
   legacy `~/.kaggle/kaggle.json` also works.
 - **Roboflow:** free account -> https://app.roboflow.com/settings/api -> `ROBOFLOW_API_KEY=...`.
   Without a key, export the dataset from its Universe page in *Folder Structure* format and put the
-  zip (or extracted folders) in `data/raw/roboflow/<slug>/`; `make download` extracts it.
+  zip (or extracted folders) in `data/inputs/raw/roboflow/<slug>/`; `make download` extracts it.
 
 ### 4. Download the data
 
 ```bash
 make model      # MediaPipe model -> .cache/face_landmarker.task (~4 MB)
-make download   # datasets -> data/raw/ (~720 MB: niten19 + the DIAMOND sources)
-make manifest   # list the images actually used -> data/interim/sources.csv
+make download   # datasets -> data/inputs/raw/ (~720 MB: niten19 + the DIAMOND sources)
+make manifest   # list the images actually used -> data/datasets/full-real/interim/sources.csv
 ```
 
 `make manifest` prints the image count per class; expect 1,000 for each niten19 class and ~175
-DIAMOND. Sources already in `data/raw/` are skipped, so re-running is cheap (`make all` and
+DIAMOND. Sources already in `data/inputs/raw/` are skipped, so re-running is cheap (`make all` and
 `make sample` also run these three steps first).
 
 ### 5. Run the pipeline
 
 ```bash
-make sample   # quick end-to-end check on ~100 images (outputs in data/sample/)
-make all      # full run -> data/processed/{features.parquet,splits.csv} + reports/dataset_card.md
+make sample   # quick end-to-end check on ~100 images (outputs in data/datasets/sample/)
+make all      # full run -> data/datasets/full-real/processed/{features.parquet,splits.csv} + reports/dataset/dataset_card.md
 ```
 
 The first `make identity` also downloads the InsightFace `buffalo_l` weights (~300 MB, into
 `~/.insightface/`). `make identity` and `make landmarks` run on CPU and take a while on ~5,000
 images. Run `make sample` first: it shows a setup problem in minutes instead of after the long run.
 
-After `make all`, read `reports/dataset_card.md` and check the per-class counts, the DIAMOND
+After `make all`, read `reports/dataset/dataset_card.md` and check the per-class counts, the DIAMOND
 shortfall and the rejection reasons (see Q3 in the plan if `yaw_exceeded` rejects > 15%).
 
 ## Data sources (`config.yaml` -> `sources`)
@@ -93,7 +93,7 @@ shortfall and the rejection reasons (see Q3 in the plan if `yaw_exceeded` reject
 | Roboflow `face-detection-beautysense/face-shape-real-lagcm` v4 | DIAMOND only | 100 | CC BY 4.0 |
 
 - A source's `keep_classes` limits which classes it adds; other class folders are ignored by
-  `make manifest` (you may delete them from `data/raw/`, it changes nothing).
+  `make manifest` (you may delete them from `data/inputs/raw/`, it changes nothing).
 - Roboflow `plant-id/shape-face-oumca` is **excluded**: every version is stretched to 640x640,
   which distorts the length/width geometry the features measure.
 - No public source has ~1,000 clean Diamond images, so DIAMOND stays the minority class
@@ -103,8 +103,9 @@ shortfall and the rejection reasons (see Q3 in the plan if `yaw_exceeded` reject
 
 ## Steps
 
-Every step is also a module: `python -m faceshape.<stage>.<step> --config config.yaml --data-dir data`
-(`--help` lists the options). Code layout under `face-shape/src/faceshape/`:
+Every step is also a module: `python -m faceshape.<stage>.<step> --config config.yaml --data-dir data/datasets/full-real`
+(`--help` lists the options; `download`/`manifest` also take `--raw-dir`, `calibrate`/`evaluate`/`export` take
+`--models-dir`). Code layout under `face-shape/src/faceshape/`:
 
 | folder | what lives there |
 |---|---|
@@ -114,7 +115,7 @@ Every step is also a module: `python -m faceshape.<stage>.<step> --config config
 | `training/` | model training (plan 07): `shared` (dataset loading, estimators, best-model helpers), `tune`, `calibrate`, `export` |
 | `evaluation/` | scoring on test + experiments: `baselines` (rule-based), `evaluate`, `ablation` |
 
-| make target | module | output (under `data/`) |
+| make target | module | output (under the dataset `data/datasets/full-real/`; `download` under `data/inputs/`) |
 |---|---|---|
 | `model` | - | `.cache/face_landmarker.task` (same `float16/1` model as the service Dockerfile) |
 | `download` | `dataset.download` | `raw/niten19/`, `raw/<kaggle_extra dir>/`, `raw/roboflow/<slug>/` |
@@ -125,17 +126,32 @@ Every step is also a module: `python -m faceshape.<stage>.<step> --config config
 | `landmarks` | `features.extract_landmarks` | `interim/landmarks.npz`, `interim/rejections.csv` |
 | `features` | `features.build_features` | `processed/features.parquet` |
 | `split` | `dataset.split` | `processed/splits.csv` |
-| `card` | `dataset.dataset_card` | `reports/dataset_card.md`, `reports/class_balance.png` (committed) |
+| `card` | `dataset.dataset_card` | `reports/dataset/dataset_card.md`, `reports/dataset/class_balance.png` (committed; `CARD_DIR=` changes the folder) |
 
 - `make all` runs every step in order; you can also re-run a single step (e.g. `make split`).
 - `make sample` builds the full manifest, then runs the later steps on a seeded, class-stratified
-  ~100-image subset in `data/sample/` (card in `data/sample/reports/`), so full outputs are not
-  overwritten.
-- `data/raw/` is only the download mirror: later steps read `interim/sources.csv`, not the raw
+  ~100-image subset in `data/datasets/sample/` (card in `data/runs/sample/reports/` via `CARD_DIR`), so full outputs
+  are not overwritten.
+- `data/inputs/raw/` is only the download mirror: later steps read `interim/sources.csv`, not the raw
   folders.
-- Manual label fixes: open `data/interim/review/<CLASS>.html`, write
-  `data/interim/review/relabels.csv` (`image_id,new_label|DROP`) and re-run from `make manifest`.
+- Manual label fixes: open `data/datasets/full-real/interim/review/<CLASS>.html`, write
+  `data/datasets/full-real/interim/review/relabels.csv` (`image_id,new_label|DROP`) and re-run from `make manifest`.
+
+`data/` layout (plan 2026-10-19):
+
+```
+data/
+  inputs/raw/         downloaded images (make download)
+  inputs/curated/     filtered real + generated images (plan 2026-10-18, see its README.md)
+  datasets/<name>/    one dataset = interim/ + processed/ (full-real, synth, curated-real,
+                      curated-real-synth, full-real-synth, sample)
+  runs/<run>/models/  calibrated models of one training run (same name as reports/runs/<run>/);
+                      runs/sample/ = scratch outputs of the sample runs (reports/, models/, export/)
+  logs/
+```
 
 Everything under `data/` and `.cache/` (images, landmarks, parquet, model) and `.env` is
-git-ignored; only code, config, docs and `reports/` are committed. Thresholds, class map and seeds
-are in `face-shape/config.yaml`.
+git-ignored; only code, config, docs and `reports/` are committed (`reports/README.md` indexes every
+training run; `make train evaluate ablation export` need `RUN_NAME=v<N>-<data>-<YYYYMMDD>`, which also puts the
+models in `data/runs/<RUN_NAME>/models/`).
+Thresholds, class map and seeds are in `face-shape/config.yaml`.

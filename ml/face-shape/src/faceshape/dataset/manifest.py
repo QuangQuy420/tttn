@@ -63,14 +63,15 @@ def _load_relabels(path: Path, classes: list[str]) -> dict[str, str]:
 
 def main() -> None:
     parser = build_parser("Build interim/sources.csv from all raw sources (label mapping + relabels).")
-    _, config, paths = parse(parser)
+    parser.add_argument("--raw-dir", type=Path, default=Path("data/inputs/raw"), help="raw images (default: data/inputs/raw)")
+    args, config, paths = parse(parser)
     class_map = {k.lower(): v for k, v in config["class_map"].items()}
     drop_labels = {label.lower() for label in config["drop_labels"]}
     relabels = _load_relabels(paths.relabels_csv, config["classes"])
 
     rows: list[dict[str, str]] = []
     rejections: list[dict[str, str]] = []
-    for source, root, source_cfg in _source_roots(config, paths.raw):
+    for source, root, source_cfg in _source_roots(config, args.raw_dir):
         if not root.is_dir():
             print(f"[{source}] {root} not found - source skipped (run `make download`).")
             continue

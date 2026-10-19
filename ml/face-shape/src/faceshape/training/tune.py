@@ -38,7 +38,7 @@ def _json_value(value: object) -> object:
 
 def main() -> None:
     parser = build_parser("Tune SVM / Random Forest / XGBoost with person-grouped CV on train+val.")
-    parser.add_argument("--out-dir", type=Path, default=Path("reports"), help="report folder (default: reports)")
+    parser.add_argument("--out-dir", type=Path, required=True, help="report folder (reports/runs/<run>)")
     parser.add_argument("--cv-folds", type=int, default=None, help="override training.cv_folds")
     args, config, paths = parse(parser)
     from sklearn.model_selection import GridSearchCV

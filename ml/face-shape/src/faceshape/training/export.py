@@ -1,15 +1,17 @@
 """Step `make export`: copy the calibrated best model into the service (AC11, AC12).
 
 Writes `<export-dir>/<version>/model.joblib` (the `CalibratedClassifierCV` of the best algorithm by
-`training.selection` - only sklearn/xgboost objects) and `model_card.json`. Version = `fs-YYYYMMDD-<algo>`.
+`training.selection` - only sklearn/xgboost objects) and `model_card.json`. Version = `<run-name>-<algo>`
+(`--run-name` = the run folder name `v<N>-<data>-<YYYYMMDD>`, e.g. `v2-full-real-20261005` -> `v2-full-real-20261005-svm`).
 Metrics come from `metrics_<algo>.json` written by `make evaluate` (the test set is not re-run).
 Fails when `model.joblib` is larger than `training.max_model_mb`. `--export-dir` overrides
-`training.export_dir` (the sample run writes to `data/sample/export`).
+`training.export_dir` (the sample run writes to `data/runs/sample/export`).
 """
 from __future__ import annotations
 
 import json
 import platform
+import re
 from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version as package_version
 from pathlib import Path
@@ -22,6 +24,9 @@ from faceshape.common import DataPaths, build_parser, fail, parse, require_file
 from faceshape.training.shared import ALGO_NAMES, class_names, label_order, load_calibration, load_tuning, model_path, select_best
 
 _LIBRARIES = {"sklearn": "scikit-learn", "numpy": "numpy", "scipy": "scipy", "joblib": "joblib", "xgboost": "xgboost", "mediapipe": "mediapipe"}
+# Run name `v<N>-<data>-<YYYYMMDD>`; the model id must fit `face_analyses.model_version` (String(64)).
+_RUN_NAME = re.compile(r"v[0-9]+-[a-z0-9]+(-[a-z0-9]+)*-[0-9]{8}")
+_RUN_NAME_MAX = 60
 
 
 def _library_versions() -> dict[str, str | None]:
@@ -48,9 +53,13 @@ def _data_summary(paths: DataPaths) -> dict[str, Any]:
 
 def main() -> None:
     parser = build_parser("Export the calibrated best model + model_card.json.")
-    parser.add_argument("--out-dir", type=Path, default=Path("reports"), help="report folder (default: reports)")
+    parser.add_argument("--out-dir", type=Path, required=True, help="report folder (reports/runs/<run>)")
+    parser.add_argument("--models-dir", type=Path, required=True, help="model folder (data/runs/<run>/models)")
+    parser.add_argument("--run-name", required=True, help="run name v<N>-<data>-<YYYYMMDD>; model id = <run-name>-<algo>")
     parser.add_argument("--export-dir", type=Path, default=None, help="override training.export_dir")
     args, config, paths = parse(parser)
+    if not _RUN_NAME.fullmatch(args.run_name) or len(args.run_name) > _RUN_NAME_MAX:
+        fail(f"--run-name {args.run_name!r} must look like v<N>-<data>-<YYYYMMDD> (lowercase, max {_RUN_NAME_MAX} chars).")
     import joblib
 
     cfg = config["training"]
@@ -61,12 +70,12 @@ def main() -> None:
     metrics_path = args.out_dir / f"metrics_{algo}.json"
     require_file(metrics_path, "Run `make evaluate` first.")
     metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
-    source = model_path(paths, algo)
+    source = model_path(args.models_dir, algo)
     require_file(source, "Run `make train` first.")
     model = joblib.load(source)
 
     now = datetime.now(timezone.utc)
-    model_version = f"fs-{now:%Y%m%d}-{algo}"
+    model_version = f"{args.run_name}-{algo}"
     target = export_dir / model_version
     target.mkdir(parents=True, exist_ok=True)
     model_file = target / "model.joblib"

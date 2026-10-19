@@ -1,9 +1,10 @@
 """Shared CLI + config + path helpers for the face-shape dataset pipeline steps.
 
-Every step is run as `python -m faceshape.<stage>.<step> --config config.yaml --data-dir data` from
-`ml/face-shape/` with `PYTHONPATH=../../face-processing-service:src` (see the Makefile).
-`--data-dir` is the data root; `make sample` points it at `data/sample` so the sample run
-never overwrites the full outputs.
+Every step is run as `python -m faceshape.<stage>.<step> --config config.yaml --data-dir data/datasets/full-real`
+from `ml/face-shape/` with `PYTHONPATH=../../face-processing-service:src` (see the Makefile).
+`--data-dir` is one dataset (`interim/` + `processed/`) under `data/datasets/`; `make sample` points it at
+`data/datasets/sample` so the sample run never overwrites the full outputs. Raw images live in
+`data/inputs/raw/` (`--raw-dir`) and the models of a run in `data/runs/<run>/models` (`--models-dir`).
 """
 import argparse
 import sys
@@ -19,13 +20,9 @@ KEPT = "kept"
 
 @dataclass(frozen=True)
 class DataPaths:
-    """All pipeline files, relative to one data root (`--data-dir`)."""
+    """All pipeline files of one dataset, relative to its root (`--data-dir`)."""
 
     root: Path
-
-    @property
-    def raw(self) -> Path:
-        return self.root / "raw"
 
     @property
     def interim(self) -> Path:
@@ -79,16 +76,12 @@ class DataPaths:
     def splits_csv(self) -> Path:
         return self.processed / "splits.csv"
 
-    @property
-    def models(self) -> Path:
-        """Calibrated models written by `make train` (plan 07), read by evaluate/export."""
-        return self.root / "models"
-
 
 def build_parser(description: str) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--config", type=Path, default=Path("config.yaml"), help="pipeline config (YAML)")
-    parser.add_argument("--data-dir", type=Path, default=Path("data"), help="data root (default: data)")
+    parser.add_argument("--data-dir", type=Path, default=Path("data/datasets/full-real"),
+                        help="dataset root: interim/ + processed/ (default: data/datasets/full-real)")
     return parser
 
 

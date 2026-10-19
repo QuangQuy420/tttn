@@ -1,0 +1,14 @@
+Rule v1 (literature) (test)
+
+              precision    recall  f1-score   support
+
+        OVAL      0.000     0.000     0.000       135
+       ROUND      0.000     0.000     0.000       136
+      SQUARE      0.000     0.000     0.000       138
+       HEART      0.000     0.000     0.000       141
+     DIAMOND      0.027     1.000     0.053        19
+      OBLONG      0.000     0.000     0.000       132
+
+    accuracy                          0.027       701
+   macro avg      0.005     0.167     0.009       701
+weighted avg      0.001     0.027     0.001       701
