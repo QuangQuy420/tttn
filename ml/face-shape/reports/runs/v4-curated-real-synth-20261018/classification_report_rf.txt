@@ -1,0 +1,14 @@
+Random Forest (test)
+
+              precision    recall  f1-score   support
+
+        OVAL      0.333     0.259     0.292       135
+       ROUND      0.554     0.750     0.637       136
+      SQUARE      0.849     0.652     0.738       138
+       HEART      0.292     0.220     0.251       141
+     DIAMOND      0.038     0.105     0.056        19
+      OBLONG      0.655     0.735     0.693       132
+
+    accuracy                          0.509       701
+   macro avg      0.454     0.454     0.445       701
+weighted avg      0.522     0.509     0.508       701

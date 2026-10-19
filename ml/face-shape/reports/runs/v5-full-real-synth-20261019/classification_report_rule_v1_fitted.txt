@@ -1,0 +1,14 @@
+Rule v1 (fitted) (test)
+
+              precision    recall  f1-score   support
+
+        OVAL      0.314     0.281     0.297       135
+       ROUND      0.517     0.684     0.589       136
+      SQUARE      0.771     0.732     0.751       138
+       HEART      0.269     0.227     0.246       141
+     DIAMOND      0.018     0.053     0.026        19
+      OBLONG      0.645     0.455     0.533       132
+
+    accuracy                          0.464       701
+   macro avg      0.422     0.405     0.407       701
+weighted avg      0.489     0.464     0.470       701

@@ -1,10 +1,10 @@
-"""Step `make card`: dataset card `reports/dataset_card.md` + `reports/class_balance.png`.
+"""Step `make card`: dataset card `reports/dataset/dataset_card.md` + `reports/dataset/class_balance.png`.
 
 Summarizes every step's outputs: counts per class per split, DIAMOND vs the required minimum,
 imbalance ratio, dedup / identity / rejection stats, sources + licenses and known limitations.
 Only `processed/splits.csv` is required; missing upstream files are reported as "n/a"
 (e.g. `make sample` never re-runs `manifest`, so it has no manifest rejections).
-`--out-dir` lets `make sample` write its card under `data/sample/reports/`.
+`--out-dir` lets `make sample` write its card under `data/runs/sample/reports/`.
 """
 from __future__ import annotations
 
@@ -116,7 +116,7 @@ def _sources_section(sources: pd.DataFrame | None, config: dict[str, Any]) -> li
 
 def main() -> None:
     parser = build_parser("Write the dataset card (markdown + class balance chart).")
-    parser.add_argument("--out-dir", type=Path, default=Path("reports"), help="output folder (default: reports)")
+    parser.add_argument("--out-dir", type=Path, default=Path("reports/dataset"), help="output folder (default: reports/dataset)")
     args, config, paths = parse(parser)
     require_file(paths.splits_csv, "Run `make split` first.")
     classes: list[str] = config["classes"]

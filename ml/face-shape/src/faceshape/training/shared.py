@@ -138,8 +138,8 @@ def load_tuning(out_dir: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def model_path(paths: DataPaths, algo: str) -> Path:
-    return paths.models / f"{algo}_calibrated.joblib"
+def model_path(models_dir: Path, algo: str) -> Path:
+    return models_dir / f"{algo}_calibrated.joblib"
 
 
 def calibration_path(out_dir: Path) -> Path:

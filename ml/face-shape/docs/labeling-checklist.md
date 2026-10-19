@@ -1,7 +1,7 @@
 # Face-shape labeling checklist
 
 Use this checklist when reviewing the contact sheets from `make review`
-(`data/interim/review/<CLASS>.html`). Labels are judged on the face outline only
+(`data/datasets/full-real/interim/review/<CLASS>.html`). Labels are judged on the face outline only
 (forehead, cheekbones, jaw, chin, length vs width), not on hair, makeup or expression.
 
 ## Class rules
@@ -33,9 +33,9 @@ softness vs length), HEART vs DIAMOND (is the forehead wide or narrow?), SQUARE 
 
 ## Review procedure
 
-1. Run `make manifest review`. Open `data/interim/review/index.html`.
+1. Run `make manifest review`. Open `data/datasets/full-real/interim/review/index.html`.
 2. **Pass 1 (per class):** scroll each class page and note every wrong or unusable image in
-   `data/interim/review/relabels.csv`:
+   `data/datasets/full-real/interim/review/relabels.csv`:
 
    ```csv
    image_id,new_label

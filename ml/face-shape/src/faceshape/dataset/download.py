@@ -1,10 +1,10 @@
-"""Step `make download`: fetch the raw datasets into `<data-dir>/raw/`.
+"""Step `make download`: fetch the raw datasets into `<raw-dir>/` (default `data/inputs/raw/`).
 
-(a) Kaggle `niten19/face-shape-dataset` -> `raw/niten19/` (needs an API token: `KAGGLE_API_TOKEN` or
+(a) Kaggle `niten19/face-shape-dataset` -> `<raw-dir>/niten19/` (needs an API token: `KAGGLE_API_TOKEN` or
     `~/.kaggle/access_token` (new `KGAT_...` tokens), or the legacy `~/.kaggle/kaggle.json` /
     `KAGGLE_USERNAME`+`KAGGLE_KEY`; exits non-zero when missing).
-    Each `kaggle_extra` dataset -> `raw/<dir>/` the same way.
-(b) Each Roboflow project in the config -> `raw/roboflow/<slug>/`: via the `roboflow` package when
+    Each `kaggle_extra` dataset -> `<raw-dir>/<dir>/` the same way.
+(b) Each Roboflow project in the config -> `<raw-dir>/roboflow/<slug>/`: via the `roboflow` package when
     `ROBOFLOW_API_KEY` is set, else a manual "Folder Structure" export already placed there (a zip
     is extracted), else print instructions and skip (plan Q5).
 Sources that already hold images are skipped, so re-running is cheap.
@@ -91,14 +91,15 @@ def download_roboflow(ds: dict[str, Any], raw_dir: Path) -> None:
 
 
 def main() -> None:
-    parser = build_parser("Download the Kaggle niten19 and Roboflow datasets into <data-dir>/raw/.")
-    _, config, paths = parse(parser)
+    parser = build_parser("Download the Kaggle niten19 and Roboflow datasets into <raw-dir>/.")
+    parser.add_argument("--raw-dir", type=Path, default=Path("data/inputs/raw"), help="raw images (default: data/inputs/raw)")
+    args, config, _ = parse(parser)
     sources = config["sources"]
-    download_kaggle(sources["kaggle"], paths.raw)
+    download_kaggle(sources["kaggle"], args.raw_dir)
     for ds in sources.get("kaggle_extra") or []:
-        download_kaggle(ds, paths.raw)
+        download_kaggle(ds, args.raw_dir)
     for ds in sources.get("roboflow") or []:
-        download_roboflow(ds, paths.raw)
+        download_roboflow(ds, args.raw_dir)
 
 
 if __name__ == "__main__":

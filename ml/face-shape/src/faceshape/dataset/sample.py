@@ -1,9 +1,9 @@
 """Step used by `make sample`: seeded, class-stratified subset of the full manifest.
 
-Reads `<source-dir>/interim/sources.csv` (the full manifest, default `data/`) and writes
-`sample.sample_size` rows to `<data-dir>/interim/sources.csv` (`make sample` uses
-`--data-dir data/sample`). The later steps then run with the same `--data-dir`, so the full
-outputs under `data/` are never overwritten. Image paths still point at `data/raw/`.
+Reads `<source-dir>/interim/sources.csv` (the full manifest, default `data/datasets/full-real/`) and
+writes `sample.sample_size` rows to `<data-dir>/interim/sources.csv` (`make sample` uses
+`--data-dir data/datasets/sample`). The later steps then run with the same `--data-dir`, so the full
+outputs under `data/datasets/full-real/` are never overwritten. Image paths still point at `data/inputs/raw/`.
 """
 from pathlib import Path
 
@@ -12,7 +12,9 @@ from faceshape.common import DataPaths, build_parser, parse, require_file
 
 def main() -> None:
     parser = build_parser("Write a stratified sample of the full manifest into <data-dir>/interim/sources.csv.")
-    parser.add_argument("--source-dir", type=Path, default=Path("data"), help="data root of the full manifest")
+    parser.add_argument(
+        "--source-dir", type=Path, default=Path("data/datasets/full-real"), help="dataset of the full manifest"
+    )
     args, config, paths = parse(parser)
     import pandas as pd
 

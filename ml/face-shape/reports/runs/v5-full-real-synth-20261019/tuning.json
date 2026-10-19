@@ -1,0 +1,46 @@
+{
+  "created_at": "2026-10-19T03:19:03+00:00",
+  "seed": 42,
+  "cv_folds": 5,
+  "scoring": "f1_macro",
+  "n_images": 5244,
+  "n_persons": 689,
+  "algos": {
+    "svm": {
+      "name": "SVM (RBF)",
+      "status": "trained",
+      "best_params": {
+        "clf__C": 10,
+        "clf__gamma": 0.03
+      },
+      "cv_macro_f1": 0.6110946000933182,
+      "cv_macro_f1_std": 0.06940075263606867,
+      "n_candidates": 20
+    },
+    "rf": {
+      "name": "Random Forest",
+      "status": "trained",
+      "best_params": {
+        "max_depth": 16,
+        "max_features": 0.5,
+        "min_samples_leaf": 3,
+        "n_estimators": 200
+      },
+      "cv_macro_f1": 0.5991634474024232,
+      "cv_macro_f1_std": 0.07024221310777133,
+      "n_candidates": 48
+    },
+    "xgb": {
+      "name": "XGBoost",
+      "status": "trained",
+      "best_params": {
+        "learning_rate": 0.05,
+        "max_depth": 4,
+        "n_estimators": 400
+      },
+      "cv_macro_f1": 0.6044138148598238,
+      "cv_macro_f1_std": 0.07031843603420479,
+      "n_candidates": 12
+    }
+  }
+}

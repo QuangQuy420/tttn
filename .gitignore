@@ -50,3 +50,5 @@ AGENTS.md
 ml/**/data/
 ml/**/.cache/
 ml/**/*.parquet
+
+tool-generate-image/*

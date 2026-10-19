@@ -1,5 +1,6 @@
 # Face-shape dataset pipeline config (plan 06). Paths are relative to ml/face-shape/.
-# Data files live under the --data-dir root (default: data/, `make sample`: data/sample/).
+# Dataset files live under the --data-dir root (default: data/datasets/full-real/, `make sample`: data/datasets/sample/);
+# raw images under data/inputs/raw/ (--raw-dir).
 
 paths:
   # Downloaded by `make model` (same float16/1 URL as face-processing-service/Dockerfile).
@@ -8,7 +9,7 @@ paths:
 sources:
   kaggle:
     slug: niten19/face-shape-dataset
-    dir: niten19  # -> <data-dir>/raw/niten19/
+    dir: niten19  # -> data/inputs/raw/niten19/
     source_url: https://www.kaggle.com/datasets/niten19/face-shape-dataset
     license: "unclear (scraped celebrity images) - research use only"
 
@@ -16,22 +17,22 @@ sources:
   # ~1,000 clean Diamond images, so we pool the small ones). Neither states a license -> research use only.
   kaggle_extra:
     - slug: minhquangbui/face-shapes
-      dir: minhquangbui  # -> <data-dir>/raw/minhquangbui/ (64 diamond images)
+      dir: minhquangbui  # -> data/inputs/raw/minhquangbui/ (64 diamond images)
       source_url: https://www.kaggle.com/datasets/minhquangbui/face-shapes
       license: "not stated - research use only"
       keep_classes: [DIAMOND]
     - slug: lucifierx/face-shape-classification
-      dir: lucifierx  # -> <data-dir>/raw/lucifierx/ (12 diamond images)
+      dir: lucifierx  # -> data/inputs/raw/lucifierx/ (12 diamond images)
       source_url: https://www.kaggle.com/datasets/lucifierx/face-shape-classification
       license: "not stated - research use only"
       keep_classes: [DIAMOND]
 
   # Roboflow Universe classification projects (CC BY 4.0), downloaded in "folder" format into
-  # <data-dir>/raw/roboflow/<slug>/. TODO(confirm): the workspace/project slugs below come from the
+  # data/inputs/raw/roboflow/<slug>/. TODO(confirm): the workspace/project slugs below come from the
   # Universe URLs in the plan, but the version numbers have NOT been checked. Open each URL, check
   # the class names + the latest version, and set `version` (an integer). While `version` is null
   # the API download is skipped; a manual "Folder Structure" export (zip or extracted) placed in
-  # <data-dir>/raw/roboflow/<slug>/ is still used.
+  # data/inputs/raw/roboflow/<slug>/ is still used.
   # Pick a version exported WITHOUT augmentations (flip/rotate/etc.): augmented copies are the same
   # face and would inflate the class counts (dedup catches mirrored copies, not every augmentation).
   roboflow:
@@ -107,7 +108,7 @@ sample:
 card:
   diamond_min: 200
 
-# Plan 07: model training + evaluation (`make train evaluate ablation export`).
+# Plan 07: model training + evaluation (`make train evaluate ablation export RUN_NAME=v<N>-<data>-<YYYYMMDD>`).
 training:
   seed: 42
   # StratifiedGroupKFold folds (groups = person_id) on train+val for tuning + ablation.
@@ -116,13 +117,13 @@ training:
   calibration: sigmoid  # Q3: sigmoid (Platt) rather than isotonic - small data
   # Plan 2026-10-05: sample weights of the sigmoid fit on val. Sigmoid fitted on val's real class
   # frequencies (DIAMOND ~3%) cancels the model's class_weight balancing, so the calibrated SVM never
-  # predicted DIAMOND. `balanced` = weight n / (k * n_c) per class; `null` reproduces v1 (fs-20260930-svm).
+  # predicted DIAMOND. `balanced` = weight n / (k * n_c) per class; `null` reproduces v1 (v1-full-real-20260930-svm).
   calibration_weight: balanced
   # Final-model selection: `calibrated_cv` = person-grouped CV macro-F1 of the whole "fit + calibrate"
   # pipeline (calibration.json, what is deployed); `tuning_cv` = v1 rule (uncalibrated tuning CV).
   selection: calibrated_cv
   max_model_mb: 5  # roadmap C1: export fails above this
-  # Where `make export` writes <version>/model.joblib + model_card.json (`EXPORT_DIR=` overrides it).
+  # Where `make export` writes <run-name>-<algo>/model.joblib + model_card.json (`EXPORT_DIR=` overrides it).
   export_dir: ../../face-processing-service/models/face_shape
   # GridSearchCV grids (scoring f1_macro). SVM params are prefixed by the pipeline step name `clf`.
   grids:
