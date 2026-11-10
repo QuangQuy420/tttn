@@ -5,6 +5,8 @@ Docker Compose.
 
 - `face-shape/` - face-shape dataset pipeline (plan 06): download -> manifest + relabel -> dedup ->
   pseudo-identities -> MediaPipe landmarks -> geometric features -> identity-aware split -> dataset card.
+- `recommendation/` - behavior simulator + ranking dataset for the personalized ranker (plan 09),
+  see the `recommendation/` section at the end.
 
 The feature code is **not** in this folder: the scripts import
 `face-processing-service/app/ml/face_features.py`, so training and the `/analyze` endpoint use the
@@ -155,3 +157,19 @@ git-ignored; only code, config, docs and `reports/` are committed (`reports/READ
 training run; `make train evaluate ablation export` need `RUN_NAME=v<N>-<data>-<YYYYMMDD>`, which also puts the
 models in `data/runs/<RUN_NAME>/models/`).
 Thresholds, class map and seeds are in `face-shape/config.yaml`.
+
+## recommendation/
+
+Behavior simulator + dataset builder for AI 2 (plan 09). Same conventions as `face-shape/`: its own
+Python 3.11 venv in `ml/recommendation/.venv/`, `python -m recsys.<step>` modules, Makefile with
+`PYTHONPATH=../../recommendation-service:src` - the features come from
+`recommendation-service/app/ml/features.py` (train/serve parity).
+
+```bash
+cd ml/recommendation
+uv venv -p 3.11 .venv && uv pip install -p .venv/bin/python -r requirements.txt
+make all CATALOG_SOURCE=seed   # simulate -> dataset -> reports/dataset_card.{md,json}, offline
+```
+
+`make publish` / `make export-real` need the running stack (`docker compose` in `infra/`). Details
+(catalog sources, env vars, AC checks) in `recommendation/README.md`.

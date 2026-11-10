@@ -1,0 +1,74 @@
+# Behavior simulator config (plan 09). CLI flags --users / --days / --seed override the top keys.
+# Defaults are tuned so `make all` (2000 users, 90 days) gives ~15-25 events per user.
+seed: 42
+users: 2000
+days: 90
+# Timestamps count from this fixed instant (never now()), so a seeded run is reproducible (AC5).
+start_date: "2026-06-01T00:00:00+00:00"
+
+catalog:
+  url: http://localhost:8080/api/products
+
+persona:
+  gender_probs: {MALE: 0.5, FEMALE: 0.5}
+  face_shape_probs: {OVAL: 0.30, ROUND: 0.20, SQUARE: 0.15, HEART: 0.15, OBLONG: 0.12, DIAMOND: 0.08}
+  # price_center ~ LogNormal(mean/std of log catalog prices * price_sigma_scale)
+  price_sigma_scale: 1.0
+  # price tolerance in log-price units ~ U(low, high)
+  price_tol: [0.25, 0.6]
+  # Dirichlet concentrations (symmetric) over the 8 frame shapes / 6 materials / colors / brands
+  alpha_shape: 0.5
+  alpha_material: 0.5
+  alpha_color: 0.5
+  alpha_brand: 0.5
+  # gamma = face-fit sensitivity ~ Beta(a, b)
+  gamma_beta: [1.2, 1.2]
+  # pop_bias ~ U(0, max)
+  pop_bias_max: 0.5
+  # activity = sessions per day ~ Gamma(shape, scale)
+  activity_shape: 2.0
+  activity_scale: 0.03
+
+utility:
+  w_shape: 4.0
+  w_material: 1.5
+  w_color: 1.5
+  w_brand: 2.0
+  w_face: 2.5
+  w_price: 2.0
+  gender_match: 0.5
+  gender_mismatch_penalty: 2.0
+  # epsilon ~ Gumbel(0, noise_scale)
+  noise_scale: 0.5
+
+session:
+  # items exposed per session
+  k: 12
+  # share of "browse/search" sessions (slate ~ softmax(U / t_browse)); the rest are "homepage"
+  browse_share: 0.6
+  # homepage slate weights: home_pop_share * popularity + (1 - home_pop_share) * uniform
+  home_pop_share: 0.5
+  t_browse: 1.0
+  # views per session = min(k, 1 + Poisson(view_rate)), chosen from the slate ~ softmax(U / t_browse)
+  view_rate: 1.6
+  # seconds between consecutive views / chain steps ~ U(low, high)
+  view_gap_s: [20, 180]
+  step_gap_s: [5, 120]
+  purchase_gap_s: [60, 1800]
+
+funnel:
+  # P(step | previous step) = sigmoid(a + b * U)
+  try_on: {a: -4.4, b: 0.7}
+  like: {a: -3.9, b: 0.6}
+  add_to_cart: {a: -3.9, b: 0.6}
+  purchase: {a: -4.2, b: 0.6}
+  # share of LIKEs that did not reach ADD_TO_CART and are UNLIKEd later, after U(low, high) days
+  unlike_share: 0.05
+  unlike_delay_days: [0.1, 7.0]
+  max_purchases_per_user: 3
+
+drift:
+  # at day days * at_fraction, this share of users moves theta_shape to (1 - mix) * theta + mix * theta_new
+  at_fraction: 0.5
+  user_share: 0.2
+  mix: 0.3

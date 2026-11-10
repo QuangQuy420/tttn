@@ -6,4 +6,5 @@ sqlalchemy[asyncio]>=2.0
 asyncpg
 alembic
 aio-pika>=9.4
+numpy
 pytest
