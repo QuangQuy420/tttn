@@ -1,7 +1,8 @@
 # ml/recommendation
 
-Behavior simulator + dataset builder for the personalized ranker (AI 2 / PreferenceScore,
-plan `.planning/2026-09-29-09-recsys-behavior-dataset.md`). Offline work, not a service.
+Behavior simulator + dataset builder (plan `.planning/2026-09-29-09-recsys-behavior-dataset.md`)
+and the train / evaluate / export steps (plan 10, see "Train & evaluate") for the personalized
+ranker (AI 2 / PreferenceScore). Offline work, not a service.
 
 The feature code is **not** in this folder: the scripts import
 `recommendation-service/app/ml/features.py` (`FEATURE_SCHEMA_VERSION = "rec-v1"`, 63 features), so
@@ -43,8 +44,59 @@ Every step is also `python -m recsys.<module> --help`. Make variables: `CONFIG`,
 To build a dataset from real data: `make dataset INTERACTIONS=data/real/interactions.parquet`
 (output in `data/real/dataset/`; the card shows the gamma section as "n/a").
 
-Only code, `configs/` and `reports/` are committed; everything under `data/` is git-ignored
+Only code, `configs/` and `reports/` (dataset card, `preference_results.*`, `figures/`) are committed; everything under `data/` is git-ignored
 (root `.gitignore`: `ml/**/data/`, `ml/**/*.parquet`).
+
+## Train & evaluate (plan 10, PreferenceScore)
+
+Plan `.planning/2026-09-29-10-preference-model-training.md`. Needs the dataset above
+(`make all CATALOG_SOURCE=seed` first; `data/` is git-ignored). CPU only, about 4 minutes in total.
+
+```bash
+make train                          # ~3 min -> data/models/<name>/model.joblib + data/models/val_results.json
+make evaluate                       # ~40 s  -> reports/preference_results.{md,csv,json} + reports/figures/*.png
+make export RUN_NAME=v1-sim-20261110   # -> recommendation-service/models/preference/v1-sim-20261110-<algo>/
+# real data (dataset built with `make dataset INTERACTIONS=data/real/interactions.parquet`):
+make train evaluate DATASET_DIR=data/real/dataset
+make export DATASET_DIR=data/real/dataset SOURCE=real RUN_NAME=v2-real-YYYYMMDD
+```
+
+| make target | module | output |
+|---|---|---|
+| `train` | `recsys.train` | `data/models/{lr,rf,xgb,xgbrank,<best binary>_ge1,<best binary>_ge3}/model.joblib` (+ `als/` when `implicit` is installed), `data/models/val_results.json` |
+| `evaluate` | `recsys.evaluate` | `reports/preference_results.{md,csv,json}`, `reports/figures/{metrics_bar,reliability,feature_importance}.png` (committed) |
+| `export` | `recsys.export` | `recommendation-service/models/preference/<run>-<algo>/{model.json or model.joblib, model_card.json}` |
+
+Make variables: `DATASET_DIR` (default `$(SIM_DIR)/dataset`; `data/real/dataset` for real data),
+`MODELS_DIR` (`data/models`), `TRAIN_SEED` (default 42: every estimator, the bootstrap and the
+permutation importance; separate from the dataset `SEED`), `RUN_NAME` (`v<N>-<data>-<YYYYMMDD>`,
+required by `export`), `SOURCE` (`simulated|real|mixed`, written to the model card).
+
+- **Models:** baselines Popularity (`p_log_pop`) and Content-based (mean of `x_cos_shape`,
+  `x_cos_material`, `x_color_affinity`, `x_brand_affinity`, `1 - min(x_price_abs_z, 3) / 3`); ALS
+  only when `implicit` is installed (optional line in `requirements.txt`, otherwise skipped with a
+  note, never exported). Logistic Regression, Random Forest, XGBoost binary (target `label >= 2`)
+  and XGBoost ranker (`rank:ndcg`, graded labels, `qid = group_id`), small fixed grids, no early
+  stopping. Ablation: the best binary family re-trained with `label >= 1` and `label >= 3`.
+- **Selection (val only):** mean NDCG@10 inside the val groups (1 positive + 20 sampled
+  negatives - a sampled metric, used only for tuning and choosing the best model). `train` reads
+  only `train/val.parquet`; `evaluate` only loads the frozen models.
+- **PreferenceScore:** sigmoid (Platt) of the raw score fitted on val, computed by
+  `recommendation-service/app/ml/preference.py` (same code in training and serving). `a`, `b` and
+  the raw score kind are stored in `val_results.json` and the model card (no calibrator file).
+  The probabilities are relative to the 1:20 sampled negatives.
+- **Test:** full ranking of each test user's `eval_candidates` block (no sampled metric), every
+  test user, P/R/HitRate/NDCG @5 and @10 with 95% bootstrap CI (1000 user resamples), coverage@10,
+  mean price of the top 10; a second table for users whose test label >= 2; the ablation table;
+  Brier + reliability diagram; permutation importance of the best model on val. With one held-out
+  product per user, Recall@K = HitRate@K and Precision@K = HitRate@K / K.
+- **Export:** the best primary model (val NDCG@10), `model.json` (XGBoost native, load with
+  `xgboost.Booster(model_file=...)`) or `model.joblib` (sklearn, `scikit-learn==1.9.1`,
+  `joblib==1.6.0`), plus `model_card.json` (roadmap C1: calibration, params, val/test metrics,
+  data summary, library versions, `uses_face_shape_features: false`). The script refuses an
+  existing version folder and a model file >= 5 MB. Not loaded by the service until plan 11.
+- **Reproducible:** the same `TRAIN_SEED` gives the same `reports/preference_results.csv` (within
+  0.001; the optional ALS row excluded).
 
 ## Catalog
 

@@ -1,0 +1,181 @@
+{
+  "algorithm": "XGBoost ranker",
+  "best_params": {
+    "colsample_bytree": 0.8,
+    "learning_rate": 0.05,
+    "max_depth": 6,
+    "n_estimators": 300,
+    "subsample": 0.8,
+    "tree_method": "hist"
+  },
+  "calibration": {
+    "a": 1.6506522283039458,
+    "b": -3.7862954903479227,
+    "fitted_on": "val",
+    "method": "sigmoid",
+    "raw_score": "margin"
+  },
+  "created_at": "2026-11-10T10:10:37+00:00",
+  "feature_names": [
+    "u_shape_ROUND",
+    "u_shape_SQUARE",
+    "u_shape_OVAL",
+    "u_shape_CAT_EYE",
+    "u_shape_AVIATOR",
+    "u_shape_RECTANGLE",
+    "u_shape_WAYFARER",
+    "u_shape_RIMLESS",
+    "u_material_ACETATE",
+    "u_material_METAL",
+    "u_material_TITANIUM",
+    "u_material_TR90",
+    "u_material_PLASTIC",
+    "u_material_MIXED",
+    "u_price_mean",
+    "u_price_std",
+    "u_cnt_VIEW_7d",
+    "u_cnt_VIEW_30d",
+    "u_cnt_VIEW_all",
+    "u_cnt_TRY_ON_7d",
+    "u_cnt_TRY_ON_30d",
+    "u_cnt_TRY_ON_all",
+    "u_cnt_LIKE_7d",
+    "u_cnt_LIKE_30d",
+    "u_cnt_LIKE_all",
+    "u_cnt_ADD_TO_CART_7d",
+    "u_cnt_ADD_TO_CART_30d",
+    "u_cnt_ADD_TO_CART_all",
+    "u_cnt_PURCHASE_7d",
+    "u_cnt_PURCHASE_30d",
+    "u_cnt_PURCHASE_all",
+    "u_days_since_last",
+    "u_n_products",
+    "u_has_history",
+    "p_shape_ROUND",
+    "p_shape_SQUARE",
+    "p_shape_OVAL",
+    "p_shape_CAT_EYE",
+    "p_shape_AVIATOR",
+    "p_shape_RECTANGLE",
+    "p_shape_WAYFARER",
+    "p_shape_RIMLESS",
+    "p_material_ACETATE",
+    "p_material_METAL",
+    "p_material_TITANIUM",
+    "p_material_TR90",
+    "p_material_PLASTIC",
+    "p_material_MIXED",
+    "p_gender_MALE",
+    "p_gender_FEMALE",
+    "p_gender_UNISEX",
+    "p_price",
+    "p_price_band",
+    "p_log_pop",
+    "p_purchase_rate",
+    "p_age_days",
+    "x_cos_shape",
+    "x_cos_material",
+    "x_color_affinity",
+    "x_brand_affinity",
+    "x_price_z",
+    "x_price_abs_z",
+    "x_brand_events"
+  ],
+  "feature_schema_version": "rec-v1",
+  "label_definition": "graded 0-4",
+  "library_versions": {
+    "joblib": "1.6.0",
+    "numpy": "2.4.6",
+    "python": "3.11.15",
+    "scipy": "1.17.1",
+    "sklearn": "1.9.1",
+    "xgboost": "3.2.0"
+  },
+  "metrics": {
+    "brier": {
+      "test": 0.015804542653148224,
+      "val": 0.01643281102009346
+    },
+    "test": {
+      "coverage@10": {
+        "ci_high": null,
+        "ci_low": null,
+        "mean": 1.0
+      },
+      "hitrate@10": {
+        "ci_high": 0.4699074074074074,
+        "ci_low": 0.4230324074074074,
+        "mean": 0.4461805555555556
+      },
+      "hitrate@5": {
+        "ci_high": 0.29224537037037035,
+        "ci_low": 0.2505787037037037,
+        "mean": 0.2708333333333333
+      },
+      "mean_price@10": {
+        "ci_high": 2586752.4016203703,
+        "ci_low": 2486271.3975694445,
+        "mean": 2537741.8981481483
+      },
+      "n_users": {
+        "ci_high": null,
+        "ci_low": null,
+        "mean": 1728.0
+      },
+      "ndcg@10": {
+        "ci_high": 0.25000946727061985,
+        "ci_low": 0.22034040468356522,
+        "mean": 0.23540429622944037
+      },
+      "ndcg@5": {
+        "ci_high": 0.19389196026107422,
+        "ci_low": 0.1636009179567078,
+        "mean": 0.17879856323047486
+      },
+      "precision@10": {
+        "ci_high": 0.04699074074074055,
+        "ci_low": 0.042303240740740815,
+        "mean": 0.04461805555555555
+      },
+      "precision@5": {
+        "ci_high": 0.05844907407407459,
+        "ci_low": 0.05011574074074114,
+        "mean": 0.05416666666666667
+      },
+      "recall@10": {
+        "ci_high": 0.4699074074074074,
+        "ci_low": 0.4230324074074074,
+        "mean": 0.4461805555555556
+      },
+      "recall@5": {
+        "ci_high": 0.29224537037037035,
+        "ci_low": 0.2505787037037037,
+        "mean": 0.2708333333333333
+      }
+    },
+    "val": {
+      "ndcg@10": 0.38163312901980495
+    }
+  },
+  "model_size_mb": 2.03,
+  "objective": "rank:ndcg",
+  "price_band_edges": [
+    905000.0,
+    1840000.0,
+    4230000.0
+  ],
+  "training_data_summary": {
+    "catalog_source": "seed",
+    "events": 44390,
+    "items": 60,
+    "seeds": {
+      "dataset": 42,
+      "sim": 42,
+      "train": 42
+    },
+    "source": "simulated",
+    "users": 1859
+  },
+  "uses_face_shape_features": false,
+  "version": "v1-sim-20261110-xgbrank"
+}

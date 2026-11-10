@@ -5,7 +5,8 @@ Docker Compose.
 
 - `face-shape/` - face-shape dataset pipeline (plan 06): download -> manifest + relabel -> dedup ->
   pseudo-identities -> MediaPipe landmarks -> geometric features -> identity-aware split -> dataset card.
-- `recommendation/` - behavior simulator + ranking dataset for the personalized ranker (plan 09),
+- `recommendation/` - behavior simulator + ranking dataset (plan 09) and the PreferenceScore
+  train / evaluate / export steps (plan 10) for the personalized ranker,
   see the `recommendation/` section at the end.
 
 The feature code is **not** in this folder: the scripts import
@@ -160,8 +161,8 @@ Thresholds, class map and seeds are in `face-shape/config.yaml`.
 
 ## recommendation/
 
-Behavior simulator + dataset builder for AI 2 (plan 09). Same conventions as `face-shape/`: its own
-Python 3.11 venv in `ml/recommendation/.venv/`, `python -m recsys.<step>` modules, Makefile with
+Behavior simulator + dataset builder (plan 09) and PreferenceScore training (plan 10) for AI 2.
+Same conventions as `face-shape/`: its own Python 3.11 venv in `ml/recommendation/.venv/`, `python -m recsys.<step>` modules, Makefile with
 `PYTHONPATH=../../recommendation-service:src` - the features come from
 `recommendation-service/app/ml/features.py` (train/serve parity).
 
@@ -169,7 +170,9 @@ Python 3.11 venv in `ml/recommendation/.venv/`, `python -m recsys.<step>` module
 cd ml/recommendation
 uv venv -p 3.11 .venv && uv pip install -p .venv/bin/python -r requirements.txt
 make all CATALOG_SOURCE=seed   # simulate -> dataset -> reports/dataset_card.{md,json}, offline
+make train evaluate            # LR / RF / XGBoost (+ baselines) -> reports/preference_results.{md,csv,json}
+make export RUN_NAME=v1-sim-20261110   # best model -> recommendation-service/models/preference/<run>-<algo>/
 ```
 
 `make publish` / `make export-real` need the running stack (`docker compose` in `infra/`). Details
-(catalog sources, env vars, AC checks) in `recommendation/README.md`.
+(catalog sources, env vars, AC checks, the train / evaluate protocol) in `recommendation/README.md`.
