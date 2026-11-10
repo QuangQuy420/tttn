@@ -25,6 +25,9 @@ app/
   schemas/        # Pydantic DTOs (incl. the behavior event payload)
   core/           # config, internal-key auth, face-shape→frame mapping config
   ml/             # features.py — pure ranker features (numpy only), shared with ml/recommendation
+                  # preference.py — raw model score → calibrated PreferenceScore (numpy only), shared too
+models/
+  preference/<version>/  # exported PreferenceScore model: model.joblib or model.json + model_card.json
 alembic/          # migrations — run by entrypoint.sh (`alembic upgrade head`) on start
 tests/            # unit tests
 ```
@@ -93,3 +96,6 @@ and the RabbitMQ credentials in `RABBITMQ_URL` must match `RABBITMQ_USER` /
 - `POST /recommend` does not use the stored behavior yet — personalized recommendation
   on top of `interactions` comes in a later plan.
 - Stored events are never deleted for now (small thesis dataset).
+- `models/preference/<version>/` is written by `make export` in `ml/recommendation`
+  (best model by val NDCG@10; calibration params live in `model_card.json`). It is not
+  loaded by the service yet — loading comes in a later plan (plan 11).
