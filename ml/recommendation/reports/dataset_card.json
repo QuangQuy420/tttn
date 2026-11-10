@@ -1,0 +1,222 @@
+{
+  "dataset_dir": "data/sim/dataset",
+  "dataset_meta": {
+    "catalog_source": "seed",
+    "feature_schema_version": "rec-v1",
+    "n_catalog_products": 60,
+    "n_dropped": 0,
+    "n_events_used": 44390,
+    "n_negatives_per_positive": 20,
+    "price_band_edges": [
+      905000.0,
+      1840000.0,
+      4230000.0
+    ],
+    "seed": 42
+  },
+  "feature_names_containing_face": [],
+  "feature_schema_version": "rec-v1",
+  "features_match_schema": true,
+  "interactions": "data/sim/interactions.parquet",
+  "interactions_stats": {
+    "events_by_source": {
+      "simulator": 44390
+    },
+    "events_by_type": {
+      "ADD_TO_CART": 1760,
+      "LIKE": 3593,
+      "PURCHASE": 840,
+      "TRY_ON": 10021,
+      "UNLIKE": 72,
+      "VIEW": 28104
+    },
+    "events_per_user": {
+      "mean": 23.88,
+      "median": 19.0,
+      "p10": 5.0,
+      "p90": 49.0
+    },
+    "funnel": {
+      "counts": {
+        "ADD_TO_CART": 1760,
+        "LIKE": 3593,
+        "PURCHASE": 840,
+        "TRY_ON": 10021,
+        "VIEW": 28104
+      },
+      "step_ratio": {
+        "ADD_TO_CART/LIKE": 0.4898,
+        "LIKE/TRY_ON": 0.3585,
+        "PURCHASE/ADD_TO_CART": 0.4773,
+        "TRY_ON/VIEW": 0.3566
+      },
+      "strictly_decreasing": true
+    },
+    "n_events": 44390,
+    "n_pairs": 18900,
+    "n_products_interacted": 60,
+    "n_users": 1859,
+    "sparsity": 0.8306,
+    "time_range": [
+      "2026-06-01T00:19:40.638474+00:00",
+      "2026-08-30T00:01:33.848728+00:00"
+    ]
+  },
+  "n_features": 63,
+  "personas": {
+    "drifted_share": 0.2075,
+    "face_shape_shares": {
+      "DIAMOND": 0.076,
+      "HEART": 0.15,
+      "OBLONG": 0.122,
+      "OVAL": 0.3065,
+      "ROUND": 0.2005,
+      "SQUARE": 0.145
+    },
+    "gamma_histogram": [
+      {
+        "bin": "[0.0, 0.1)",
+        "count": 140
+      },
+      {
+        "bin": "[0.1, 0.2)",
+        "count": 177
+      },
+      {
+        "bin": "[0.2, 0.3)",
+        "count": 201
+      },
+      {
+        "bin": "[0.3, 0.4)",
+        "count": 194
+      },
+      {
+        "bin": "[0.4, 0.5)",
+        "count": 224
+      },
+      {
+        "bin": "[0.5, 0.6)",
+        "count": 246
+      },
+      {
+        "bin": "[0.6, 0.7)",
+        "count": 230
+      },
+      {
+        "bin": "[0.7, 0.8)",
+        "count": 244
+      },
+      {
+        "bin": "[0.8, 0.9)",
+        "count": 197
+      },
+      {
+        "bin": "[0.9, 1.0]",
+        "count": 147
+      }
+    ],
+    "gamma_share_above_0_85": 0.1215,
+    "gamma_share_below_0_15": 0.1155,
+    "gamma_shares_ok": true,
+    "gender_shares": {
+      "FEMALE": 0.488,
+      "MALE": 0.512
+    },
+    "n_personas": 2000
+  },
+  "run_meta": {
+    "catalog_source": "seed",
+    "days": 90,
+    "n_events": 44390,
+    "seed": 42,
+    "start_date": "2026-06-01T00:00:00+00:00",
+    "users": 2000
+  },
+  "splits": {
+    "eval_candidates": {
+      "groups": 1728,
+      "labels": {
+        "0": 84992,
+        "1": 1140,
+        "2": 475,
+        "3": 59,
+        "4": 54
+      },
+      "negatives_per_group": {
+        "max": 57,
+        "mean": 49.19,
+        "min": 24
+      },
+      "positives_per_group": [
+        1,
+        1
+      ],
+      "rows": 86720,
+      "users": 1728
+    },
+    "test": {
+      "groups": 1728,
+      "labels": {
+        "0": 34560,
+        "1": 1140,
+        "2": 475,
+        "3": 59,
+        "4": 54
+      },
+      "negatives_per_group": {
+        "max": 20,
+        "mean": 20.0,
+        "min": 20
+      },
+      "positives_per_group": [
+        1,
+        1
+      ],
+      "rows": 36288,
+      "users": 1728
+    },
+    "train": {
+      "groups": 15444,
+      "labels": {
+        "0": 308880,
+        "1": 9084,
+        "2": 4834,
+        "3": 792,
+        "4": 734
+      },
+      "negatives_per_group": {
+        "max": 20,
+        "mean": 20.0,
+        "min": 20
+      },
+      "positives_per_group": [
+        1,
+        1
+      ],
+      "rows": 324324,
+      "users": 1859
+    },
+    "val": {
+      "groups": 1728,
+      "labels": {
+        "0": 34560,
+        "1": 1114,
+        "2": 493,
+        "3": 69,
+        "4": 52
+      },
+      "negatives_per_group": {
+        "max": 20,
+        "mean": 20.0,
+        "min": 20
+      },
+      "positives_per_group": [
+        1,
+        1
+      ],
+      "rows": 36288,
+      "users": 1728
+    }
+  },
+  "warnings": []
+}

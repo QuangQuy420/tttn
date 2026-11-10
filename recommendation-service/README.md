@@ -24,6 +24,7 @@ app/
   db/             # SQLAlchemy async engine/session + ORM models (interactions)
   schemas/        # Pydantic DTOs (incl. the behavior event payload)
   core/           # config, internal-key auth, face-shape→frame mapping config
+  ml/             # features.py — pure ranker features (numpy only), shared with ml/recommendation
 alembic/          # migrations — run by entrypoint.sh (`alembic upgrade head`) on start
 tests/            # unit tests
 ```
