@@ -6,11 +6,15 @@ import { AddToCartModal } from "@/components/cart/AddToCartModal";
 import { ErrorState } from "@/components/common/ErrorState";
 import { ImageWithFallback } from "@/components/common/ImageWithFallback";
 import { LoadingState } from "@/components/common/LoadingState";
+import { useDebugFlag } from "@/hooks/useDebugFlag";
 import { useFaceTracking } from "@/hooks/useFaceTracking";
 import { useProductBySlug } from "@/hooks/useProduct";
 import { useProducts } from "@/hooks/useProducts";
 import { useTrackTryOn } from "@/hooks/useTrackTryOn";
 import { pickTryOnImage } from "@/lib/productImages";
+import { DEFAULT_FILTER_PARAMS } from "@/lib/vto/oneEuro";
+import type { OneEuroParams, SmoothingMode } from "@/lib/vto/oneEuro";
+import { widthFactorFor } from "@/lib/vto/pose";
 
 interface TryOnPageProps {
   // Omitted for the camera-first landing state (nav's "Thử Kính" tab, no product chosen yet) —
@@ -25,10 +29,33 @@ const STATUS_HINTS: Partial<Record<string, string>> = {
   "loading-model": "Đang tải mô hình nhận diện khuôn mặt...",
   "no-face": "Không phát hiện khuôn mặt nào. Vui lòng nhìn thẳng vào camera.",
   "multiple-faces": "Phát hiện nhiều hơn 1 khuôn mặt. Vui lòng chỉ để 1 người trong khung hình.",
+  "turned-away": "Vui lòng quay mặt thẳng vào camera.",
 };
 
 // How many other products to offer in the switcher/picker strip.
 const SWITCHER_LIMIT = 8;
+
+// Benchmark length offered by the debug panel (?debug=1).
+const BENCHMARK_SECONDS = 10;
+
+const SMOOTHING_OPTIONS: { value: SmoothingMode; label: string }[] = [
+  { value: "raw", label: "Raw" },
+  { value: "ema", label: "EMA" },
+  { value: "oneEuro", label: "One Euro" },
+];
+
+// Benchmark only while the render loop is running (otherwise it would never finish).
+const BENCHMARK_READY_STATUSES = new Set<string>(["tracking", "turned-away", "no-face"]);
+
+// Debug-panel number input → a finite number (> 0 for minCutoff, since 0 freezes the filter;
+// ≥ 0 for beta), or null to keep the previous value.
+function parseFilterParam(key: "minCutoff" | "beta", value: string): number | null {
+  if (value.trim() === "") return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  if (key === "minCutoff" ? parsed <= 0 : parsed < 0) return null;
+  return parsed;
+}
 
 // Thin page component: only wires the product fetch + camera/canvas elements together. All
 // MediaPipe/canvas frame-processing logic lives in useFaceTracking (coder.md §4).
@@ -47,7 +74,12 @@ export function TryOnPage({ slug }: TryOnPageProps) {
 
   const thumbnail = product ? pickTryOnImage(product) : undefined;
 
-  const { status, errorMessage } = useFaceTracking({
+  // `?debug=1` shows the FPS/latency/yaw panel, the smoothing controls and the benchmark button.
+  const debug = useDebugFlag();
+  const [smoothing, setSmoothing] = useState<SmoothingMode>("oneEuro");
+  const [filterParams, setFilterParams] = useState<OneEuroParams>(DEFAULT_FILTER_PARAMS);
+
+  const { status, errorMessage, stats, isBenchmarking, startBenchmark } = useFaceTracking({
     videoRef,
     canvasRef,
     overlayImageUrl: thumbnail?.imageUrl ?? null,
@@ -55,7 +87,17 @@ export function TryOnPage({ slug }: TryOnPageProps) {
     // picked yet — useFaceTracking already no-ops the draw step whenever overlayImageUrl is
     // null, so this just shows a plain live tracking preview until a frame is chosen.
     enabled: true,
+    smoothing,
+    filterParams,
+    widthFactor: widthFactorFor(product?.frameWidthMm),
+    debug,
   });
+
+  function updateFilterParam(key: "minCutoff" | "beta", value: string) {
+    const parsed = parseFilterParam(key, value);
+    if (parsed === null) return;
+    setFilterParams((prev) => ({ ...prev, [key]: parsed }));
+  }
   // Plan 05 (AC6): one TRY_ON once the face has been tracked for 3 s in total with this frame.
   useTrackTryOn(product?.id ?? null, status === "tracking");
 
@@ -120,6 +162,56 @@ export function TryOnPage({ slug }: TryOnPageProps) {
         <div className="try-on__video-frame">
           <video ref={videoRef} className="try-on__video" playsInline muted aria-hidden="true" />
           <canvas ref={canvasRef} className="try-on__canvas" aria-hidden="true" />
+          {debug && (
+            <div className="try-on__debug">
+              <p>FPS: {stats ? stats.fps : "-"}</p>
+              <p>
+                Latency p50/p95: {stats ? `${stats.latencyP50.toFixed(1)} / ${stats.latencyP95.toFixed(1)} ms` : "-"}
+              </p>
+              <p>Delegate: {stats?.delegate ?? "-"}</p>
+              <p>Yaw: {stats ? `${stats.yawDeg.toFixed(1)}°` : "-"}</p>
+              <label>
+                Bộ lọc{" "}
+                <select
+                  value={smoothing}
+                  onChange={(event) => setSmoothing(event.target.value as SmoothingMode)}
+                >
+                  {SMOOTHING_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                minCutoff{" "}
+                <input
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  defaultValue={filterParams.minCutoff}
+                  onChange={(event) => updateFilterParam("minCutoff", event.target.value)}
+                />
+              </label>
+              <label>
+                beta{" "}
+                <input
+                  type="number"
+                  min={0}
+                  step={0.001}
+                  defaultValue={filterParams.beta}
+                  onChange={(event) => updateFilterParam("beta", event.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => startBenchmark(BENCHMARK_SECONDS)}
+                disabled={isBenchmarking || !BENCHMARK_READY_STATUSES.has(status)}
+              >
+                {isBenchmarking ? "Đang ghi..." : `Ghi benchmark ${BENCHMARK_SECONDS} giây`}
+              </button>
+            </div>
+          )}
         </div>
         {hint && (
           <p role="status" className="try-on__hint">

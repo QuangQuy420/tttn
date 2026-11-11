@@ -1,15 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { FaceLandmarkerResult, NormalizedLandmark } from "@mediapipe/tasks-vision";
-import { computeOverlayTransform, MAX_FACES_TO_DETECT } from "@/lib/faceOverlay";
-
-// Same CDN copies useFaceTracking.ts uses for the live-camera case — single-shot IMAGE mode
-// detection needs the same WASM runtime + Face Landmarker model, just a different runningMode.
-const WASM_BASE_URL =
-  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm";
-const MODEL_ASSET_PATH =
-  "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+import type { FaceLandmarker, FaceLandmarkerResult, NormalizedLandmark } from "@mediapipe/tasks-vision";
+import { drawGlasses, TURNED_AWAY_ALPHA } from "@/lib/vto/draw";
+import { createFaceLandmarker } from "@/lib/vto/mediapipe";
+import { computeGlassesPose, yawFromMatrix } from "@/lib/vto/pose";
 
 export type StaticFaceOverlayStatus =
   | "idle"
@@ -45,6 +40,9 @@ export function useStaticFaceOverlay({
   const photoImageRef = useRef<HTMLImageElement | null>(null);
   const overlayImageElRef = useRef<HTMLImageElement | null>(null);
   const landmarksRef = useRef<NormalizedLandmark[] | null>(null);
+  // Matrix yaw of the detected face (radians), cached next to the landmarks; undefined → the
+  // 2D estimate in computeGlassesPose is used.
+  const yawRef = useRef<number | undefined>(undefined);
 
   // Redraws the canvas from whatever landmarks/overlay image are currently cached — called
   // both right after a fresh detection and on every overlayImageUrl change.
@@ -63,29 +61,21 @@ export function useStaticFaceOverlay({
 
     const overlayImage = overlayImageElRef.current;
     if (overlayImage?.complete && overlayImage.naturalWidth > 0) {
-      const { centerX, centerY, eyeDistance, angle } = computeOverlayTransform(
-        landmarks,
-        canvas.width,
-        canvas.height,
-      );
-
-      // Same 1.6 width factor as useFaceTracking.ts (faceOverlay.ts's tuned heuristic).
-      const drawWidth = eyeDistance * 1.6;
-      const drawHeight = drawWidth * (overlayImage.naturalHeight / overlayImage.naturalWidth);
-
-      ctx.save();
-      ctx.translate(centerX, centerY);
-      ctx.rotate(angle);
-      ctx.drawImage(overlayImage, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
-      ctx.restore();
+      // Same placement as the live camera (lib/vto/pose.ts) with the default width factor —
+      // RecommendedProduct has no frameWidthMm. Single frame, so no smoothing and no hold.
+      const pose = computeGlassesPose(landmarks, canvas.width, canvas.height, {
+        yaw: yawRef.current,
+      });
+      drawGlasses(ctx, overlayImage, pose, pose.visible ? 1 : TURNED_AWAY_ALPHA);
     }
   }
 
   // Detect once per photoUrl: load the photo (crossOrigin="anonymous", same pattern
-  // useFaceTracking.ts:90-92 uses for the overlay image), run a single IMAGE-mode `.detect()`,
+  // useFaceTracking.ts uses for the overlay image), run a single IMAGE-mode `.detect()`,
   // cache the landmarks, then draw.
   useEffect(() => {
     landmarksRef.current = null;
+    yawRef.current = undefined;
     photoImageRef.current = null;
 
     if (!photoUrl) {
@@ -100,8 +90,7 @@ export function useStaticFaceOverlay({
     }
 
     let cancelled = false;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- FaceLandmarker type imported lazily below
-    let faceLandmarker: any = null;
+    let faceLandmarker: FaceLandmarker | null = null;
 
     // Same INFO:-log suppression useFaceTracking.ts applies for the life of a detection session.
     const originalConsoleError = console.error;
@@ -130,15 +119,9 @@ export function useStaticFaceOverlay({
       }
       photoImageRef.current = img;
 
-      let landmarker;
+      let landmarker: FaceLandmarker;
       try {
-        const { FaceLandmarker, FilesetResolver } = await import("@mediapipe/tasks-vision");
-        const wasmFileset = await FilesetResolver.forVisionTasks(WASM_BASE_URL);
-        landmarker = await FaceLandmarker.createFromOptions(wasmFileset, {
-          baseOptions: { modelAssetPath: MODEL_ASSET_PATH },
-          runningMode: "IMAGE",
-          numFaces: MAX_FACES_TO_DETECT,
-        });
+        ({ landmarker } = await createFaceLandmarker("IMAGE"));
         faceLandmarker = landmarker;
       } catch {
         if (!cancelled) {
@@ -180,6 +163,8 @@ export function useStaticFaceOverlay({
       }
 
       landmarksRef.current = result.faceLandmarks[0];
+      const matrix = result.facialTransformationMatrixes?.[0];
+      yawRef.current = matrix ? yawFromMatrix(matrix.data) : undefined;
       setStatus("ready");
       draw();
     }
