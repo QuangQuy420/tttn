@@ -1,11 +1,12 @@
 """`/internal/*` — service-to-service reads of face analyses (not routed by api-gateway).
 
 Every route requires `X-Internal-Key` (`require_internal_key`, 403 otherwise). A bad
-`userId` path param becomes 400 `VALIDATION_FAILED` via the handler in `app/main.py`.
+`userId` / `analysisId` (path or query) becomes 400 `VALIDATION_FAILED` via the handler
+in `app/main.py`.
 """
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.internal_auth import require_internal_key
 from app.schemas.common import ApiResponse, ok
@@ -30,3 +31,21 @@ async def get_latest_analysis(
             detail="Người dùng chưa có kết quả phân tích khuôn mặt.",
         )
     return ok(latest)
+
+
+@router.get(
+    "/analyses/{analysis_id}",
+    response_model=ApiResponse[LatestAnalysisResponse],
+)
+async def get_user_analysis(
+    analysis_id: uuid.UUID,
+    user_id: uuid.UUID = Query(alias="userId"),
+    service: FaceAnalysisService = Depends(get_face_analysis_service),
+) -> ApiResponse[LatestAnalysisResponse]:
+    analysis = await service.get_for_user(analysis_id, user_id)
+    if analysis is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy kết quả phân tích khuôn mặt.",
+        )
+    return ok(analysis)

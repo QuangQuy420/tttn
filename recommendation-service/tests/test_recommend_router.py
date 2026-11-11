@@ -1,8 +1,11 @@
-"""HTTP-level tests for `POST /recommend` and `GET /health` (T6) — uses FastAPI's
+"""HTTP-level tests for `POST /recommend`, `GET /recommendations/for-you` and `GET /health`
+(T6; plan 11 T9) — uses FastAPI's
 `TestClient` with the `get_recommendation_service` dependency overridden to a fake
 service, so these exercise the router's request validation and error-mapping without a
 real product-service call. Mirrors face-processing-service's boundary-only test scope.
 """
+from uuid import UUID
+
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -11,8 +14,8 @@ from app.repositories.product_client import (
     ProductServiceUnavailableError,
 )
 from app.routers.recommend import get_recommendation_service
-from app.schemas.common import ApiResponse, paginated
-from app.schemas.recommend import RecommendRequest
+from app.schemas.common import ApiResponse, ok, paginated
+from app.schemas.recommend import ForYouResponse, RecommendRequest
 
 client = TestClient(app)
 
@@ -21,8 +24,16 @@ class _FakeRecommendationService:
     def __init__(self, response=None, error=None):
         self._response = response
         self._error = error
+        self.calls: list[tuple] = []
 
-    async def recommend(self, request: RecommendRequest) -> ApiResponse:
+    async def recommend(self, request: RecommendRequest, user_id: UUID | None = None) -> ApiResponse:
+        self.calls.append(("recommend", user_id))
+        if self._error is not None:
+            raise self._error
+        return self._response
+
+    async def for_you(self, user_id: UUID, limit: int, face_analysis_id: UUID | None) -> ApiResponse:
+        self.calls.append(("for_you", user_id, limit, face_analysis_id))
         if self._error is not None:
             raise self._error
         return self._response
@@ -90,3 +101,56 @@ def test_recommend_maps_product_service_unavailable_to_503() -> None:
 
     assert response.status_code == 503
     assert "Không thể kết nối" in response.json()["message"]
+
+
+_USER_ID = "11111111-1111-1111-1111-111111111111"
+_ANALYSIS_ID = "22222222-2222-2222-2222-222222222222"
+
+
+def test_recommend_forwards_a_valid_x_user_id_to_the_service() -> None:
+    fake = _FakeRecommendationService(response=paginated([], total=0, page=1, limit=20))
+    _override_with(fake)
+
+    response = client.post("/recommend", json={"faceShape": "OVAL"}, headers={"X-User-Id": _USER_ID})
+
+    assert response.status_code == 200
+    assert fake.calls == [("recommend", UUID(_USER_ID))]
+
+
+def test_for_you_passes_user_limit_and_face_analysis_to_the_service_AC2() -> None:
+    fake = _FakeRecommendationService(
+        response=ok(ForYouResponse(items=[], modelVersion="v-test", alpha=0.6, beta=0.0))
+    )
+    _override_with(fake)
+
+    response = client.get(
+        "/recommendations/for-you",
+        params={"limit": 5, "faceAnalysisId": _ANALYSIS_ID},
+        headers={"X-User-Id": _USER_ID},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "success": True,
+        "message": "Thành công",
+        "data": {
+            "items": [],
+            "faceShape": None,
+            "faceAnalysisId": None,
+            "modelVersion": "v-test",
+            "alpha": 0.6,
+            "beta": 0.0,
+        },
+    }
+    assert fake.calls == [("for_you", UUID(_USER_ID), 5, UUID(_ANALYSIS_ID))]
+
+
+def test_for_you_without_x_user_id_returns_400() -> None:
+    fake = _FakeRecommendationService(response=None)
+    _override_with(fake)
+
+    response = client.get("/recommendations/for-you")
+
+    assert response.status_code == 400
+    assert response.json()["message"] == "Thiếu header bắt buộc 'X-User-Id'."
+    assert fake.calls == []

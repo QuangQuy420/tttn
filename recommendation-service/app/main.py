@@ -1,5 +1,5 @@
-"""FastAPI entrypoint — app instance, lifespan (behavior-events consumer), router
-mounting, envelope exception handlers."""
+"""FastAPI entrypoint — app instance, lifespan (preference model + behavior-events
+consumer), router mounting, envelope exception handlers."""
 import asyncio
 import contextlib
 import logging
@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.config import get_settings
+from app.core.model_registry import load_preference_model
 from app.db.session import get_engine
 from app.repositories.behavior_event_consumer import BehaviorEventConsumer
 from app.repositories.interaction_repository import interaction_repository_scope
@@ -70,6 +71,9 @@ async def _start_consumer_with_retry(consumer: BehaviorEventConsumer) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
+    # Before the consumer starts: a missing model or a feature-schema mismatch raises here,
+    # so the app never starts serving with a wrong model.
+    load_preference_model(settings.PREFERENCE_MODEL_VERSION)
     consumer: BehaviorEventConsumer | None = None
     consumer_task: asyncio.Task | None = None
     if settings.BEHAVIOR_CONSUMER_ENABLED:

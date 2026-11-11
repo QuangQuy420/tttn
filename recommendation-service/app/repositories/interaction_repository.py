@@ -1,6 +1,6 @@
 """`interactions` table access — interface + SQLAlchemy async implementation.
 
-The ONLY layer that queries `recommendation_db`. The repository never commits: the
+The ONLY layer that queries the `interactions` table. The repository never commits: the
 caller owns the session/transaction (`get_db_session` for HTTP reads, the consumer's
 repository scope for writes — see `app/services/interaction_ingest_service.py`).
 """
@@ -36,6 +36,19 @@ class IInteractionRepository(Protocol):
     ) -> list[tuple[date, BehaviorEventType, int]]:
         """Event counts per UTC day and event type over the last `days` UTC days
         (today included), ordered by day then type."""
+
+    async def list_all_by_user(self, user_id: UUID) -> list[Interaction]:
+        """Every interaction of `user_id`, oldest `occurred_at` first (no window — the
+        ranker profile uses the full history, like training)."""
+
+    async def list_all_events(
+        self,
+    ) -> list[tuple[UUID, UUID, BehaviorEventType, datetime]]:
+        """`(user_id, product_id, event_type, occurred_at)` of every interaction of every
+        user, oldest first — the replay input of the global product stats."""
+
+    async def purchased_product_ids(self, user_id: UUID) -> set[UUID]:
+        """Products `user_id` has a PURCHASE event for."""
 
 
 class SqlAlchemyInteractionRepository:
@@ -90,6 +103,41 @@ class SqlAlchemyInteractionRepository:
         )
         result = await self._session.execute(statement)
         return [(row.day, row.event_type, row.count) for row in result]
+
+    async def list_all_by_user(self, user_id: UUID) -> list[Interaction]:
+        statement = (
+            select(Interaction)
+            .where(Interaction.user_id == user_id)
+            .order_by(Interaction.occurred_at, Interaction.id)
+        )
+        result = await self._session.execute(statement)
+        return list(result.scalars().all())
+
+    async def list_all_events(
+        self,
+    ) -> list[tuple[UUID, UUID, BehaviorEventType, datetime]]:
+        statement = select(
+            Interaction.user_id,
+            Interaction.product_id,
+            Interaction.event_type,
+            Interaction.occurred_at,
+        ).order_by(Interaction.occurred_at, Interaction.id)
+        result = await self._session.execute(statement)
+        return [
+            (row.user_id, row.product_id, row.event_type, row.occurred_at) for row in result
+        ]
+
+    async def purchased_product_ids(self, user_id: UUID) -> set[UUID]:
+        statement = (
+            select(Interaction.product_id)
+            .where(
+                Interaction.user_id == user_id,
+                Interaction.event_type == BehaviorEventType.PURCHASE,
+            )
+            .distinct()
+        )
+        result = await self._session.execute(statement)
+        return set(result.scalars().all())
 
 
 def get_interaction_repository(

@@ -17,13 +17,35 @@ interface RecommendationCardProps {
   // that context the primary action is "Thêm vào giỏ hàng" instead of the live-camera "Thử kính
   // AR" — /recommendations (onTryOnPhoto absent) keeps the AR action instead.
   onTryOnPhoto?: (product: RecommendedProduct) => void;
+  // Debug view (`?debug=1`, read by RecommendationGrid): Preference/FaceFit score bars.
+  showScores?: boolean;
+}
+
+const MAX_REASONS = 2;
+
+function ScoreBar({ label, value }: { label: string; value: number }) {
+  const percent = Math.round(Math.min(Math.max(value, 0), 1) * 100);
+  return (
+    <div className="recommendation-score">
+      <span className="recommendation-score__label">{label}</span>
+      <span className="recommendation-score__track" aria-hidden="true">
+        <span className="recommendation-score__fill" style={{ width: `${percent}%` }} />
+      </span>
+      <span className="recommendation-score__value">{percent}%</span>
+    </div>
+  );
 }
 
 // Same card-style layout as ProductCard, but built for RecommendedProduct's narrower shape
 // (no genderTarget/category/variants — recommendation-service only returns what a card needs
 // plus a ranking `score`), so ProductCard itself isn't reused directly.
-export function RecommendationCard({ product, onTryOnPhoto }: RecommendationCardProps) {
+export function RecommendationCard({
+  product,
+  onTryOnPhoto,
+  showScores = false,
+}: RecommendationCardProps) {
   const thumbnail = product.images.find((image) => image.isThumbnail) ?? product.images[0];
+  const reasons = product.reasons.slice(0, MAX_REASONS);
 
   // AddToCartModal needs variants (for color/size selection), which RecommendedProduct doesn't
   // carry — fetch the full Product on demand when the user actually asks to add to cart, rather
@@ -70,6 +92,21 @@ export function RecommendationCard({ product, onTryOnPhoto }: RecommendationCard
           <p className="product-card__price">{formatPriceVnd(product.basePrice)}</p>
         </div>
       </Link>
+      {reasons.length > 0 && (
+        <ul className="recommendation-reasons" aria-label="Vì sao gợi ý">
+          {reasons.map((reason) => (
+            <li key={reason} className="recommendation-reasons__chip">
+              {reason}
+            </li>
+          ))}
+        </ul>
+      )}
+      {showScores && (
+        <div className="recommendation-scores">
+          <ScoreBar label="Preference" value={product.preferenceScore} />
+          <ScoreBar label="FaceFit" value={product.faceFitScore} />
+        </div>
+      )}
       <div className="product-card__actions">
         {onTryOnPhoto ? (
           <>

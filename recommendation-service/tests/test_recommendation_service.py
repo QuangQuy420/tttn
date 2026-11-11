@@ -1,151 +1,272 @@
-"""Unit tests for `RecommendationService.recommend` — the face-shape -> ranked-products
-use-case (T5). Uses a fake `IProductServiceClient` (the Protocol interface, per coder.md's
-DI guidance) instead of a real httpx call, so these run without any network/product-service
-dependency — mirrors face-processing-service's "no real model/photo needed" test style.
+"""Unit tests for `RecommendationService` — `recommend` (legacy `POST /recommend`) and
+`for_you` over the hybrid ranking pipeline (plan 11, T7/T10).
+
+Every boundary is a small fake: product client (`list_catalog`), interaction repository,
+face-analysis client, impression scope, and a tiny `xgboost.Booster`-like model. No
+network, no DB, no committed model.
 """
 import asyncio
+from contextlib import asynccontextmanager
+from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
+from uuid import UUID
 
+import numpy as np
 import pytest
+from sqlalchemy.exc import OperationalError
 
-from app.repositories.product_client import (
-    ProductServiceTimeoutError,
-    ProductServiceUnavailableError,
-)
+from app.core.config import Settings
+from app.core.ttl_cache import TtlCache
+from app.db.models import BehaviorEventType
+from app.ml.face_fit import face_fit
+from app.repositories.face_analysis_client import FaceAnalysisSummary
 from app.schemas.recommend import (
     BrandSummaryDto,
+    CatalogProductDto,
+    CatalogVariantDto,
     FaceShape,
-    FrameShape,
-    RecommendedProductDto,
     RecommendRequest,
 )
-from app.services.recommendation_service import RecommendationService
+from app.services.recommendation_service import (
+    BehaviorStoreUnavailableError,
+    RecommendationService,
+)
+
+USER = UUID("11111111-1111-1111-1111-111111111111")
+ANALYSIS = UUID("22222222-2222-2222-2222-222222222222")
+P_SQUARE = "00000000-0000-0000-0000-00000000000a"
+P_CAT_EYE = "00000000-0000-0000-0000-00000000000b"
+P_RECT = "00000000-0000-0000-0000-00000000000c"
+P_ROUND = "00000000-0000-0000-0000-00000000000d"
+
+_SETTINGS = Settings(
+    RANK_ALPHA=0.6,
+    RANK_BETA=0.4,
+    PREFERENCE_MODEL_VERSION="",
+    CATALOG_TTL_SECONDS=300,
+    MAX_PER_FRAME_SHAPE=3,
+    MAX_PER_BRAND=3,
+)
+_CARD = {
+    "version": "v-test",
+    "price_band_edges": [900_000.0, 1_800_000.0, 4_200_000.0],
+    "calibration": {"method": "sigmoid", "raw_score": "margin", "a": 1.0, "b": 0.0},
+}
 
 
-def _product(product_id: str, frame_shape: FrameShape) -> RecommendedProductDto:
-    return RecommendedProductDto(
-        id=product_id,
-        sku=f"SKU-{product_id}",
-        name=f"Product {product_id}",
-        slug=f"product-{product_id}",
+class _ZeroBooster:
+    """`xgboost.Booster`-like: margin 0 for every row → preference 0.5."""
+
+    def inplace_predict(self, X: np.ndarray, predict_type: str = "value") -> np.ndarray:
+        return np.zeros(X.shape[0])
+
+
+def _product(pid: str, frame_shape: str, face_shapes: list[FaceShape] | None = None) -> CatalogProductDto:
+    return CatalogProductDto(
+        id=pid,
+        sku=f"SKU-{pid[-1]}",
+        name=f"Product {pid[-1]}",
+        slug=f"product-{pid[-1]}",
         frameShape=frame_shape,
-        basePrice=100.0,
-        brand=BrandSummaryDto(id="brand-1", name="Brand", logoUrl=None),
+        genderTarget="UNISEX",
+        materialType="ACETATE",
+        basePrice=1_000_000.0,
+        brand=BrandSummaryDto(id=f"brand-{pid[-1]}", name=f"Brand {pid[-1]}", logoUrl=None),
         images=[],
-        faceShapes=[FaceShape.OVAL],
-        score=0.0,
+        faceShapes=face_shapes or [],
+        variants=[CatalogVariantDto(color="black")],
     )
 
 
-class FakeProductServiceClient:
-    """A test double for `IProductServiceClient` — returns a fixed product list (optionally
-    raising a domain error instead), recording the last call's arguments for assertions."""
+_CATALOG = [
+    _product(P_SQUARE, "SQUARE"),  # not tagged with any face shape (AC11)
+    _product(P_CAT_EYE, "CAT_EYE", [FaceShape.ROUND]),
+    _product(P_RECT, "RECTANGLE", [FaceShape.ROUND]),
+    _product(P_ROUND, "ROUND", [FaceShape.SQUARE]),
+]
 
-    def __init__(self, products=None, error=None):
-        self._products = products or []
-        self._error = error
-        self.last_call = None
 
-    async def list_products(
-        self,
-        face_shape,
-        frame_shape=None,
-        gender_target=None,
-        min_price=None,
-        max_price=None,
-        limit=None,
-    ):
-        self.last_call = {
-            "face_shape": face_shape,
-            "frame_shape": frame_shape,
-            "gender_target": gender_target,
-            "min_price": min_price,
-            "max_price": max_price,
-            "limit": limit,
-        }
-        if self._error is not None:
-            raise self._error
+class FakeProductClient:
+    def __init__(self, products: list[CatalogProductDto]):
+        self._products = products
+
+    async def list_catalog(self) -> list[CatalogProductDto]:
         return self._products
 
 
-def test_recommend_ranks_products_by_frame_shape_score_for_the_requested_face_shape() -> None:
-    # For ROUND, the mapping scores SQUARE > RECTANGLE > CAT_EYE, so a mixed candidate pool
-    # should come back re-ordered by that score, not in the order product-service returned them.
-    products = [
-        _product("a", FrameShape.CAT_EYE),
-        _product("b", FrameShape.SQUARE),
-        _product("c", FrameShape.RECTANGLE),
+class FakeInteractionRepository:
+    """`(user_id, product_id, event_type, occurred_at)` rows; `error` makes every read fail."""
+
+    def __init__(self, rows=(), error: Exception | None = None):
+        self._rows = list(rows)
+        self._error = error
+        self.history_calls: list[UUID] = []
+
+    def _check(self) -> None:
+        if self._error is not None:
+            raise self._error
+
+    async def list_all_events(self):
+        self._check()
+        return self._rows
+
+    async def list_all_by_user(self, user_id: UUID):
+        self._check()
+        self.history_calls.append(user_id)
+        return [
+            SimpleNamespace(user_id=u, product_id=p, event_type=t, occurred_at=at)
+            for u, p, t, at in self._rows
+            if u == user_id
+        ]
+
+    async def purchased_product_ids(self, user_id: UUID) -> set[UUID]:
+        self._check()
+        return {p for u, p, t, _ in self._rows if u == user_id and t == BehaviorEventType.PURCHASE}
+
+
+class FakeFaceAnalysisClient:
+    def __init__(self, analysis: FaceAnalysisSummary | None = None):
+        self._analysis = analysis
+        self.calls: list[tuple] = []
+
+    async def get_latest(self, user_id: UUID):
+        self.calls.append(("latest", user_id))
+        return self._analysis
+
+    async def get_by_id(self, analysis_id: UUID, user_id: UUID):
+        self.calls.append(("by_id", analysis_id, user_id))
+        return self._analysis
+
+
+class ImpressionRecorder:
+    def __init__(self):
+        self.rows: list[dict] = []
+
+    @asynccontextmanager
+    async def scope(self):
+        yield self
+
+    async def add(self, **row) -> None:
+        self.rows.append(row)
+
+
+def _service(
+    interactions: FakeInteractionRepository | None = None,
+    face_client: FakeFaceAnalysisClient | None = None,
+    model=None,
+    impressions: ImpressionRecorder | None = None,
+) -> RecommendationService:
+    return RecommendationService(
+        FakeProductClient(_CATALOG),
+        interactions or FakeInteractionRepository(),
+        face_client or FakeFaceAnalysisClient(),
+        _SETTINGS,
+        model,
+        TtlCache(),
+        (impressions or ImpressionRecorder()).scope,
+    )
+
+
+def _purchase_and_view_rows() -> list[tuple]:
+    at = datetime.now(UTC) - timedelta(days=1)
+    return [
+        (USER, UUID(P_ROUND), BehaviorEventType.VIEW, at),
+        (USER, UUID(P_ROUND), BehaviorEventType.PURCHASE, at + timedelta(minutes=1)),
     ]
-    client = FakeProductServiceClient(products=products)
-    service = RecommendationService(client)
-
-    response = asyncio.run(service.recommend(RecommendRequest(faceShape=FaceShape.ROUND)))
-
-    assert [item.id for item in response.data] == ["b", "c", "a"]
-    assert response.data[0].score > response.data[1].score > response.data[2].score
 
 
-def test_recommend_paginates_the_ranked_list_by_page_and_limit() -> None:
-    products = [
-        _product("c", FrameShape.CAT_EYE),
-        _product("a", FrameShape.SQUARE),
-        _product("b", FrameShape.RECTANGLE),
-    ]
-    client = FakeProductServiceClient(products=products)
-    service = RecommendationService(client)
+def test_recommend_ranks_the_whole_catalog_and_keeps_the_paginated_envelope_AC10_AC11() -> None:
+    # Legacy mode (no model) + anonymous: α=0, ranked by FaceFit of the one-hot ROUND face.
+    interactions = FakeInteractionRepository()
+    service = _service(interactions=interactions)
 
     response = asyncio.run(
-        service.recommend(RecommendRequest(faceShape=FaceShape.ROUND, page=2, limit=2))
+        service.recommend(RecommendRequest(faceShape=FaceShape.ROUND, page=1, limit=2))
     )
 
-    # Ranked order is a, b, c -> page 2 of size 2 holds only c.
-    assert [item.id for item in response.data] == ["c"]
-    assert response.meta.model_dump() == {"page": 2, "limit": 2, "total": 3, "totalPages": 2}
+    # SQUARE (10/10) is not tagged ROUND but is still a candidate (AC11).
+    assert [item.id for item in response.data] == [P_SQUARE, P_RECT]
+    assert response.meta.model_dump() == {"page": 1, "limit": 2, "total": 4, "totalPages": 2}
+    top = response.data[0]
+    assert top.score == top.finalScore == pytest.approx(0.4 * 1.0)  # score = finalScore, 0–1 (AC10)
+    assert top.faceFitScore == pytest.approx(1.0)
+    assert top.preferenceScore == 0.0
+    assert interactions.history_calls == []  # anonymous → no user history read
 
 
-def test_recommend_passes_optional_filters_through_to_the_product_client() -> None:
-    client = FakeProductServiceClient(products=[])
-    service = RecommendationService(client)
-
-    asyncio.run(
-        service.recommend(
-            RecommendRequest(
-                faceShape=FaceShape.OVAL,
-                genderTarget="FEMALE",
-                minPrice=50,
-                maxPrice=500,
-            )
-        )
+def test_for_you_excludes_purchases_reports_weights_and_logs_one_impression_AC4_AC7_AC8_AC15() -> None:
+    probs = {FaceShape.ROUND: 0.7, FaceShape.OVAL: 0.3}
+    face_client = FakeFaceAnalysisClient(
+        FaceAnalysisSummary(analysisId=str(ANALYSIS), faceShape=FaceShape.ROUND, probabilities=probs)
+    )
+    impressions = ImpressionRecorder()
+    service = _service(
+        interactions=FakeInteractionRepository(_purchase_and_view_rows()),
+        face_client=face_client,
+        model=(_ZeroBooster(), _CARD),
+        impressions=impressions,
     )
 
-    assert client.last_call["face_shape"] == "OVAL"
-    assert client.last_call["gender_target"] == "FEMALE"
-    assert client.last_call["min_price"] == 50
-    assert client.last_call["max_price"] == 500
+    response = asyncio.run(service.for_you(USER, limit=10, face_analysis_id=ANALYSIS))
+
+    data = response.data
+    ids = [item.id for item in data.items]
+    assert P_ROUND not in ids  # purchased (AC8)
+    assert sorted(ids) == sorted([P_SQUARE, P_CAT_EYE, P_RECT])
+    assert (data.alpha, data.beta) == (0.6, 0.4)  # defaults from settings (AC4)
+    assert (data.faceShape, data.faceAnalysisId, data.modelVersion) == (
+        FaceShape.ROUND,
+        str(ANALYSIS),
+        "v-test",
+    )
+    assert face_client.calls == [("by_id", ANALYSIS, USER)]
+    for item in data.items:
+        assert item.preferenceScore == pytest.approx(0.5)
+        assert item.faceFitScore == pytest.approx(face_fit(probs, item.frameShape))  # AC7
+        assert item.finalScore == pytest.approx(0.6 * 0.5 + 0.4 * item.faceFitScore)
+
+    assert impressions.rows == [
+        {
+            "user_id": USER,
+            "product_ids": [UUID(pid) for pid in ids],
+            "scores": {
+                item.id: {
+                    "preference": item.preferenceScore,
+                    "faceFit": item.faceFitScore,
+                    "final": item.finalScore,
+                }
+                for item in data.items
+            },
+            "alpha": 0.6,
+            "beta": 0.4,
+            "model_version": "v-test",
+            "face_analysis_id": ANALYSIS,
+        }
+    ]
 
 
-def test_recommend_always_fetches_the_full_candidate_pool_from_the_client() -> None:
-    # The ranking pool must not shrink with the requested page size — product-service's
-    # own default page size (20) would otherwise silently cap it before ranking.
-    client = FakeProductServiceClient(products=[])
-    service = RecommendationService(client)
+def test_for_you_without_a_face_analysis_uses_beta_zero_AC5() -> None:
+    face_client = FakeFaceAnalysisClient(None)
+    service = _service(
+        interactions=FakeInteractionRepository(_purchase_and_view_rows()),
+        face_client=face_client,
+        model=(_ZeroBooster(), _CARD),
+    )
 
-    asyncio.run(service.recommend(RecommendRequest(faceShape=FaceShape.OVAL, limit=5)))
+    response = asyncio.run(service.for_you(USER, limit=10, face_analysis_id=None))
 
-    assert client.last_call["limit"] == 100
+    data = response.data
+    assert (data.alpha, data.beta) == (0.6, 0.0)
+    assert data.faceShape is None and data.faceAnalysisId is None
+    assert face_client.calls == [("latest", USER)]
+    assert all(item.faceFitScore == 0.0 for item in data.items)
+    assert all(item.finalScore == pytest.approx(0.6 * item.preferenceScore) for item in data.items)
 
 
-@pytest.mark.parametrize(
-    "error",
-    [
-        ProductServiceTimeoutError("product-service không phản hồi kịp thời."),
-        ProductServiceUnavailableError("Không thể kết nối tới product-service."),
-    ],
-)
-def test_recommend_propagates_product_service_errors_unchanged(error: Exception) -> None:
-    # The service doesn't swallow/rewrap these — the router (T6) is what maps them to
-    # 504/503 (AC6/NFR3), so propagating unchanged here is the correct behavior to test.
-    client = FakeProductServiceClient(error=error)
-    service = RecommendationService(client)
+def test_for_you_raises_behavior_store_unavailable_when_the_db_fails() -> None:
+    service = _service(
+        interactions=FakeInteractionRepository(error=OperationalError("SELECT 1", {}, Exception("down")))
+    )
 
-    with pytest.raises(type(error)):
-        asyncio.run(service.recommend(RecommendRequest(faceShape=FaceShape.OVAL)))
+    with pytest.raises(BehaviorStoreUnavailableError):
+        asyncio.run(service.for_you(USER, limit=10, face_analysis_id=None))

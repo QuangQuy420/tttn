@@ -1,86 +1,324 @@
-"""Face-shape -> frame-shape ranking use-case for `POST /recommend`.
+"""Recommendation use-cases: `POST /recommend` (face shape + optional user) and
+`GET /recommendations/for-you` (one logged-in user).
 
-Design choice (plan T5 left this to the coding agent — documenting the choice here):
-this service calls product-service's `GET /products?faceShape=...` **once** per
-request (passing through the optional gender/price filters as extra query params so
-product-service does that filtering server-side), then re-ranks the returned products
-client-side using the T2 face-shape -> frame-shape score table, rather than issuing one
-call per candidate frame shape.
+Both run the hybrid pipeline of `app/services/ranking_service.py` over the WHOLE catalog
+(`ProductClient.list_catalog`, cached), not only the products tagged with a face shape:
 
-Why: `GET /products?faceShape=X` already returns exactly the pool of products this
-service is allowed to recommend for face shape X (every product whose `faceShapes`
-includes that face shape), regardless of the product's own `frameShape`. Doing
-N calls (one per candidate frame shape in the T2 mapping) would mean unioning many
-paginated calls back together and would still miss/duplicate products whose tagged
-face shape doesn't line up 1:1 with their own frame shape — needless complexity for no
-extra correctness. A single call keeps this simple and avoids N network round-trips
-against a downstream call that can already time out (NFR3); de-duping isn't needed
-since a single page of results has no repeats.
+1. Catalog DTOs → `features.Product` (brand NAME, sorted distinct variant colors — same as
+   training `ml/recommendation/src/recsys/catalog.py`).
+2. Global `ProductStats`: replay of every stored interaction in time order, cached for
+   `CATALOG_TTL_SECONDS`. User history: all of the user's interactions, oldest first.
+   ORM rows become `features.Event` with `str` ids (catalog keys are `str`).
+3. Candidates = catalog minus request filters (`POST /recommend`) or minus purchased
+   products (`for-you`). The profile always sees the full catalog.
+4. `final = α·preference + β·faceFit` with the effective weights; for-you then applies the
+   diversity caps and logs one impression row.
 
-Ranking: each returned product's own `frameShape` is looked up in the T2 table for the
-requested `faceShape` to get its score (falls back to 0.0 if a product's frame shape
-isn't in the table — shouldn't happen since the table covers all 8 `FrameShape`
-values, but keeps this defensive rather than raising on unexpected data).
+Behavior store (DB) failures: `for-you` raises `BehaviorStoreUnavailableError` (→ 503);
+`POST /recommend` degrades to no personalization and popularity 0 (it worked without the
+DB before), so the list is ranked by FaceFit only.
 """
-from fastapi import Depends
+import asyncio
+import logging
+from collections.abc import Callable, Mapping, Sequence
+from contextlib import AbstractAsyncContextManager
+from datetime import UTC, datetime
+from uuid import UUID
 
-from app.core.face_shape_mapping import get_ranked_frame_shapes
+from fastapi import Depends
+from fastapi.concurrency import run_in_threadpool
+from sqlalchemy.exc import SQLAlchemyError
+
+from app.core.config import Settings, get_settings
+from app.core.model_registry import PreferenceModel, get_preference_model
+from app.core.ttl_cache import TtlCache
+from app.db.models import BehaviorEventType
+from app.ml import features as F
+from app.ml.face_fit import one_hot
+from app.repositories.face_analysis_client import (
+    FaceAnalysisSummary,
+    IFaceAnalysisClient,
+    get_face_analysis_client,
+)
+from app.repositories.impression_repository import (
+    IImpressionRepository,
+    impression_repository_scope,
+)
+from app.repositories.interaction_repository import (
+    IInteractionRepository,
+    get_interaction_repository,
+)
 from app.repositories.product_client import (
     IProductServiceClient,
     get_product_service_client,
 )
-from app.schemas.common import ApiResponse, paginated
-from app.schemas.recommend import RecommendedProductDto, RecommendRequest
+from app.schemas.common import ApiResponse, ok, paginated
+from app.schemas.recommend import (
+    CatalogProductDto,
+    ForYouResponse,
+    RecommendedProductDto,
+    RecommendRequest,
+)
+from app.services.ranking_service import (
+    FaceInput,
+    ScoredProduct,
+    diversify,
+    effective_weights,
+    rank,
+)
 
-# product-service's max `limit` per page — the ranking pool is capped at this many products.
-CANDIDATE_POOL_SIZE = 100
+logger = logging.getLogger(__name__)
+
+# SQLAlchemy errors plus raw connection errors (asyncpg can raise `OSError` on connect).
+_DB_ERRORS = (SQLAlchemyError, OSError)
+
+# Card fields copied from a catalog DTO into a `RecommendedProductDto`.
+_CARD_FIELDS = set(RecommendedProductDto.model_fields) & set(CatalogProductDto.model_fields)
+
+ImpressionScope = Callable[[], AbstractAsyncContextManager[IImpressionRepository]]
+
+# Shared by every request of this process (the service itself is built per request).
+_product_stats_cache: TtlCache[F.ProductStats] = TtlCache()
+# Single flight: one rebuild per cache expiry, the other requests wait for its result.
+_product_stats_lock = asyncio.Lock()
+
+
+class BehaviorStoreUnavailableError(Exception):
+    """`recommendation_db` (interactions) cannot be read."""
 
 
 class RecommendationService:
-    """Orchestrates the T2 scoring table with the T3 product-service client — the
-    router (T6) only ever calls `recommend()`."""
-
-    def __init__(self, product_client: IProductServiceClient) -> None:
+    def __init__(
+        self,
+        product_client: IProductServiceClient,
+        interaction_repository: IInteractionRepository,
+        face_analysis_client: IFaceAnalysisClient,
+        settings: Settings,
+        model: PreferenceModel | None,
+        stats_cache: TtlCache[F.ProductStats],
+        impression_scope: ImpressionScope,
+    ) -> None:
         self._product_client = product_client
+        self._interactions = interaction_repository
+        self._face_analyses = face_analysis_client
+        self._settings = settings
+        self._model = model
+        self._stats_cache = stats_cache
+        self._impression_scope = impression_scope
 
     async def recommend(
-        self, request: RecommendRequest
+        self, request: RecommendRequest, user_id: UUID | None = None
     ) -> ApiResponse[list[RecommendedProductDto]]:
-        score_by_frame_shape: dict[str, float] = {
-            frame_shape.value: score
-            for frame_shape, score in get_ranked_frame_shapes(request.faceShape)
-        }
+        dtos, catalog = _to_catalog(await self._product_client.list_catalog())
+        candidate_ids = [pid for pid, dto in dtos.items() if _matches_filters(request, dto)]
 
-        products = await self._product_client.list_products(
-            face_shape=request.faceShape.value,
-            gender_target=request.genderTarget.value if request.genderTarget else None,
-            min_price=request.minPrice,
-            max_price=request.maxPrice,
-            # Always fetch the full candidate pool (product-service caps a page at 100) and
-            # rank all of it before paginating, so page N is a stable slice of one ranking
-            # instead of depending on product-service's own (createdAt-based) ordering.
-            limit=CANDIDATE_POOL_SIZE,
+        try:
+            stats = await self._product_stats()
+            events = await self._user_events(user_id) if user_id is not None else []
+        except _DB_ERRORS as exc:
+            logger.warning("Behavior store unavailable, ranking without it: %s", exc)
+            stats, events = F.ProductStats(), []
+
+        face = FaceInput(one_hot(request.faceShape), request.faceShape)
+        alpha, beta = effective_weights(
+            self._settings.RANK_ALPHA, self._settings.RANK_BETA, self._model is not None, True
         )
-
-        scored: list[RecommendedProductDto] = [
-            product.model_copy(
-                update={"score": score_by_frame_shape.get(product.frameShape.value, 0.0)}
-            )
-            for product in products
-        ]
-        scored.sort(key=lambda product: product.score, reverse=True)
+        # Features + predict for ~100 candidates measured ~9 ms → off the event loop.
+        ranked = await run_in_threadpool(
+            rank, catalog, candidate_ids, events, stats, datetime.now(UTC), self._model, face, alpha, beta
+        )
 
         start = (request.page - 1) * request.limit
         return paginated(
-            scored[start : start + request.limit],
-            total=len(scored),
+            [_to_dto(dtos[item.product_id], item) for item in ranked[start : start + request.limit]],
+            total=len(ranked),
             page=request.page,
             limit=request.limit,
         )
 
+    async def for_you(
+        self, user_id: UUID, limit: int, face_analysis_id: UUID | None
+    ) -> ApiResponse[ForYouResponse]:
+        dtos, catalog = _to_catalog(await self._product_client.list_catalog())
+
+        try:
+            stats = await self._product_stats()
+            events = await self._user_events(user_id)
+            purchased = {str(pid) for pid in await self._interactions.purchased_product_ids(user_id)}
+        except _DB_ERRORS as exc:
+            raise BehaviorStoreUnavailableError(
+                "Không thể đọc dữ liệu hành vi, vui lòng thử lại sau."
+            ) from exc
+
+        if face_analysis_id is not None:
+            analysis = await self._face_analyses.get_by_id(face_analysis_id, user_id)
+        else:
+            analysis = await self._face_analyses.get_latest(user_id)
+        face = _face_input(analysis)
+
+        alpha, beta = effective_weights(
+            self._settings.RANK_ALPHA,
+            self._settings.RANK_BETA,
+            self._model is not None,
+            face is not None,
+        )
+        candidate_ids = [pid for pid in catalog if pid not in purchased]
+        # Features + predict for ~100 candidates measured ~9 ms → off the event loop.
+        ranked = await run_in_threadpool(
+            rank, catalog, candidate_ids, events, stats, datetime.now(UTC), self._model, face, alpha, beta
+        )
+        top = diversify(
+            ranked,
+            catalog,
+            limit,
+            self._settings.MAX_PER_FRAME_SHAPE,
+            self._settings.MAX_PER_BRAND,
+        )
+        model_version = self._model[1].get("version") if self._model is not None else None
+
+        await self._log_impression(user_id, top, alpha, beta, model_version, analysis)
+        return ok(
+            ForYouResponse(
+                items=[_to_dto(dtos[item.product_id], item) for item in top],
+                faceShape=analysis.faceShape if analysis is not None else None,
+                faceAnalysisId=analysis.analysisId if analysis is not None else None,
+                modelVersion=model_version,
+                alpha=alpha,
+                beta=beta,
+            )
+        )
+
+    async def _product_stats(self) -> F.ProductStats:
+        cached = self._stats_cache.get()
+        if cached is not None:
+            return cached
+        async with _product_stats_lock:
+            # Another request may have rebuilt it while this one waited for the lock.
+            cached = self._stats_cache.get()
+            if cached is not None:
+                return cached
+            rows = await self._interactions.list_all_events()
+            # The replay is pure CPU (~1 s for 45k events) → off the event loop.
+            stats = await run_in_threadpool(_replay_stats, rows)
+            self._stats_cache.set(stats, self._settings.CATALOG_TTL_SECONDS)
+            return stats
+
+    async def _user_events(self, user_id: UUID) -> list[F.Event]:
+        # UNLIKE rows stay in: `build_user_profile` cancels them itself.
+        return [
+            F.Event(str(row.user_id), str(row.product_id), row.event_type.value, row.occurred_at)
+            for row in await self._interactions.list_all_by_user(user_id)
+        ]
+
+    async def _log_impression(
+        self,
+        user_id: UUID,
+        items: list[ScoredProduct],
+        alpha: float,
+        beta: float,
+        model_version: str | None,
+        analysis: FaceAnalysisSummary | None,
+    ) -> None:
+        """One `recommendation_impressions` row in its own transaction — a failure is
+        logged and never fails the response."""
+        try:
+            async with self._impression_scope() as repository:
+                await repository.add(
+                    user_id=user_id,
+                    product_ids=[UUID(item.product_id) for item in items],
+                    scores={
+                        item.product_id: {
+                            "preference": item.preference,
+                            "faceFit": item.face_fit,
+                            "final": item.final,
+                        }
+                        for item in items
+                    },
+                    alpha=alpha,
+                    beta=beta,
+                    model_version=model_version,
+                    face_analysis_id=UUID(analysis.analysisId) if analysis is not None else None,
+                )
+        except Exception:
+            logger.exception("Failed to log recommendation impression for user %s", user_id)
+
+
+def _replay_stats(
+    rows: Sequence[tuple[UUID, UUID, BehaviorEventType, datetime]],
+) -> F.ProductStats:
+    """Global `ProductStats` from every interaction, replayed in time order (rows come
+    oldest first). No UNLIKE cancellation, like training."""
+    stats = F.ProductStats()
+    for user_id, product_id, event_type, occurred_at in rows:
+        stats.add(F.Event(str(user_id), str(product_id), event_type.value, occurred_at))
+    return stats
+
+
+def _to_catalog(
+    products: list[CatalogProductDto],
+) -> tuple[dict[str, CatalogProductDto], dict[str, F.Product]]:
+    """Catalog DTOs by id + the matching `features.Product`s (same order)."""
+    dtos = {dto.id: dto for dto in products}
+    catalog = {
+        dto.id: F.Product(
+            product_id=dto.id,
+            brand=dto.brand.name,
+            frame_shape=dto.frameShape.value,
+            material_type=dto.materialType,
+            gender_target=dto.genderTarget.value,
+            base_price=float(dto.basePrice),
+            colors=tuple(sorted({variant.color for variant in dto.variants if variant.color})),
+        )
+        for dto in products
+    }
+    return dtos, catalog
+
+
+def _matches_filters(request: RecommendRequest, dto: CatalogProductDto) -> bool:
+    """`POST /recommend` filters, with product-service's semantics (exact gender, inclusive
+    price bounds)."""
+    if request.genderTarget is not None and dto.genderTarget != request.genderTarget:
+        return False
+    if request.minPrice is not None and dto.basePrice < request.minPrice:
+        return False
+    if request.maxPrice is not None and dto.basePrice > request.maxPrice:
+        return False
+    return True
+
+
+def _face_input(analysis: FaceAnalysisSummary | None) -> FaceInput | None:
+    if analysis is None:
+        return None
+    # Analyses created before plan 08 have no probabilities → one-hot of the label.
+    probabilities: Mapping = analysis.probabilities or one_hot(analysis.faceShape)
+    return FaceInput(probabilities, analysis.faceShape)
+
+
+def _to_dto(dto: CatalogProductDto, item: ScoredProduct) -> RecommendedProductDto:
+    return RecommendedProductDto(
+        **{field: getattr(dto, field) for field in _CARD_FIELDS},
+        score=item.final,
+        preferenceScore=item.preference,
+        faceFitScore=item.face_fit,
+        finalScore=item.final,
+        reasons=list(item.reasons),
+    )
+
 
 def get_recommendation_service(
     product_client: IProductServiceClient = Depends(get_product_service_client),
+    interaction_repository: IInteractionRepository = Depends(get_interaction_repository),
+    face_analysis_client: IFaceAnalysisClient = Depends(get_face_analysis_client),
+    settings: Settings = Depends(get_settings),
 ) -> RecommendationService:
-    """FastAPI `Depends` provider — constructs the service with its client dep injected."""
-    return RecommendationService(product_client)
+    """FastAPI `Depends` provider — wires the request-scoped repository with the
+    process-wide clients, model and stats cache."""
+    return RecommendationService(
+        product_client,
+        interaction_repository,
+        face_analysis_client,
+        settings,
+        get_preference_model(),
+        _product_stats_cache,
+        impression_repository_scope,
+    )

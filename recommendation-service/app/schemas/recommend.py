@@ -1,4 +1,4 @@
-"""Pydantic request/response DTOs for `POST /recommend`.
+"""Pydantic request/response DTOs for `POST /recommend` and `GET /recommendations/for-you`.
 
 `FaceShape` and `FrameShape` mirror product-service's enums exactly (same 6/8 values,
 same string casing) so requests/responses are directly comparable across services —
@@ -86,4 +86,45 @@ class RecommendedProductDto(BaseModel):
     brand: BrandSummaryDto
     images: list[ProductImageDto]
     faceShapes: list[FaceShape]
-    score: float = Field(..., description="Ranking score — how well this product's frame shape fits the requested face shape")
+    score: float = Field(..., description="Ranking score on a 0–1 scale — equal to `finalScore`")
+    # Hybrid ranking parts (all in [0, 1]); defaults keep `product_client.list_products` parsing.
+    preferenceScore: float = 0.0
+    faceFitScore: float = 0.0
+    finalScore: float = 0.0
+    reasons: list[str] = Field(default_factory=list)
+
+
+class CatalogVariantDto(BaseModel):
+    color: str | None = None
+
+
+class CatalogProductDto(BaseModel):
+    """One product of the full catalog (`ProductClient.list_catalog`) — the card fields of
+    `RecommendedProductDto` plus what the ranker features need (`genderTarget`,
+    `materialType`, variant colors). `materialType` is checked against the feature enum by
+    the client, item by item."""
+
+    id: str
+    sku: str
+    name: str
+    slug: str
+    frameShape: FrameShape
+    genderTarget: GenderTarget
+    materialType: str | None = None
+    basePrice: float
+    brand: BrandSummaryDto
+    images: list[ProductImageDto]
+    faceShapes: list[FaceShape]
+    variants: list[CatalogVariantDto] = Field(default_factory=list)
+
+
+class ForYouResponse(BaseModel):
+    """`data` of `GET /recommendations/for-you`. `alpha`/`beta` are the effective weights
+    (β=0 without a face analysis, α=0 when no preference model is loaded)."""
+
+    items: list[RecommendedProductDto]
+    faceShape: FaceShape | None = None
+    faceAnalysisId: str | None = None
+    modelVersion: str | None = None
+    alpha: float
+    beta: float

@@ -126,3 +126,42 @@ def test_list_products_parses_image_kind_and_defaults_to_gallery(
     images = products[0].images
     assert images[0].kind == "TRY_ON"
     assert images[1].kind == "GALLERY"
+
+
+def test_list_catalog_reads_every_page_without_face_shape_filter_AC11(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    catalog_item = {
+        **_PRODUCT_ITEM,
+        "genderTarget": "UNISEX",
+        "materialType": "ACETATE",
+        "variants": [{"color": "black"}, {"color": "gold"}],
+    }
+    pages = {
+        "1": [catalog_item, {**catalog_item, "id": "p-bad", "materialType": "WOOD"}],
+        "2": [{**catalog_item, "id": "p2"}, catalog_item],  # p1 again → de-duplicated
+    }
+    seen_params: list = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_params.append(dict(request.url.params))
+        page = request.url.params["page"]
+        return httpx.Response(
+            200,
+            json={
+                "success": True,
+                "message": "Thành công",
+                "data": pages[page],
+                "meta": {"page": int(page), "limit": 100, "total": 4, "totalPages": 2},
+            },
+        )
+
+    _install_mock_transport(monkeypatch, httpx.MockTransport(handler))
+    client = HttpxProductServiceClient(_SETTINGS)
+
+    products = asyncio.run(client.list_catalog())
+
+    assert [p.id for p in products] == ["p1", "p2"]  # unknown materialType skipped
+    assert products[0].genderTarget == "UNISEX"
+    assert [v.color for v in products[0].variants] == ["black", "gold"]
+    assert seen_params == [{"page": "1", "limit": "100"}, {"page": "2", "limit": "100"}]

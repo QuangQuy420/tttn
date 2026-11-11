@@ -11,3 +11,6 @@ os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://app:app@localhost:54
 os.environ.setdefault("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
 os.environ.setdefault("INTERNAL_API_KEY", "test-internal-key")
 os.environ.setdefault("BEHAVIOR_CONSUMER_ENABLED", "false")
+# Forced (not `setdefault`): a local `.env` sets a model version, but tests must stay
+# model-free (legacy mode) so the app lifespan never loads `models/preference/`.
+os.environ["PREFERENCE_MODEL_VERSION"] = ""

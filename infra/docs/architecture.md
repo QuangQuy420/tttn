@@ -28,7 +28,7 @@ recommendation and virtual try-on. It runs **locally only** via Docker Compose.
 | order-service            | TBD (Q2) | Postgres `order_db` + Redis (cart) |
 | payment-service          | TBD (Q2) | Postgres `payment_db` (internal-only, called by `order-service`) |
 | face-processing-service  | Python + FastAPI + MediaPipe | S3 / MinIO (face images) |
-| recommendation-service   | Python + FastAPI | reads product-service via API |
+| recommendation-service   | Python + FastAPI + XGBoost | Postgres `recommendation_db` (behavior events, impressions); reads product-service + face-processing-service via API |
 | web                      | Next.js + TS | — (browser AR client-side) |
 
 ## Request flow (happy path)
@@ -37,7 +37,7 @@ recommendation and virtual try-on. It runs **locally only** via Docker Compose.
 browser → api-gateway → user-service          (login → JWT)
 browser → api-gateway → product-service       (browse)
 browser → api-gateway → face-processing-service   (upload photo → landmarks → face shape)   → S3/MinIO
-browser → api-gateway → recommendation-service    (face shape → ranked products)             → product-service
+browser → api-gateway → recommendation-service    (user behavior + face shape → ranked products) → product-service, face-processing-service
 browser (client-side)                         (virtual try-on AR with MediaPipe + Canvas/Three.js)
 browser → api-gateway → order-service         (cart in Redis → checkout → order)             → product-service, payment-service
 ```

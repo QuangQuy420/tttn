@@ -5,13 +5,26 @@ message (see `infra/contracts/behavior-events.md`). `event_id` is UNIQUE so a re
 or re-published event is stored only once (consumer-side dedupe). `user_id` /
 `product_id` are plain UUIDs — `recommendation_db` has no cross-database foreign keys to
 user/product data (database-per-service).
+
+`RecommendationImpression` logs each `GET /recommendations/for-you` answer (which products,
+their scores, the weights and model used) for later offline evaluation.
 """
 import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Enum, Identity, Index, String, func, text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import (
+    BigInteger,
+    DateTime,
+    Enum,
+    Float,
+    Identity,
+    Index,
+    String,
+    func,
+    text,
+)
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -52,4 +65,32 @@ class Interaction(Base):
     )
     received_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class RecommendationImpression(Base):
+    __tablename__ = "recommendation_impressions"
+    __table_args__ = (
+        Index("ix_recommendation_impressions_user_id", "user_id"),
+        Index("ix_recommendation_impressions_created_at", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    # In ranked order.
+    product_ids: Mapped[list[uuid.UUID]] = mapped_column(
+        ARRAY(UUID(as_uuid=True)), nullable=False
+    )
+    # `{productId: {preference, faceFit, final}}`
+    scores: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    alpha: Mapped[float] = mapped_column(Float, nullable=False)
+    beta: Mapped[float] = mapped_column(Float, nullable=False)
+    model_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    face_analysis_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
     )

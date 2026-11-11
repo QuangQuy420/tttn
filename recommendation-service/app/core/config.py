@@ -39,6 +39,26 @@ class Settings(BaseSettings):
     # `infra/.env` `INTERNAL_API_KEY`.
     INTERNAL_API_KEY: str
 
+    # Hybrid ranking: `final = RANK_ALPHA * preference + RANK_BETA * faceFit`. The response
+    # reports the effective weights (β=0 without a face analysis, α=0 in legacy mode).
+    RANK_ALPHA: float = 0.6
+    RANK_BETA: float = 0.4
+    # Folder under `models/preference/` to load at startup (see app/core/model_registry.py).
+    # Empty = legacy mode: no model is loaded, preference = popularity, α=0.
+    PREFERENCE_MODEL_VERSION: str = ""
+
+    # face-processing-service internal API (latest / chosen face analysis of a user) — the
+    # default keeps CI (no `.env`) importable.
+    FACE_PROCESSING_SERVICE_URL: str = "http://face-processing-service:8000"
+    FACE_PROCESSING_TIMEOUT_SECONDS: float = 2.0
+
+    # In-process cache lifetime for the product catalog and the global product stats.
+    CATALOG_TTL_SECONDS: float = 300.0
+
+    # Diversity caps on the top-10 of `GET /recommendations/for-you`.
+    MAX_PER_FRAME_SHAPE: int = 3
+    MAX_PER_BRAND: int = 3
+
 
 @lru_cache
 def get_settings() -> Settings:
