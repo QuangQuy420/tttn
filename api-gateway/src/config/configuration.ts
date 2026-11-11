@@ -17,6 +17,26 @@ export interface AppConfig {
   rabbitmqUrl: string;
   /** Max events accepted in one `POST /api/events` batch. */
   eventsMaxBatch: number;
+  /** Redis used as a cache (permissions). Unreachable Redis = cache bypassed, never an error. */
+  redisUrl: string;
+  /** Lifetime of a cached `perm:{userId}` entry. */
+  permissionsCacheTtlSeconds: number;
+  /** Rate-limit window shared by every tier. */
+  rateLimitTtlMs: number;
+  /** Requests per window per user (valid JWT) or IP — routes without a tier. */
+  rateLimitDefault: number;
+  /** `@RateLimitTier('auth')`: register / login / forgot-password / reset-password. */
+  rateLimitAuth: number;
+  /** `@RateLimitTier('faceAnalyze')`: `POST /api/face-analysis/analyze`. */
+  rateLimitFaceAnalyze: number;
+  /** `@RateLimitTier('events')`: `POST /api/events`. */
+  rateLimitEvents: number;
+}
+
+/** Env value as a finite positive integer, else `fallback` (a NaN limit would break the throttler). */
+function positiveInt(value: string | undefined, fallback: number): number {
+  const parsed = parseInt(value ?? '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 export default (): { app: AppConfig } => ({
@@ -36,5 +56,12 @@ export default (): { app: AppConfig } => ({
       process.env.RECOMMENDATION_SERVICE_URL ?? 'http://recommendation-service:8000',
     rabbitmqUrl: process.env.RABBITMQ_URL ?? 'amqp://guest:guest@rabbitmq:5672',
     eventsMaxBatch: parseInt(process.env.EVENTS_MAX_BATCH ?? '20', 10),
+    redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6379',
+    permissionsCacheTtlSeconds: positiveInt(process.env.PERMISSIONS_CACHE_TTL_SECONDS, 60),
+    rateLimitTtlMs: positiveInt(process.env.RATE_LIMIT_TTL_MS, 60000),
+    rateLimitDefault: positiveInt(process.env.RATE_LIMIT_DEFAULT, 100),
+    rateLimitAuth: positiveInt(process.env.RATE_LIMIT_AUTH, 5),
+    rateLimitFaceAnalyze: positiveInt(process.env.RATE_LIMIT_FACE_ANALYZE, 10),
+    rateLimitEvents: positiveInt(process.env.RATE_LIMIT_EVENTS, 60),
   },
 });

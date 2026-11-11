@@ -6,6 +6,8 @@ sqlalchemy[asyncio]>=2.0
 asyncpg
 alembic
 aio-pika>=9.4
+# asyncio client with `aclose()` (catalog cache, see app/repositories/catalog_cache.py).
+redis>=5.0.1
 numpy
 # Must match model_card.json library_versions.xgboost, or model.json may not load.
 xgboost==3.2.0

@@ -11,6 +11,7 @@ import {
 import { Request } from 'express';
 import { AuthenticatedUser } from '../auth/jwt.guard';
 import { OptionalJwtGuard } from '../auth/optional-jwt.guard';
+import { RateLimitTier } from '../auth/rate-limit';
 import {
   BehaviorEvent,
   BehaviorEventPublisherService,
@@ -32,6 +33,7 @@ export class EventsController {
 
   @Post()
   @HttpCode(202)
+  @RateLimitTier('events')
   @UseGuards(OptionalJwtGuard)
   @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
   track(

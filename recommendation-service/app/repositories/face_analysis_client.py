@@ -17,6 +17,7 @@ import httpx
 from pydantic import BaseModel, ValidationError
 
 from app.core.config import Settings, get_settings
+from app.core.request_id import request_id_headers
 from app.schemas.recommend import FaceShape
 
 logger = logging.getLogger(__name__)
@@ -58,7 +59,9 @@ class HttpxFaceAnalysisClient:
     async def _get(self, path: str, params: dict[str, str] | None) -> FaceAnalysisSummary | None:
         try:
             async with httpx.AsyncClient(
-                base_url=self._base_url, timeout=self._timeout, headers=self._headers
+                base_url=self._base_url,
+                timeout=self._timeout,
+                headers={**self._headers, **request_id_headers()},
             ) as client:
                 response = await client.get(path, params=params)
         except httpx.HTTPError as exc:

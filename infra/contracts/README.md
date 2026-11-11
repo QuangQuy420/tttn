@@ -8,10 +8,10 @@ take a **versioned copy** (see `infra/docs/adr/0001-contract-sharing-mechanism.m
 contracts/
   product-service.openapi.yaml   # product-service REST API (OpenAPI 3)
   order-checkout-saga.md         # order-saga-events exchange (checkout saga, RabbitMQ)
-  product-events.md              # product-events exchange (catalog changes → cart sync, RabbitMQ)
+  product-events.md              # product-events exchange (catalog changes → cart sync + recommendation catalog cache, RabbitMQ)
   behavior-events.md             # behavior-events exchange (user behavior → recommendation-service, RabbitMQ)
   face-processing-service.md     # face-processing-service REST (AnalyzeResponse fields + internal latest-analysis / analysis by id)
-  recommendation-service.md      # recommendation-service REST (POST /recommend score fields + GET /recommendations/for-you)
+  recommendation-service.md      # recommendation-service REST (POST /recommend score fields + GET /recommendations/for-you + GET /health/ready)
 ```
 
 Other services do not publish an OpenAPI file here yet.
@@ -70,7 +70,36 @@ On the query string, except `POST /recommend` (in the request body). An invalid 
 
 - `GET /health` on every service (incl. `api-gateway`) keeps returning `{ "status": "ok" }` —
   Docker healthchecks depend on it.
+- `GET /health/ready` on `recommendation-service` returns `{ "status", "checks" }` (200 / 503) —
+  see `recommendation-service.md`.
 - `204 No Content` responses have no body.
 - Multipart upload *requests* keep their form shape (the response is still wrapped).
 - RabbitMQ message bodies (`order-checkout-saga.md`, `product-events.md`, `behavior-events.md`)
   are not wrapped.
+
+## Request id (`X-Request-Id`, all HTTP services)
+
+One id follows a request through every service, so the log lines of one request can be found
+in each container's log.
+
+- **Request header (optional).** A client may send `X-Request-Id`. A value matching
+  `^[A-Za-z0-9-]{8,64}$` is kept; anything else (or no header) is replaced by a new UUID.
+- **Response header.** `api-gateway` returns `X-Request-Id` on every routed response
+  (including the 404 / 429 / 4xx it creates itself) and exposes it to the browser through CORS.
+  CORS preflight responses and body-parse errors (malformed JSON, payload too large) are the
+  exception — they are answered before the request-id middleware runs.
+  `recommendation-service` and `face-processing-service` also echo it on their responses.
+- **Forwarded downstream.** The gateway sends the id on every HTTP call to a downstream service
+  (not on RabbitMQ messages);
+  `recommendation-service` forwards it to `product-service` and `face-processing-service`.
+- **Logs.** `api-gateway` prints one access line per request
+  (`METHOD /path STATUS <ms>ms <requestId>`). `recommendation-service` and
+  `face-processing-service` print the id in every application log line
+  (`<time> <LEVEL> <logger> [<requestId>] <message>`, `[-]` outside a request; uvicorn's own
+  lines keep their default format) plus one access line per request on logger `app.access`
+  (`METHOD /path STATUS <ms>ms`, path percent-encoded).
+- **Known gap.** A 500 caused by an unhandled exception in the two Python services may come
+  back **without** the header. The gateway still puts its own `X-Request-Id` on the response to
+  the client, and the service's log line for that 500 still carries the id.
+- `product-service`, `order-service` and `user-service` receive the header but do not log or
+  forward it yet. `payment-service` is reached only over RabbitMQ, so it never receives it.

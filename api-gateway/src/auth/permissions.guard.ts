@@ -6,14 +6,15 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
-import { UsersProxyService } from '../services/users-proxy.service';
+import { PermissionsCacheService } from '../services/permissions-cache.service';
 import { AuthenticatedUser } from './jwt.guard';
 import { PERMISSIONS_KEY } from './permissions.decorator';
 
 /**
- * Checks the caller's *current* permissions — looked up fresh from
- * user-service on every request via `UsersProxyService.getPermissions`, not
- * a JWT-embedded snapshot — against the permission codes declared via
+ * Checks the caller's *current* permissions — read through
+ * `PermissionsCacheService` (Redis `perm:{userId}`, TTL 60 s, deleted on role
+ * changes made through the gateway; user-service on a miss or when Redis is
+ * down), not a JWT-embedded snapshot — against the permission codes declared via
  * `@RequirePermission(...)` on the route/controller. No `@RequirePermission()`
  * metadata -> allow (permission check is opt-in per route). Must run after
  * `JwtGuard` (needs `request.user.userId` already set).
@@ -22,7 +23,7 @@ import { PERMISSIONS_KEY } from './permissions.decorator';
 export class PermissionsGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
-    private readonly usersProxyService: UsersProxyService,
+    private readonly permissionsCacheService: PermissionsCacheService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -39,7 +40,7 @@ export class PermissionsGuard implements CanActivate {
       .switchToHttp()
       .getRequest<Request & { user: AuthenticatedUser }>();
 
-    const permissions = await this.usersProxyService.getPermissions(
+    const permissions = await this.permissionsCacheService.getPermissions(
       request.user.userId,
     );
 

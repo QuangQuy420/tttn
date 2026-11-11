@@ -165,3 +165,98 @@ def test_list_catalog_reads_every_page_without_face_shape_filter_AC11(
     assert products[0].genderTarget == "UNISEX"
     assert [v.color for v in products[0].variants] == ["black", "gold"]
     assert seen_params == [{"page": "1", "limit": "100"}, {"page": "2", "limit": "100"}]
+
+
+class _FakeCatalogCache:
+    """In-memory `ICatalogCache` (no Redis)."""
+
+    def __init__(self, cached=None) -> None:
+        self.value = cached
+        self.set_calls: list = []
+
+    async def get(self):
+        return self.value
+
+    async def set(self, items) -> None:
+        self.set_calls.append(items)
+        self.value = items
+
+    async def invalidate(self) -> None:
+        self.value = None
+
+    async def ping(self) -> bool:
+        return True
+
+
+def _catalog_handler(calls: list):
+    catalog_item = {**_PRODUCT_ITEM, "genderTarget": "UNISEX", "materialType": "ACETATE"}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "success": True,
+                "message": "Thành công",
+                "data": [catalog_item],
+                "meta": {"page": 1, "limit": 100, "total": 1, "totalPages": 1},
+            },
+        )
+
+    return handler
+
+
+def test_list_catalog_miss_fetches_and_stores_in_cache_then_hit_skips_http_AC7(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list = []
+    _install_mock_transport(monkeypatch, httpx.MockTransport(_catalog_handler(calls)))
+    cache = _FakeCatalogCache()
+    client = HttpxProductServiceClient(_SETTINGS, cache)
+
+    async def scenario():
+        return await client.list_catalog(), await client.list_catalog()
+
+    first, second = asyncio.run(scenario())
+
+    assert [p.id for p in first] == ["p1"]
+    assert cache.set_calls == [first]
+    assert second == first
+    assert len(calls) == 1  # second call served from the cache
+
+
+def test_list_catalog_cache_hit_makes_no_http_call_AC7(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list = []
+    _install_mock_transport(monkeypatch, httpx.MockTransport(_catalog_handler(calls)))
+    cached = [object()]
+    cache = _FakeCatalogCache(cached=cached)
+    client = HttpxProductServiceClient(_SETTINGS, cache)
+
+    result = asyncio.run(client.list_catalog())
+
+    assert result is cached
+    assert calls == []
+    assert cache.set_calls == []
+
+
+def test_list_products_forwards_the_current_request_id_AC10(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.core.request_id import request_id_var
+
+    seen_headers: list = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_headers.append(request.headers.get("X-Request-Id"))
+        return httpx.Response(200, json={"success": True, "message": "Thành công", "data": []})
+
+    _install_mock_transport(monkeypatch, httpx.MockTransport(handler))
+    client = HttpxProductServiceClient(_SETTINGS)
+
+    token = request_id_var.set("req-12345678")
+    try:
+        asyncio.run(client.list_products(face_shape="ROUND"))
+    finally:
+        request_id_var.reset(token)
+
+    assert seen_headers == ["req-12345678"]

@@ -154,3 +154,63 @@ def test_for_you_without_x_user_id_returns_400() -> None:
     assert response.status_code == 400
     assert response.json()["message"] == "Thiếu header bắt buộc 'X-User-Id'."
     assert fake.calls == []
+
+
+class _FakeSession:
+    def __init__(self, error: Exception | None = None) -> None:
+        self._error = error
+
+    async def execute(self, statement):
+        if self._error is not None:
+            raise self._error
+        return None
+
+
+class _FakeCatalogCache:
+    def __init__(self, ping_ok: bool) -> None:
+        self._ping_ok = ping_ok
+
+    async def ping(self) -> bool:
+        return self._ping_ok
+
+
+class _FakeConsumer:
+    is_connected = True
+
+
+def _override_ready(session: _FakeSession, cache: _FakeCatalogCache) -> None:
+    from app.db.session import get_db_session
+    from app.repositories.catalog_cache import get_catalog_cache
+
+    async def _session():
+        yield session
+
+    app.dependency_overrides[get_db_session] = _session
+    app.dependency_overrides[get_catalog_cache] = lambda: cache
+
+
+def test_health_ready_returns_200_when_db_redis_and_broker_are_up_AC11() -> None:
+    _override_ready(_FakeSession(), _FakeCatalogCache(ping_ok=True))
+    app.state.product_consumer = _FakeConsumer()
+    try:
+        response = client.get("/health/ready")
+    finally:
+        del app.state.product_consumer
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ok",
+        "checks": {"db": "ok", "redis": "ok", "broker": "ok"},
+    }
+
+
+def test_health_ready_returns_503_with_the_failing_component_when_redis_is_down_AC11() -> None:
+    _override_ready(_FakeSession(), _FakeCatalogCache(ping_ok=False))
+
+    response = client.get("/health/ready")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "status": "unavailable",
+        "checks": {"db": "ok", "redis": "error", "broker": "disabled"},
+    }

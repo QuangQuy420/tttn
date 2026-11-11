@@ -144,8 +144,9 @@ export class UsersProxyService {
     /**
      * Internal, service-to-service call — not exposed to end users. Asks
      * user-service for the caller's *current* flattened permission code
-     * list, fresh on every call (no JWT-embedded snapshot), so role changes
-     * apply immediately. Requires `X-Internal-Key` (T11's gate on
+     * list (no JWT-embedded snapshot). Called through
+     * `PermissionsCacheService`, which caches the result for ≤ 60 s and
+     * drops it on gateway role changes. Requires `X-Internal-Key` (T11's gate on
      * user-service's `/internal/**` routes).
      */
     async getPermissions(userId: string): Promise<string[]> {

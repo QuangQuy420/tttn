@@ -121,6 +121,52 @@ gateway forwards the query string and sets `X-User-Id` from the token.
 
 | Callee | Call | Used for |
 |---|---|---|
-| product-service | `GET /products?page=n&limit=100` (all pages, cached `CATALOG_TTL_SECONDS = 300`) | candidate catalog |
+| product-service | `GET /products?page=n&limit=100` (all pages; cached in Redis, see below) | candidate catalog |
 | face-processing-service | `GET /internal/users/{userId}/latest-analysis`, `GET /internal/analyses/{analysisId}?userId=` (`X-Internal-Key`) — see `face-processing-service.md` | face-shape probabilities |
 | `recommendation_db` | `interactions` (read), `recommendation_impressions` (write) | behavior history, popularity, impression log |
+
+Every outgoing call carries the incoming `X-Request-Id` (see `README.md`).
+
+## Inputs (RabbitMQ)
+
+| Exchange | Queue | Used for |
+|---|---|---|
+| `behavior-events` | `recommendation-service.behavior-events` | store user behavior in `interactions` — see `behavior-events.md` |
+| `product-events` | `product-events.recommendation-service` (`product.updated`, `product.deleted`) | invalidate the catalog cache — see `product-events.md` |
+
+## Catalog cache
+
+- The whole catalog is cached in Redis under one key `rec:catalog:v1` (JSON) for
+  `CATALOG_TTL_SECONDS` (default 300). Concurrent misses load it from product-service once (per process), and any cache miss within
+  2 s (`RECENT_CATALOG_FETCH_REUSE_SECONDS`) of this process's last catalog fetch reuses that
+  fetch — up to 2 s of extra staleness right after an invalidation.
+- `product.updated` / `product.deleted` delete the key, so a price change or delete shows up in
+  the next recommendation (normally within seconds). A new product has no event and appears after
+  the TTL at the latest (≤ 300 s). Details and the consistency window:
+  `infra/docs/adr/0005-redis-cache-and-event-invalidation.md`.
+- Redis down → no error: recommendations read the catalog from product-service, at most once
+  per 2 s per process.
+- The global product stats (popularity) stay cached in process for `CATALOG_TTL_SECONDS`.
+
+## `GET /health/ready`
+
+Readiness check (not routed through the gateway; `GET /health` stays the liveness check used by
+Docker). **Not wrapped** in the response envelope. Each check is bounded to 2 s.
+
+**200**
+
+```json
+{ "status": "ok", "checks": { "db": "ok", "redis": "ok", "broker": "ok" } }
+```
+
+**503** — at least one check failed; failing checks are `"error"`:
+
+```json
+{ "status": "unavailable", "checks": { "db": "ok", "redis": "error", "broker": "ok" } }
+```
+
+- `db` — `SELECT 1` on `recommendation_db`.
+- `redis` — `PING` on the catalog cache's Redis.
+- `broker` — every enabled RabbitMQ consumer (behavior events, product events) is connected.
+  `"disabled"` (not a failure) when both consumers are turned off
+  (`BEHAVIOR_CONSUMER_ENABLED=false`, `PRODUCT_CONSUMER_ENABLED=false`).

@@ -1,6 +1,7 @@
-"""Single-value in-process cache with a time-to-live (catalog and product stats).
+"""Single-value in-process cache with a time-to-live (global product stats).
 
-Per process, not shared between replicas — plan 14 moves these caches to Redis.
+Per process, not shared between replicas. The product catalog lives in Redis instead (see
+app/repositories/catalog_cache.py).
 """
 import time
 from typing import Generic, TypeVar

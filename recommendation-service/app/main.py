@@ -1,5 +1,6 @@
-"""FastAPI entrypoint — app instance, lifespan (preference model + behavior-events
-consumer), router mounting, envelope exception handlers."""
+"""FastAPI entrypoint — logging + request-id middleware, app instance, lifespan
+(preference model + behavior-events and product-events consumers), router mounting,
+envelope exception handlers."""
 import asyncio
 import contextlib
 import logging
@@ -13,9 +14,12 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.config import get_settings
 from app.core.model_registry import load_preference_model
+from app.core.request_id import RequestIdMiddleware, configure_logging
 from app.db.session import get_engine
 from app.repositories.behavior_event_consumer import BehaviorEventConsumer
+from app.repositories.catalog_cache import get_catalog_cache
 from app.repositories.interaction_repository import interaction_repository_scope
+from app.repositories.product_event_consumer import ProductEventConsumer
 from app.routers.internal import router as internal_router
 from app.routers.recommend import router as recommend_router
 from app.schemas.common import error_body
@@ -43,7 +47,9 @@ _INITIAL_CONNECT_ATTEMPTS = 5
 _RECONNECT_DELAY_SECONDS = 3
 
 
-async def _start_consumer_with_retry(consumer: BehaviorEventConsumer) -> None:
+async def _start_consumer_with_retry(
+    consumer: BehaviorEventConsumer | ProductEventConsumer,
+) -> None:
     """Keep trying the first connect every few seconds until it succeeds. Runs as a
     background task so startup and `/health` never wait on RabbitMQ; after the first
     connect, `connect_robust` handles reconnects by itself."""
@@ -56,15 +62,19 @@ async def _start_consumer_with_retry(consumer: BehaviorEventConsumer) -> None:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
+            name = type(consumer).__name__
             if attempt == _INITIAL_CONNECT_ATTEMPTS:
                 logger.warning(
-                    "Still cannot connect to RabbitMQ after %d attempts — behavior events "
-                    "will not be stored until it connects; retrying every %ss",
+                    "%s still cannot connect to RabbitMQ after %d attempts — its events "
+                    "will not be handled until it connects; retrying every %ss",
+                    name,
                     attempt,
                     _RECONNECT_DELAY_SECONDS,
                 )
             else:
-                logger.error("Failed to connect to RabbitMQ (attempt %d): %s", attempt, exc)
+                logger.error(
+                    "%s failed to connect to RabbitMQ (attempt %d): %s", name, attempt, exc
+                )
         await asyncio.sleep(_RECONNECT_DELAY_SECONDS)
 
 
@@ -74,29 +84,45 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Before the consumer starts: a missing model or a feature-schema mismatch raises here,
     # so the app never starts serving with a wrong model.
     load_preference_model(settings.PREFERENCE_MODEL_VERSION)
-    consumer: BehaviorEventConsumer | None = None
-    consumer_task: asyncio.Task | None = None
+    consumers: list[BehaviorEventConsumer | ProductEventConsumer] = []
+    behavior_consumer: BehaviorEventConsumer | None = None
     if settings.BEHAVIOR_CONSUMER_ENABLED:
-        consumer = BehaviorEventConsumer(
+        behavior_consumer = BehaviorEventConsumer(
             settings, InteractionIngestService(interaction_repository_scope)
         )
-        consumer_task = asyncio.create_task(_start_consumer_with_retry(consumer))
+        consumers.append(behavior_consumer)
+    product_consumer: ProductEventConsumer | None = None
+    if settings.PRODUCT_CONSUMER_ENABLED:
+        # Same `lru_cache` instance the product client uses.
+        product_consumer = ProductEventConsumer(settings, get_catalog_cache())
+        consumers.append(product_consumer)
+    # Read by `GET /health/ready` (None = disabled).
+    app.state.behavior_consumer = behavior_consumer
+    app.state.product_consumer = product_consumer
+    consumer_tasks = [
+        asyncio.create_task(_start_consumer_with_retry(consumer)) for consumer in consumers
+    ]
 
     yield
 
-    if consumer_task is not None:
-        consumer_task.cancel()
+    for task in consumer_tasks:
+        task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
-            await consumer_task
-    if consumer is not None:
+            await task
+    for consumer in consumers:
         await consumer.stop()
-    # Dispose only if something actually created the engine, so a flag-off
-    # `with TestClient(app)` never needs a database.
+    # Dispose / close only if something actually created the engine / Redis client, so a
+    # flag-off `with TestClient(app)` never needs a database or Redis.
     if get_engine.cache_info().currsize:
         await get_engine().dispose()
+    if get_catalog_cache.cache_info().currsize:
+        await get_catalog_cache().aclose()
 
+
+configure_logging()
 
 app = FastAPI(title="recommendation-service", lifespan=lifespan)
+app.add_middleware(RequestIdMiddleware)
 
 app.include_router(recommend_router)
 app.include_router(internal_router)

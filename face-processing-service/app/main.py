@@ -9,6 +9,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.core.request_id import RequestIdMiddleware, configure_logging
 from app.repositories.image_storage_repository import get_image_storage_repository
 from app.routers.face import router as face_router
 from app.routers.internal import router as internal_router
@@ -42,7 +43,10 @@ _DEFAULT_MESSAGES: dict[int, str] = {
     500: "Lỗi hệ thống, vui lòng thử lại sau.",
 }
 
+configure_logging()
+
 app = FastAPI(title="face-processing-service")
+app.add_middleware(RequestIdMiddleware)
 
 app.include_router(face_router)
 app.include_router(internal_router)
