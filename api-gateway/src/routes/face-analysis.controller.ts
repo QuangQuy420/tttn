@@ -15,6 +15,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
 import { AuthenticatedUser, JwtGuard } from '../auth/jwt.guard';
+import { RateLimitTier } from '../auth/rate-limit';
 import { FaceAnalysisProxyService } from '../services/face-analysis-proxy.service';
 
 /**
@@ -26,6 +27,7 @@ export class FaceAnalysisController {
   constructor(private readonly faceAnalysisProxyService: FaceAnalysisProxyService) {}
 
   @Post('analyze')
+  @RateLimitTier('faceAnalyze')
   @UseGuards(JwtGuard)
   @UseInterceptors(FileInterceptor('file'))
   analyze(

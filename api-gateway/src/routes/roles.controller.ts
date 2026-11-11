@@ -13,6 +13,7 @@ import {
 import { JwtGuard } from '../auth/jwt.guard';
 import { RequirePermission } from '../auth/permissions.decorator';
 import { PermissionsGuard } from '../auth/permissions.guard';
+import { PermissionsCacheService } from '../services/permissions-cache.service';
 import { UsersProxyService } from '../services/users-proxy.service';
 
 /**
@@ -22,11 +23,15 @@ import { UsersProxyService } from '../services/users-proxy.service';
  * requires the caller to currently hold `role:manage` (checked live against
  * user-service, see `PermissionsGuard`) — user-service enforces the same
  * check again on its own side (AC5), this guard is a defense-in-depth edge
- * check, not the only enforcement.
+ * check, not the only enforcement. Updating or deleting a role clears every
+ * cached `perm:*` entry, since any user may hold that role.
  */
 @Controller('api/roles')
 export class RolesController {
-  constructor(private readonly usersProxyService: UsersProxyService) {}
+  constructor(
+    private readonly usersProxyService: UsersProxyService,
+    private readonly permissionsCacheService: PermissionsCacheService,
+  ) {}
 
   @Get()
   @UseGuards(JwtGuard, PermissionsGuard)
@@ -51,22 +56,27 @@ export class RolesController {
   @Put(':id')
   @UseGuards(JwtGuard, PermissionsGuard)
   @RequirePermission('role:manage')
-  update(
+  async update(
     @Param('id') id: string,
     @Body() body: Record<string, unknown>,
     @Headers('authorization') authorization?: string,
   ): Promise<unknown> {
-    return this.usersProxyService.updateRole(id, body, authorization);
+    const result = await this.usersProxyService.updateRole(id, body, authorization);
+    // Only after user-service accepted the change (an upstream error skips this).
+    await this.permissionsCacheService.invalidateAll();
+    return result;
   }
 
   @Delete(':id')
   @UseGuards(JwtGuard, PermissionsGuard)
   @RequirePermission('role:manage')
-  remove(
+  async remove(
     @Param('id') id: string,
     @Headers('authorization') authorization?: string,
   ): Promise<unknown> {
-    return this.usersProxyService.deleteRole(id, authorization);
+    const result = await this.usersProxyService.deleteRole(id, authorization);
+    await this.permissionsCacheService.invalidateAll();
+    return result;
   }
 }
 

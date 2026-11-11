@@ -35,6 +35,14 @@ class Settings(BaseSettings):
     # dead-lettered to `behavior-events.dlq`. Changing it later means deleting the queue.
     BEHAVIOR_QUEUE_DELIVERY_LIMIT: int = 10
     BEHAVIOR_PREFETCH: int = 20
+    # RabbitMQ `product-events` consumer (see app/repositories/product_event_consumer.py) —
+    # invalidates the Redis catalog cache on `product.updated` / `product.deleted`. Tests set
+    # it to False like the behavior flag. Reuses BEHAVIOR_PREFETCH / BEHAVIOR_QUEUE_DELIVERY_LIMIT.
+    PRODUCT_CONSUMER_ENABLED: bool = True
+
+    # Redis holding the product catalog cache (see app/repositories/catalog_cache.py). When
+    # Redis is down the cache is bypassed (every request reads product-service).
+    REDIS_URL: str = "redis://redis:6379/0"
 
     # Shared secret for `/internal/*` endpoints (`X-Internal-Key` header) — same value as
     # `infra/.env` `INTERNAL_API_KEY`.
@@ -59,7 +67,9 @@ class Settings(BaseSettings):
     FACE_PROCESSING_SERVICE_URL: str = "http://face-processing-service:8000"
     FACE_PROCESSING_TIMEOUT_SECONDS: float = 2.0
 
-    # In-process cache lifetime for the product catalog and the global product stats.
+    # Cache lifetime for the product catalog (Redis, also invalidated by `product-events`) and
+    # the global product stats (in-process). Bounds staleness when an event is lost and for
+    # newly created products (product-service publishes no `product.created`).
     CATALOG_TTL_SECONDS: float = 300.0
 
     # Diversity caps on the top-10 of `GET /recommendations/for-you`.

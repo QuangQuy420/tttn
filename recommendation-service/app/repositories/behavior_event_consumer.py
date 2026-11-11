@@ -63,6 +63,11 @@ class BehaviorEventConsumer:
         self._connection: AbstractRobustConnection | None = None
         self._channel: AbstractRobustChannel | None = None
 
+    @property
+    def is_connected(self) -> bool:
+        """True while the broker connection is up (False while `connect_robust` reconnects)."""
+        return self._connection is not None and self._connection.connected.is_set()
+
     async def start(self) -> None:
         """Connect, declare the topology and start consuming. Raises if the first
         connect/declare fails (the caller retries); later drops are auto-recovered."""

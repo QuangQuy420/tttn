@@ -91,15 +91,17 @@ services:
     env_file: ../api-gateway/.env
     ports:
       - "${API_GATEWAY_PORT:-8080}:8080"
-    # user-service intentionally NOT listed here: api-gateway doesn't call it yet
-    # (edge JWT / `/api/auth/*` proxying is deferred — see Q3 in the sprint plan).
-    # Re-add `user-service: condition: service_healthy` once that proxy exists —
-    # until then, a hard dependency would block api-gateway from coming up whenever
-    # user-service's Dockerfile (still a placeholder) fails to build.
+    # user-service intentionally NOT listed here: the gateway proxies `/api/auth/*`,
+    # `/api/users/*`, `/api/roles/*` to it, but only per request — a user-service that is
+    # down (or slow to boot) gives 503 on those routes and must not keep the whole gateway
+    # (and every other route) from starting. redis = permissions cache (perm:{userId});
+    # the gateway still works without it (cache bypassed), see ADR 0005.
     depends_on:
       product-service:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       # start_period matches product-service: `nest start --watch` recompiles TS from scratch
@@ -212,6 +214,9 @@ services:
       postgres:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      # Product catalog cache (rec:catalog:v1), cleared by product-events — ADR 0005.
+      redis:
         condition: service_healthy
       product-service:
         condition: service_started

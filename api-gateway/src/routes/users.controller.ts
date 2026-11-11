@@ -13,12 +13,14 @@ import {
 import { JwtGuard } from '../auth/jwt.guard';
 import { RequirePermission } from '../auth/permissions.decorator';
 import { PermissionsGuard } from '../auth/permissions.guard';
+import { PermissionsCacheService } from '../services/permissions-cache.service';
 import { UsersProxyService } from '../services/users-proxy.service';
 
 @Controller('api/users')
 export class UsersController {
     constructor(
         private readonly usersProxyService: UsersProxyService,
+        private readonly permissionsCacheService: PermissionsCacheService,
     ) {}
 
     @Get()
@@ -96,30 +98,35 @@ export class UsersController {
     @Post(':id/roles')
     @UseGuards(JwtGuard, PermissionsGuard)
     @RequirePermission('user:manage-roles')
-    assignRole(
+    async assignRole(
         @Param('id') id: string,
         @Body() body: Record<string, unknown>,
         @Headers('authorization') authorization?: string,
     ): Promise<unknown> {
-        return this.usersProxyService.assignRoleToUser(
+        const result = await this.usersProxyService.assignRoleToUser(
             id,
             body,
             authorization,
         );
+        // Only after user-service accepted the change (an upstream error skips this).
+        await this.permissionsCacheService.invalidateUser(id);
+        return result;
     }
 
     @Delete(':id/roles/:roleId')
     @UseGuards(JwtGuard, PermissionsGuard)
     @RequirePermission('user:manage-roles')
-    removeRole(
+    async removeRole(
         @Param('id') id: string,
         @Param('roleId') roleId: string,
         @Headers('authorization') authorization?: string,
     ): Promise<unknown> {
-        return this.usersProxyService.removeRoleFromUser(
+        const result = await this.usersProxyService.removeRoleFromUser(
             id,
             roleId,
             authorization,
         );
+        await this.permissionsCacheService.invalidateUser(id);
+        return result;
     }
 }

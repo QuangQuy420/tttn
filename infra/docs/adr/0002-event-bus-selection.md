@@ -121,3 +121,11 @@ application code yet. The publish side was verified manually via the RabbitMQ ma
   *Update (2026-09-29):* `order-service` now consumes `product.updated`/`product.deleted`
   through its quorum queue `product-events.order-service` to keep Redis carts in sync — see
   `infra/contracts/product-events.md`.
+  *Update (2026-11-11):* `recommendation-service` also consumes `product.updated` /
+  `product.deleted`, through its own quorum queue `product-events.recommendation-service`
+  (sharing the DLX `product-events.dlx` → DLQ `product-events.dlq` with order-service), to delete
+  its Redis catalog cache — see `infra/docs/adr/0005-redis-cache-and-event-invalidation.md`.
+  East-West traffic over RabbitMQ now also covers the checkout saga (`order-saga-events`,
+  `infra/docs/adr/0003-transactional-outbox-and-idempotency.md`) and user behavior events
+  (`behavior-events`, `infra/docs/adr/0004-behavior-events-over-rabbitmq.md`); internal REST is
+  still used where the caller needs an answer right away.

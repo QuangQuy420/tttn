@@ -18,7 +18,7 @@ register / login
    → browse catalog
    → upload face photo
    → face analysis (landmarks → face shape + measurements)
-   → frame recommendation (by face shape)
+   → frame recommendation (face shape + the user's behavior)
    → virtual try-on (AR, in the browser)
    → add to cart → checkout → order history
 ```
@@ -33,25 +33,42 @@ register / login
   own `Dockerfile`, so splitting one out into its own repo later is a folder extraction, not a
   rewrite.
 - **North-South** (browser → system) goes through a single **API Gateway** (routing, CORS,
-  edge JWT verification, rate-limit).
-- **East-West** (service ↔ service) is mostly internal **REST** (sync) — except checkout →
-  payment, which is **event-driven over RabbitMQ**: `order-service` publishes
-  `payment.create.requested`, `payment-service` consumes it and reports back
-  `payment.completed` / `payment.failed`.
-- **Database-per-service** (one Postgres server, a separate database per service for local dev;
-  `order-service` also uses Redis for the cart).
+  edge JWT verification, permissions, rate limit, `X-Request-Id`). Rate limit: per user (valid
+  JWT) or per IP, per route, in a 60 s window — 5 for register / login / forgot / reset password,
+  10 for face analysis, 60 for behavior events, 100 for the rest; over it → **429** with a
+  Vietnamese message. `/health` is never limited.
+- **East-West** (service ↔ service) uses internal **REST** (sync) when the caller needs an
+  answer right away, and **RabbitMQ** (async) for the rest:
+  - checkout saga (`order-saga-events`): `order-service` ⇄ `product-service` (stock) and
+    `payment-service` (payment), with a transactional outbox;
+  - `product-events` (`product.updated` / `product.deleted`): `order-service` syncs Redis carts,
+    `recommendation-service` clears its catalog cache;
+  - `behavior-events` (view, try-on, like, add to cart, purchase) → `recommendation-service`.
+- **Database-per-service** (one Postgres server, a separate database per service for local dev).
+- **Redis** — `order-service` carts (data), plus two caches: the gateway's permissions cache
+  (60 s) and `recommendation-service`'s product catalog (300 s, cleared by `product-events`).
+  The caches are never the source of truth: if Redis is down, both services keep working, just
+  slower.
+- **Request id** — every request gets an `X-Request-Id` at the gateway; the same id shows up in
+  the logs of the gateway, `recommendation-service` and `face-processing-service`.
+- Architecture details and ADRs: `infra/docs/architecture.md`, `infra/docs/adr/`.
 - Face images are stored in **S3** — locally via **MinIO** (S3-compatible), so switching to
   real S3 later needs no code change.
 
 ```
             ┌─────────────┐
  browser ──▶│ api-gateway │──┬─▶ user-service            (Postgres: auth_db)
-            └─────────────┘  ├─▶ product-service         (Postgres: product_db)
-                             ├─▶ order-service            (Postgres: order_db + Redis)
-                             ├─▶ face-processing-service  (FastAPI + MediaPipe, S3/MinIO)
-                             └─▶ recommendation-service   (FastAPI; reads product-service)
+            │ (Redis:     │  ├─▶ product-service         (Postgres: product_db, MinIO)
+            │  perm cache)│  ├─▶ order-service            (Postgres: order_db + Redis carts)
+            └─────────────┘  ├─▶ face-processing-service  (FastAPI + MediaPipe, Postgres, S3/MinIO)
+                             └─▶ recommendation-service   (FastAPI + XGBoost, Postgres: recommendation_db,
+                                                           Redis catalog cache; reads product-service
+                                                           + face-processing-service)
 
- order-service ──▶ RabbitMQ ──▶ payment-service (Postgres: payment_db)
+ RabbitMQ:
+   order-saga-events  order-service ⇄ product-service, payment-service (Postgres: payment_db)
+   product-events     product-service → order-service, recommendation-service
+   behavior-events    api-gateway, product-service, order-service → recommendation-service
 
  web (Next.js) ── runs the AR try-on client-side
 ```
@@ -62,19 +79,19 @@ register / login
 
 | Repo | Language | Responsibility |
 |------|----------|----------------|
-| **`api-gateway`** | **NestJS + TypeScript** | Single entry point; routing, CORS, edge JWT verify, rate-limit (North-South) |
+| **`api-gateway`** | **NestJS + TypeScript** | Single entry point; routing, CORS, edge JWT verify, permissions (cached in Redis), rate limit, request id (North-South) |
 | **`user-service`** | **Spring Boot (Java) + Maven** | Register / login, JWT, roles & permissions, user profile, saved addresses |
 | **`product-service`** | **NestJS + TypeScript** | Products, categories, frame attributes, variants/inventory, list/detail/search |
 | **`order-service`** | **Spring Boot (Java) + Maven** | Cart (Redis), checkout, orders, order history (delegates payment to `payment-service` over RabbitMQ) |
 | **`payment-service`** | **NestJS + TypeScript** | Processes checkout payments for `order-service` (mock provider), payment status/history |
 | **`face-processing-service`** | **Python + FastAPI** | Face landmark detection (MediaPipe) → face shape + measurements |
-| **`recommendation-service`** | **Python + FastAPI** | Face shape → ranked frame recommendations (face-shape based, no behavioral filtering) |
+| **`recommendation-service`** | **Python + FastAPI** | Hybrid ranking `finalScore = α·preferenceScore (XGBoost on user behavior) + β·faceFitScore`; stores behavior events from RabbitMQ; catalog cached in Redis |
 | **`web`** | **Next.js + TypeScript** | Storefront, auth UI, upload, recommendations, virtual try-on (AR), admin dashboard |
 | **`infra`** | Docker Compose + GitHub Actions | `docker-compose.yml`, seed data, shared API contracts, docs/ADRs (local only) |
 
-> ✅ **All nine services are real and build** (`recommendation-service` just doesn't have a
-> Compose healthcheck yet, unlike the others). See `infra/README.md` for whatever's still
-> in progress on a given service.
+> ✅ **All nine services are real and build**, and every Compose container has a
+> healthcheck. See
+> `infra/README.md` for whatever's still in progress on a given service.
 
 ---
 

@@ -62,8 +62,8 @@ export function extractBearerToken(request: Request): string | undefined {
  * `{ userId, email, username }` claims onto `request.user` for downstream
  * guards/controllers to read. The JWT no longer carries a `role`/`roles`
  * claim — authorization is decided live via `PermissionsGuard`
- * (`permissions.guard.ts`), which asks user-service for the caller's
- * *current* permissions on every gated request, not from a token snapshot.
+ * (`permissions.guard.ts`), which reads the caller's *current* permissions
+ * (user-service, cached ≤ 60 s in Redis), not from a token snapshot.
  *
  * `user-service`'s `JwtUtil.getSigningKey()` Base64-decodes `JWT_SECRET`
  * before using it as the HMAC-SHA256 key (`Keys.hmacShaKeyFor(Decoders

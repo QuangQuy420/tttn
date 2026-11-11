@@ -7,6 +7,7 @@ downstream failure surface as an unhandled 500, mirroring how
 """
 import asyncio
 import logging
+import time
 from functools import lru_cache
 from typing import Any, Protocol
 
@@ -14,8 +15,13 @@ import httpx
 from pydantic import ValidationError
 
 from app.core.config import Settings, get_settings
-from app.core.ttl_cache import TtlCache
+from app.core.request_id import request_id_headers
 from app.ml.features import MATERIAL_TYPES
+from app.repositories.catalog_cache import (
+    ICatalogCache,
+    NoopCatalogCache,
+    get_catalog_cache,
+)
 from app.schemas.recommend import (
     CatalogProductDto,
     FrameShape,
@@ -27,6 +33,11 @@ logger = logging.getLogger(__name__)
 
 # product-service's max `limit` per page.
 CATALOG_PAGE_SIZE = 100
+# Any Redis miss within this window reuses the last fetched catalog (lock waiters, a Redis
+# outage, or right after an invalidation) — adds <= 2 s staleness after a product event.
+# Without it, a Redis outage (every `get` misses, `set` is a no-op) would make every waiting
+# request run its own full fetch, one after another (AC8 allows 5 s).
+RECENT_CATALOG_FETCH_REUSE_SECONDS = 2.0
 
 
 class ProductServiceError(Exception):
@@ -57,7 +68,8 @@ class IProductServiceClient(Protocol):
 
     async def list_catalog(self) -> list[CatalogProductDto]:
         """Every published product (all pages of `GET /products`, no `faceShape` filter),
-        de-duplicated by `id` and cached for `CATALOG_TTL_SECONDS`. Items whose enums the
+        de-duplicated by `id` and kept in the catalog cache (Redis, `CATALOG_TTL_SECONDS`,
+        cleared by `product-events`). Items whose enums the
         ranker features do not know are skipped. Raises the same errors as
         `list_products`."""
 
@@ -65,13 +77,18 @@ class IProductServiceClient(Protocol):
 class HttpxProductServiceClient:
     """`httpx`-backed `IProductServiceClient` against product-service's `GET /products`."""
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, catalog_cache: ICatalogCache | None = None) -> None:
         self._base_url = settings.PRODUCT_SERVICE_URL
         self._timeout = settings.PRODUCT_SERVICE_TIMEOUT_SECONDS
-        self._catalog_ttl = settings.CATALOG_TTL_SECONDS
-        self._catalog_cache: TtlCache[list[CatalogProductDto]] = TtlCache()
-        # Single flight: one catalog fetch per cache expiry.
+        # None → no caching (every `list_catalog` fetches); the app passes the Redis cache.
+        self._catalog_cache: ICatalogCache = (
+            catalog_cache if catalog_cache is not None else NoopCatalogCache()
+        )
+        # Single flight: one catalog fetch per cache miss in this process.
         self._catalog_lock = asyncio.Lock()
+        # (monotonic time, catalog) of the last successful fetch — see
+        # RECENT_CATALOG_FETCH_REUSE_SECONDS.
+        self._last_fetch: tuple[float, list[CatalogProductDto]] | None = None
 
     async def list_products(
         self,
@@ -95,7 +112,9 @@ class HttpxProductServiceClient:
             params["limit"] = limit
 
         try:
-            async with httpx.AsyncClient(base_url=self._base_url, timeout=self._timeout) as client:
+            async with httpx.AsyncClient(
+                base_url=self._base_url, timeout=self._timeout, headers=request_id_headers()
+            ) as client:
                 response = await client.get("/products", params=params)
                 response.raise_for_status()
         except httpx.TimeoutException as exc:
@@ -120,21 +139,31 @@ class HttpxProductServiceClient:
         return [RecommendedProductDto(**item, score=0.0) for item in body["data"]]
 
     async def list_catalog(self) -> list[CatalogProductDto]:
-        cached = self._catalog_cache.get()
+        cached = await self._catalog_cache.get()
         if cached is not None:
             return cached
         async with self._catalog_lock:
-            # Another request may have fetched it while this one waited for the lock.
-            cached = self._catalog_cache.get()
+            # Any Redis miss within the window reuses the last fetched catalog (lock waiters,
+            # a Redis outage, or right after an invalidation) — <= 2 s staleness after an event.
+            if self._last_fetch is not None:
+                fetched_at, catalog = self._last_fetch
+                if time.monotonic() - fetched_at < RECENT_CATALOG_FETCH_REUSE_SECONDS:
+                    return catalog
+            cached = await self._catalog_cache.get()
             if cached is not None:
                 return cached
-            return await self._fetch_catalog()
+            catalog = await self._fetch_catalog()
+            self._last_fetch = (time.monotonic(), catalog)
+            await self._catalog_cache.set(catalog)
+            return catalog
 
     async def _fetch_catalog(self) -> list[CatalogProductDto]:
         products: dict[str, CatalogProductDto] = {}
         page, total_pages = 1, 1
         try:
-            async with httpx.AsyncClient(base_url=self._base_url, timeout=self._timeout) as client:
+            async with httpx.AsyncClient(
+                base_url=self._base_url, timeout=self._timeout, headers=request_id_headers()
+            ) as client:
                 while page <= total_pages:
                     response = await client.get(
                         "/products", params={"page": page, "limit": CATALOG_PAGE_SIZE}
@@ -160,9 +189,7 @@ class HttpxProductServiceClient:
                 "Không thể kết nối tới product-service."
             ) from exc
 
-        catalog = list(products.values())
-        self._catalog_cache.set(catalog, self._catalog_ttl)
-        return catalog
+        return list(products.values())
 
 
 def _parse_catalog_item(item: dict[str, Any]) -> CatalogProductDto | None:
@@ -183,5 +210,6 @@ def _parse_catalog_item(item: dict[str, Any]) -> CatalogProductDto | None:
 
 @lru_cache
 def get_product_service_client() -> HttpxProductServiceClient:
-    """FastAPI `Depends` provider — single shared client instance per process."""
-    return HttpxProductServiceClient(get_settings())
+    """FastAPI `Depends` provider — single shared client instance per process, backed by
+    the shared Redis catalog cache."""
+    return HttpxProductServiceClient(get_settings(), get_catalog_cache())
