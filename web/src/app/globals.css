@@ -2967,14 +2967,64 @@ main {
   inset: 0;
   width: 100%;
   height: 100%;
-  /* object-fit must match on both elements — the canvas's pixel size is reset to the
-     camera's native resolution every frame (see useFaceTracking.ts), which usually isn't
-     the container's fixed 4:3 box, so without "cover" here too the canvas stretches
+  /* object-fit must match on both elements — the canvas's pixel size follows the camera's
+     native resolution (set by useFaceTracking.ts whenever the video size changes), which
+     usually isn't the container's fixed 4:3 box (e.g. a 16:9 camera), so both elements are
+     cropped the same way by "cover"; without it on the canvas too, the canvas would stretch
      non-uniformly while the video crops, throwing the overlay off. */
   object-fit: cover;
   /* Mirror the preview like a mirror/selfie camera — matches how a user expects to see
      themselves while lining up the glasses overlay. */
   transform: scaleX(-1);
+}
+
+/* ?debug=1 panel: sits above the canvas and is NOT mirrored (only the video/canvas are). */
+.try-on__debug {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-width: calc(100% - 1rem);
+  padding: 0.5rem 0.625rem;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #ffffff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+
+.try-on__debug p {
+  margin: 0;
+}
+
+.try-on__debug label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.try-on__debug select,
+.try-on__debug input {
+  width: 6rem;
+  padding: 0.125rem 0.25rem;
+  font: inherit;
+}
+
+.try-on__debug button {
+  margin-top: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.try-on__debug button:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .try-on__hint {

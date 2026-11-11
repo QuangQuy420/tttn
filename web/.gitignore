@@ -35,3 +35,6 @@ coverage/
 # TypeScript / Next.js generated
 *.tsbuildinfo
 next-env.d.ts
+
+# Self-hosted MediaPipe assets (scripts/fetch-mediapipe-assets.sh)
+public/mediapipe/
