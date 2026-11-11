@@ -78,3 +78,26 @@ def test_baselines_score_with_the_fixed_formulas_ac1():
     np.testing.assert_allclose(baselines.BASELINES["popularity"](frame), [2.5, 0.0])
     # row 0: (1 + 0.5 + 0 + 1 + 0.5) / 5; row 1: price_fit capped at 0 -> (0 + 0 + 0.2 + 0.3 + 0) / 5.
     np.testing.assert_allclose(baselines.BASELINES["content"](frame), [0.6, 0.1])
+
+
+def test_paired_bootstrap_identical_inputs_give_zero_delta_and_p_one_ac7():
+    """AC7 (plan 12): same per-user values -> delta 0, CI [0, 0], p = 1."""
+    values = np.array([0.2, 0.5, 0.9, 0.0, 1.0])
+
+    out = metrics.paired_bootstrap(values, values.copy(), n_resamples=200, seed=7)
+
+    assert out == {"delta": 0.0, "ci_low": 0.0, "ci_high": 0.0, "p_value": 1.0}
+
+
+def test_paired_bootstrap_clearly_better_input_has_ci_above_zero_and_is_seeded_ac7():
+    """AC7 (plan 12): a beats b for every user -> delta > 0, CI above 0, small p; same seed, same CI."""
+    rng = np.random.default_rng(0)
+    b = rng.uniform(0.0, 0.5, size=50)
+    a = b + rng.uniform(0.1, 0.3, size=50)
+
+    out = metrics.paired_bootstrap(a, b, n_resamples=500, seed=3)
+
+    assert out["delta"] == pytest.approx(float(np.mean(a - b)))
+    assert 0.0 < out["ci_low"] <= out["delta"] <= out["ci_high"]
+    assert out["p_value"] == 0.0
+    assert metrics.paired_bootstrap(a, b, n_resamples=500, seed=3) == out

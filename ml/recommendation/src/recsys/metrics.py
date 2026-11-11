@@ -109,6 +109,29 @@ def bootstrap_ci(
     }
 
 
+def paired_bootstrap(
+    a: np.ndarray, b: np.ndarray, n_resamples: int = 1000, seed: int = 42, alpha: float = 0.05
+) -> dict[str, float]:
+    """Paired comparison of two per-user metric arrays (same users, same order): `delta` =
+    mean(a - b), percentile CI of the user-resampled mean difference, and the two-sided bootstrap
+    p-value `2 * min(P(delta* <= 0), P(delta* >= 0))` capped at 1."""
+    diff = np.asarray(a, dtype=np.float64) - np.asarray(b, dtype=np.float64)
+    n_users = diff.shape[0]
+    if n_users == 0:
+        return {"delta": float("nan"), "ci_low": float("nan"), "ci_high": float("nan"), "p_value": float("nan")}
+    rng = np.random.default_rng(seed)
+    means = np.empty(n_resamples)
+    for i in range(n_resamples):
+        means[i] = diff[rng.integers(0, n_users, size=n_users)].mean()
+    p_value = min(1.0, 2.0 * min(float(np.mean(means <= 0.0)), float(np.mean(means >= 0.0))))
+    return {
+        "delta": float(diff.mean()),
+        "ci_low": float(np.percentile(means, 100 * alpha / 2)),
+        "ci_high": float(np.percentile(means, 100 * (1 - alpha / 2))),
+        "p_value": p_value,
+    }
+
+
 def top_k(group_ids: np.ndarray, scores: np.ndarray, product_ids: np.ndarray, k: int) -> pd.DataFrame:
     """The top-k rows of every group (`group_id, product_id, rank, row` = position in the input)."""
     frame = ranked(group_ids, np.zeros(len(group_ids), dtype=np.int64), scores, product_ids)

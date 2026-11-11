@@ -112,6 +112,9 @@ and the RabbitMQ credentials in `RABBITMQ_URL` must match `RABBITMQ_USER` /
 loaded, preference = popularity and α = 0 (the response reports `alpha: 0`). If the folder
 is missing or its `feature_schema_version` differs from the code, the app does not start.
 `FACE_PROCESSING_SERVICE_URL`, `RANK_ALPHA` / `RANK_BETA` (0.6 / 0.4),
+`PREFERENCE_NORM` (`rank` = preference ranked over the candidates, in [0, 1]; `none` = calibrated
+score as is — the defaults are a product choice, see
+[`ml/recommendation/reports/hybrid/SUMMARY.md`](../ml/recommendation/reports/hybrid/SUMMARY.md)),
 `CATALOG_TTL_SECONDS`, `MAX_PER_FRAME_SHAPE` / `MAX_PER_BRAND` have defaults.
 
 ## Notes

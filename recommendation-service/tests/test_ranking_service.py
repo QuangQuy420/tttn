@@ -145,6 +145,31 @@ def test_cold_start_preference_is_normalized_popularity_and_fills_the_limit_AC6(
     assert "Được nhiều người mua" in ranked[0].reasons
 
 
+def test_rank_norm_rescales_model_preferences_to_0_1_and_default_keeps_calibrated_scores_AC12() -> None:
+    catalog = _catalog(_product("r1", "ROUND"), _product("r2", "ROUND"), _product("s2", "SQUARE"))
+    face = FaceInput({FaceShape.ROUND: 1.0}, FaceShape.ROUND)
+    events = [_event("u1", "r1"), _event("u1", "r1", F.LIKE)]
+    model = (_ShapeAffinityBooster(), _CARD)
+
+    def ranked_with(*norm: str) -> dict[str, ScoredProduct]:
+        ranked = rank(catalog, ["r2", "s2"], events, F.ProductStats(), NOW, model, face, 0.6, 0.4, *norm)
+        return {item.product_id: item for item in ranked}
+
+    default, none, ranked = ranked_with(), ranked_with("none"), ranked_with("rank")
+
+    # Default = `none`: calibrated probabilities, not rank-scaled (today's numbers).
+    assert {pid: item.preference for pid, item in default.items()} == pytest.approx(
+        {pid: item.preference for pid, item in none.items()}
+    )
+    assert all(0.0 < item.preference < 1.0 for item in none.values())
+    # `rank`: same preference order, top candidate at 1.0, the other at 0.0 (n = 2).
+    assert none["r2"].preference > none["s2"].preference
+    assert (ranked["r2"].preference, ranked["s2"].preference) == (1.0, 0.0)
+    for item in ranked.values():
+        assert item.face_fit == pytest.approx(none[item.product_id].face_fit)
+        assert item.final == pytest.approx(0.6 * item.preference + 0.4 * item.face_fit)
+
+
 def _scored(pid: str, final: float) -> ScoredProduct:
     return ScoredProduct(pid, final, 0.0, final, 0.0, ())
 

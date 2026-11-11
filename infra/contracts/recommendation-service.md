@@ -11,13 +11,21 @@ response envelope (see `README.md`). Hybrid ranking added in
 finalScore = α · preferenceScore + β · faceFitScore        (all three in [0, 1])
 ```
 
-- `preferenceScore` — personal preference from the XGBoost ranker (plan 10), calibrated to (0, 1).
-  User with no behavior yet (cold start) → normalized product popularity instead.
+- `preferenceScore` — personal preference from the XGBoost ranker (plan 10), on the
+  `PREFERENCE_NORM` scale (plan 12):
+  - `rank` (default) — the rank of the model score among the scored candidates, scaled to
+    [0, 1] (top = 1.0, ties share the average rank). Relative to the candidate list, NOT a
+    calibrated probability.
+  - `none` — the calibrated model score in (0, 1) as is (median ≈ 0.01).
+  User with no behavior yet (cold start) or legacy mode → rank-normalized product popularity
+  instead, in both modes (unchanged).
 - `faceFitScore` — `Σ_s p(s) · M[s][frameShape]`: the face-shape probabilities `p(s)` of the
   user's analysis (one-hot of `faceShape` when the analysis has no `probabilities`) times the
   face-shape → frame-shape table (`face_shape_mapping.py`, 0–10 ÷ 10).
-- `α` / `β` come from `RANK_ALPHA` / `RANK_BETA` (default `0.6` / `0.4`) in
-  `recommendation-service/.env`. Effective values:
+- `α` / `β` come from `RANK_ALPHA` / `RANK_BETA` (default `0.6` / `0.4`) and the scale from
+  `PREFERENCE_NORM` (default `rank`) in `recommendation-service/.env`. These defaults are a
+  product choice, not the experiment's val-selected config (`none`, 0.995 / 0.005) — see
+  `ml/recommendation/reports/hybrid/SUMMARY.md`. Effective values:
   - `β = 0` when the user has no face analysis (or face-processing-service is down / times out).
   - `α = 0` when `PREFERENCE_MODEL_VERSION` is empty (legacy mode: no model loaded).
 - Ties in `finalScore` are broken by popularity (descending).
@@ -86,6 +94,7 @@ gateway forwards the query string and sets `X-User-Id` from the token.
   when needed, so it still has `limit` items when the catalog is large enough.
 - Each call writes one row to `recommendation_db.recommendation_impressions` (user, product ids,
   scores, α, β, model version, face analysis id). A failed write is logged, never returned.
+  `scores.preference` is the value returned as `preferenceScore` (normalized per `PREFERENCE_NORM`).
 
 **200** — single-object envelope (no `meta`):
 
