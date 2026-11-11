@@ -33,7 +33,7 @@ personalized ranker (PreferenceScore).
 ```
 app/
   main.py         # FastAPI entrypoint, logging + request-id middleware, lifespan (starts both consumers), error envelope
-  routers/        # recommend (+ /health, /health/ready), internal (/internal/*)
+  routers/        # recommend (+ /health, /health/ready), internal (/internal/*), admin (/admin/*)
   services/       # hybrid ranking (pure) + recommendation use-cases; behavior event ingest
   repositories/   # product-service + face-processing clients; Redis catalog cache; interactions / impressions repos; RabbitMQ consumers
   db/             # SQLAlchemy async engine/session + ORM models (interactions, impressions)
@@ -140,6 +140,18 @@ return the usual `{success, message, data}` envelope.
   default 200.
 - `GET /internal/stats/events?days=7` — event counts per UTC day and event type over the
   last `days` UTC days including today (`days` 1–90).
+
+## Admin endpoints
+Read-only, for the admin pages through api-gateway (`/api/admin/ai/*`, `/api/admin/analytics/*`).
+Same `X-Internal-Key` rule (403). `from`/`to` are `Asia/Ho_Chi_Minh` days (default: last 30,
+max 90); `source` = `real` (default, no simulator) | `simulator` | `all`.
+- `GET /admin/model-info` — loaded preference model card + configured α / β / `PREFERENCE_NORM`.
+- `GET /admin/analytics/events/daily?from=&to=&source=` — counts per day for the 5 funnel types.
+- `GET /admin/analytics/funnel?from=&to=&source=` — distinct users per event type.
+- `GET /admin/analytics/top-products?from=&to=&source=&eventType=&limit=` — top products with
+  catalog name / thumbnail.
+
+Contract: [`infra/contracts/recommendation-service.md`](../infra/contracts/recommendation-service.md).
 
 ## Configuration
 See [`.env.example`](.env.example). **Update your local `.env` from `.env.example`** —

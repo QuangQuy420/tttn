@@ -117,11 +117,88 @@ gateway forwards the query string and sets `X-User-Id` from the token.
 
 **504** `GATEWAY_TIMEOUT` — product-service timed out.
 
+## Admin endpoints (`/admin/*`)
+
+Read-only admin views (`.planning/2026-09-29-15-admin-ai-analytics.md`, plan 15). Gateway:
+`/api/admin/ai/preference-model` and `/api/admin/analytics/{events/daily,funnel,top-products}`
+(JWT + `order:manage`, see `api-gateway/README.md`).
+
+| | |
+|---|---|
+| Header | `X-Internal-Key: <INTERNAL_API_KEY>` — every route; missing / wrong / empty in the service → **403** `FORBIDDEN` `"Không có quyền truy cập nội bộ"` |
+| Query `from`, `to` | `YYYY-MM-DD`, both inclusive, calendar days in **`Asia/Ho_Chi_Minh`**. Default `to` = today there, `from` = `to` − 29 days (30 days). Rows match `start of from ≤ occurred_at < start of (to + 1 day)` in that zone |
+| Query `source` | `real` (default: every source except `simulator`) \| `simulator` \| `all` |
+
+- Analytics cover only the 5 funnel types `VIEW`, `TRY_ON`, `LIKE`, `ADD_TO_CART`, `PURCHASE`
+  (`UNLIKE` is left out).
+- **400** `BAD_REQUEST` — `from > to` → `"Ngày bắt đầu phải trước hoặc bằng ngày kết thúc"`;
+  range longer than 90 days → `"Khoảng thời gian tối đa là 90 ngày"`; an extreme date whose
+  window cannot be computed (e.g. `to=9999-12-31`, `from=0001-01-01`) →
+  `"Khoảng thời gian không hợp lệ"`.
+- **400** `VALIDATION_FAILED` — malformed date, unknown `source` / `eventType` (`UNLIKE`
+  included), `limit` out of range.
+- Day buckets here are Vietnam days; `GET /internal/stats/events` stays on **UTC** days, so its
+  per-day numbers can differ.
+
+### `GET /admin/model-info`
+
+```jsonc
+{ "loaded": true,                      // false in legacy mode (PREFERENCE_MODEL_VERSION empty)
+  "version": "v1-sim-20261110-xgbrank", "algorithm": "XGBoost ranker", "objective": "rank:ndcg",
+  "createdAt": "2026-11-10T10:10:37+00:00", // model card `created_at`
+  "metrics": { "ndcgAt10": 0.2354, "hitRateAt10": 0.4462,   // model card metrics.test[*].mean (full float, rounded here)
+               "precisionAt10": 0.0446, "recallAt10": 0.4462 },
+  "alpha": 0.6, "beta": 0.4, "preferenceNorm": "rank" }  // configured RANK_ALPHA / RANK_BETA / PREFERENCE_NORM
+```
+
+`loaded = false` → `version`, `algorithm`, `objective`, `createdAt`, `metrics` are `null`;
+`alpha`, `beta`, `preferenceNorm` are always set. A key missing from the card → `null`.
+
+### `GET /admin/analytics/events/daily?from=&to=&source=`
+
+```jsonc
+{ "from": "2026-10-13", "to": "2026-11-11", "source": "real",
+  "days": [ { "date": "2026-10-13",
+              "counts": { "VIEW": 120, "TRY_ON": 30, "LIKE": 12, "ADD_TO_CART": 8, "PURCHASE": 2 } } ] }
+```
+
+One entry per day of the range, ascending; every day has all 5 keys (0 when no event).
+
+### `GET /admin/analytics/funnel?from=&to=&source=`
+
+```jsonc
+{ "from": "…", "to": "…", "source": "real",
+  "steps": [ { "eventType": "VIEW", "users": 400, "conversionFromPrevious": null },
+             { "eventType": "TRY_ON", "users": 120, "conversionFromPrevious": 0.3 } /* … LIKE, ADD_TO_CART, PURCHASE */ ] }
+```
+
+- `users` = distinct users with at least one event of that type in the range. Steps are
+  independent: a user does not need the earlier steps to be counted.
+- `conversionFromPrevious` = `users / users of the previous step` (can be > 1); `null` for the
+  first step and when the previous step has 0 users.
+
+### `GET /admin/analytics/top-products?from=&to=&source=&eventType=VIEW&limit=10`
+
+`eventType` — one of the 5 funnel types (default `VIEW`); `limit` — integer 1..50 (default 10).
+
+```jsonc
+{ "from": "…", "to": "…", "source": "real", "eventType": "VIEW",
+  "items": [ { "productId": "uuid", "count": 57,
+               "name": "…", "slug": "…", "thumbnailUrl": "…" } ] }
+```
+
+- Sorted by `count` desc, then `productId` asc.
+- `name`, `slug`, `thumbnailUrl` come from the cached published catalog (product-service);
+  `thumbnailUrl` = the `isThumbnail` image, else the first image, else `null`. A product not in
+  the catalog (unpublished / deleted), or a catalog read that fails in any way or takes longer
+  than `ADMIN_CATALOG_TIMEOUT_SECONDS` (2 s) → these three are `null` (warning logged, still
+  **200**).
+
 ## Downstream calls
 
 | Callee | Call | Used for |
 |---|---|---|
-| product-service | `GET /products?page=n&limit=100` (all pages; cached in Redis, see below) | candidate catalog |
+| product-service | `GET /products?page=n&limit=100` (all pages; cached in Redis, see below) | candidate catalog; admin top-products names |
 | face-processing-service | `GET /internal/users/{userId}/latest-analysis`, `GET /internal/analyses/{analysisId}?userId=` (`X-Internal-Key`) — see `face-processing-service.md` | face-shape probabilities |
 | `recommendation_db` | `interactions` (read), `recommendation_impressions` (write) | behavior history, popularity, impression log |
 

@@ -25,11 +25,34 @@ permissions, applies rate-limiting and gives every request an `X-Request-Id`.
 | `/api/face-analysis/*` | `face-processing-service` | **Implemented** — JWT; `POST /api/face-analysis/analyze` (multipart, own rate limit), history list / delete |
 | `/api/events` | RabbitMQ `behavior-events` | **Implemented** — `POST`, optional JWT; VIEW / TRY_ON from the browser, published only for a logged-in user (own rate limit) |
 | `/api/recommendations/*` | `recommendation-service` | **Implemented** — `POST /api/recommendations` is public (forwards `X-User-Id` only with a valid JWT); `GET /api/recommendations/for-you` requires JWT and forwards `X-User-Id` |
+| `/api/admin/ai/*`, `/api/admin/analytics/*` | `face-processing-service`, `recommendation-service` (`/admin/*`) | **Implemented** — read-only, GET only; JWT + `order:manage`; sends `X-Internal-Key`. See [Admin AI & analytics](#admin-ai--analytics) |
 
 > Public catalog reads remain unauthenticated. Product writes require `product:manage`; Brand
 > and Category writes require `catalog:manage`. The gateway verifies JWTs at the edge and checks
 > the caller's current permissions before forwarding a write. Permissions are cached in Redis
 > for 60 s (see below); on a miss they are read from `user-service`.
+
+### Admin AI & analytics
+Every route needs JWT + permission `order:manage` (no dedicated permission yet) and is
+forwarded with `X-Internal-Key: <INTERNAL_API_KEY>` (same value as in both Python services).
+On the four `/api/admin/analytics/*` routes the query is validated here: a param not listed
+below, a bad format, or a value out of range → **400** `VALIDATION_FAILED`. The two
+`/api/admin/ai/*` routes take no query and ignore extra params. Only the params the caller sent are forwarded (defaults,
+`from <= to` and the 90-day limit are checked upstream; their 400 is passed through).
+
+| Route | Upstream | Query |
+|---|---|---|
+| `GET /api/admin/ai/face-shape-model` | face-processing `GET /admin/model-info` | — |
+| `GET /api/admin/ai/preference-model` | recommendation `GET /admin/model-info` | — |
+| `GET /api/admin/analytics/events/daily` | recommendation `GET /admin/analytics/events/daily` | `from`, `to`, `source` |
+| `GET /api/admin/analytics/funnel` | recommendation `GET /admin/analytics/funnel` | `from`, `to`, `source` |
+| `GET /api/admin/analytics/top-products` | recommendation `GET /admin/analytics/top-products` | `from`, `to`, `source`, `eventType`, `limit` |
+| `GET /api/admin/analytics/face-shapes` | face-processing `GET /admin/analytics/face-shapes` | `from`, `to` |
+
+`from` / `to`: `YYYY-MM-DD`; `source`: `real` \| `simulator` \| `all`; `eventType`: `VIEW` \|
+`TRY_ON` \| `LIKE` \| `ADD_TO_CART` \| `PURCHASE`; `limit`: integer 1..50. Upstream error
+responses are passed through; upstream timeout → **504**, unreachable → **503**. Response
+shapes: `infra/contracts/recommendation-service.md`, `infra/contracts/face-processing-service.md`.
 
 ## Rate limit
 `@nestjs/throttler`, one in-memory throttler (one gateway instance — ADR 0005). Counted **per

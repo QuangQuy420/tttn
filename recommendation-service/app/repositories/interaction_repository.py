@@ -7,17 +7,23 @@ repository scope for writes — see `app/services/interaction_ingest_service.py`
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime, time, timedelta
-from typing import Protocol
+from typing import Literal, Protocol
 from uuid import UUID
 
 from fastapi import Depends
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import BehaviorEventType, Interaction
 from app.db.session import get_db_session, get_sessionmaker
 from app.schemas.behavior_event import BehaviorEvent
+
+# Admin analytics day buckets (plan 15) — calendar days in Vietnam time.
+ADMIN_TIMEZONE_NAME = "Asia/Ho_Chi_Minh"
+SIMULATOR_SOURCE = "simulator"
+# Admin `source` filter — `real` = every source except the simulator.
+AnalyticsSource = Literal["real", "simulator", "all"]
 
 
 class IInteractionRepository(Protocol):
@@ -49,6 +55,29 @@ class IInteractionRepository(Protocol):
 
     async def purchased_product_ids(self, user_id: UUID) -> set[UUID]:
         """Products `user_id` has a PURCHASE event for."""
+
+    async def daily_counts(
+        self, start: datetime, end: datetime, source: AnalyticsSource
+    ) -> list[tuple[date, BehaviorEventType, int]]:
+        """Event counts per `Asia/Ho_Chi_Minh` day and event type for `start <= occurred_at
+        < end`, ordered by day then type. Days/types with no event are absent."""
+
+    async def distinct_users_by_type(
+        self, start: datetime, end: datetime, source: AnalyticsSource
+    ) -> dict[BehaviorEventType, int]:
+        """Number of distinct users with at least one event of each type in the window.
+        Types with no event are absent."""
+
+    async def top_products(
+        self,
+        event_type: BehaviorEventType,
+        start: datetime,
+        end: datetime,
+        source: AnalyticsSource,
+        limit: int,
+    ) -> list[tuple[UUID, int]]:
+        """`(product_id, count)` of `event_type` events in the window, `count` desc then
+        `product_id` asc, capped at `limit` rows."""
 
 
 class SqlAlchemyInteractionRepository:
@@ -138,6 +167,72 @@ class SqlAlchemyInteractionRepository:
         )
         result = await self._session.execute(statement)
         return set(result.scalars().all())
+
+    async def daily_counts(
+        self, start: datetime, end: datetime, source: AnalyticsSource
+    ) -> list[tuple[date, BehaviorEventType, int]]:
+        # `timezone(zone, timestamptz)` → wall-clock time in that zone, independent of the
+        # DB session's TimeZone setting.
+        day = func.date(func.timezone(ADMIN_TIMEZONE_NAME, Interaction.occurred_at)).label(
+            "day"
+        )
+        statement = (
+            select(day, Interaction.event_type, func.count().label("count"))
+            .where(*_window_filters(start, end, source))
+            .group_by(day, Interaction.event_type)
+            .order_by(day, Interaction.event_type)
+        )
+        result = await self._session.execute(statement)
+        return [(row.day, row.event_type, row.count) for row in result]
+
+    async def distinct_users_by_type(
+        self, start: datetime, end: datetime, source: AnalyticsSource
+    ) -> dict[BehaviorEventType, int]:
+        statement = (
+            select(
+                Interaction.event_type,
+                func.count(func.distinct(Interaction.user_id)).label("users"),
+            )
+            .where(*_window_filters(start, end, source))
+            .group_by(Interaction.event_type)
+        )
+        result = await self._session.execute(statement)
+        return {row.event_type: row.users for row in result}
+
+    async def top_products(
+        self,
+        event_type: BehaviorEventType,
+        start: datetime,
+        end: datetime,
+        source: AnalyticsSource,
+        limit: int,
+    ) -> list[tuple[UUID, int]]:
+        count = func.count().label("count")
+        statement = (
+            select(Interaction.product_id, count)
+            .where(
+                Interaction.event_type == event_type,
+                *_window_filters(start, end, source),
+            )
+            .group_by(Interaction.product_id)
+            .order_by(count.desc(), Interaction.product_id)
+            .limit(limit)
+        )
+        result = await self._session.execute(statement)
+        return [(row.product_id, row.count) for row in result]
+
+
+def _window_filters(
+    start: datetime, end: datetime, source: AnalyticsSource
+) -> list[ColumnElement[bool]]:
+    """`start <= occurred_at < end` plus the admin `source` filter (`real` = everything
+    except the simulator)."""
+    filters = [Interaction.occurred_at >= start, Interaction.occurred_at < end]
+    if source == "real":
+        filters.append(Interaction.source != SIMULATOR_SOURCE)
+    elif source == "simulator":
+        filters.append(Interaction.source == SIMULATOR_SOURCE)
+    return filters
 
 
 def get_interaction_repository(

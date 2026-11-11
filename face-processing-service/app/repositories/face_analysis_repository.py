@@ -1,5 +1,6 @@
 """Persistence for `FaceAnalysis` rows — interface + SQLAlchemy async implementation."""
 import uuid
+from datetime import datetime
 from typing import Protocol
 
 from fastapi import Depends
@@ -43,6 +44,12 @@ class IFaceAnalysisRepository(Protocol):
         actually deleted — defense-in-depth: this method must not delete a row it
         wasn't given the owner for, even though callers are expected to check
         ownership themselves first."""
+
+    async def count_by_face_shape(
+        self, start: datetime, end: datetime
+    ) -> dict[FaceShape, int]:
+        """Count analyses per face shape with `start <= created_at < end`. Shapes with no
+        rows are absent from the result."""
 
 
 class SqlAlchemyFaceAnalysisRepository:
@@ -120,6 +127,16 @@ class SqlAlchemyFaceAnalysisRepository:
         )
         await self._session.commit()
         return result.rowcount > 0
+
+    async def count_by_face_shape(
+        self, start: datetime, end: datetime
+    ) -> dict[FaceShape, int]:
+        result = await self._session.execute(
+            select(FaceAnalysis.face_shape, func.count())
+            .where(FaceAnalysis.created_at >= start, FaceAnalysis.created_at < end)
+            .group_by(FaceAnalysis.face_shape)
+        )
+        return {face_shape: count for face_shape, count in result.all()}
 
 
 def get_face_analysis_repository(

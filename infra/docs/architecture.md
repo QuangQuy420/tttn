@@ -47,7 +47,10 @@ correctness — ADR 0005).
 - **Routing** — `/api/*` to the owning service: products / categories / brands / wishlist /
   reviews → product-service; auth / users / roles / permissions → user-service; cart / orders /
   admin orders + saga logs → order-service; face analysis → face-processing-service;
-  recommendations → recommendation-service. `POST /api/events` publishes behavior events to
+  recommendations → recommendation-service; admin AI models + behavior analytics
+  (`/api/admin/ai/*`, `/api/admin/analytics/*`, permission `order:manage`) →
+  face-processing-service / recommendation-service `/admin/*` with `X-Internal-Key`.
+  `POST /api/events` publishes behavior events to
   RabbitMQ. `payment-service` is not routed (internal only).
 - **Auth** — verifies the JWT at the edge (shared `JWT_SECRET`) and forwards the caller's id as
   `X-User-Id` to the internal services; admin routes also check the caller's current permissions

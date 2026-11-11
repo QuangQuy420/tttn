@@ -47,6 +47,8 @@ class ClassificationResult:
 class FaceShapeClassifier(Protocol):
     name: str
     version: str
+    # The loaded `model_card.json` (ML) or `None` (rule) — read by the admin model-info API.
+    model_card: dict | None
 
     def predict(
         self, features: dict[str, float], legacy: FaceMeasurements
@@ -60,6 +62,7 @@ class RuleBasedClassifier:
 
     name = "rule"
     version = RULE_MODEL_VERSION
+    model_card = None
 
     def predict(
         self, features: dict[str, float], legacy: FaceMeasurements
@@ -85,6 +88,7 @@ class SklearnFaceShapeClassifier:
         self._feature_names: list[str] = list(model_card["feature_names"])
         self._classes = [FaceShape(c) for c in model.classes_]
         self.version: str = model_card["version"]
+        self.model_card: dict | None = model_card
 
     def predict(
         self, features: dict[str, float], legacy: FaceMeasurements

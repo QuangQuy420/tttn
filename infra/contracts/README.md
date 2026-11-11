@@ -10,8 +10,8 @@ contracts/
   order-checkout-saga.md         # order-saga-events exchange (checkout saga, RabbitMQ)
   product-events.md              # product-events exchange (catalog changes → cart sync + recommendation catalog cache, RabbitMQ)
   behavior-events.md             # behavior-events exchange (user behavior → recommendation-service, RabbitMQ)
-  face-processing-service.md     # face-processing-service REST (AnalyzeResponse fields + internal latest-analysis / analysis by id)
-  recommendation-service.md      # recommendation-service REST (POST /recommend score fields + GET /recommendations/for-you + GET /health/ready)
+  face-processing-service.md     # face-processing-service REST (AnalyzeResponse fields + internal latest-analysis / analysis by id + /admin/*)
+  recommendation-service.md      # recommendation-service REST (POST /recommend score fields + GET /recommendations/for-you + /admin/* + GET /health/ready)
 ```
 
 Other services do not publish an OpenAPI file here yet.

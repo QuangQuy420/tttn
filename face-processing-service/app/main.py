@@ -11,6 +11,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.request_id import RequestIdMiddleware, configure_logging
 from app.repositories.image_storage_repository import get_image_storage_repository
+from app.routers.admin import router as admin_router
 from app.routers.face import router as face_router
 from app.routers.internal import router as internal_router
 from app.schemas.common import ApiError, ApiErrorDetail
@@ -50,6 +51,7 @@ app.add_middleware(RequestIdMiddleware)
 
 app.include_router(face_router)
 app.include_router(internal_router)
+app.include_router(admin_router)
 
 
 def _error_response(status_code: int, message: str, code: str, details: Any = None) -> JSONResponse:
