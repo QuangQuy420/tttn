@@ -9,7 +9,7 @@ import com.tttn.userservice.exception.BusinessException;
 import com.tttn.userservice.exception.ErrorCode;
 import com.tttn.userservice.service.PermissionService;
 import com.tttn.userservice.service.RoleService;
-import com.tttn.userservice.util.JwtUtil;
+import com.tttn.userservice.util.AuthTokenResolver;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -36,7 +36,7 @@ public class RoleController {
 
     private final RoleService roleService;
     private final PermissionService permissionService;
-    private final JwtUtil jwtUtil;
+    private final AuthTokenResolver authTokenResolver;
 
     @GetMapping("/api/v1/roles")
     public ResponseEntity<ApiResponse<List<RoleResponse>>> listRoles(
@@ -134,25 +134,10 @@ public class RoleController {
     }
 
     private void requirePermission(String authorizationHeader) {
-        UUID callingUserId = extractUserId(authorizationHeader);
+        UUID callingUserId = authTokenResolver.resolveUserId(authorizationHeader);
 
         if (!permissionService.hasPermission(callingUserId, MANAGE_ROLES_PERMISSION)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-    }
-
-    private UUID extractUserId(String authorizationHeader) {
-        if (authorizationHeader == null
-                || !authorizationHeader.startsWith("Bearer ")) {
-            throw new BusinessException(ErrorCode.INVALID_TOKEN);
-        }
-
-        String token = authorizationHeader.substring(7);
-
-        if (!jwtUtil.validateToken(token)) {
-            throw new BusinessException(ErrorCode.INVALID_TOKEN);
-        }
-
-        return jwtUtil.extractUserId(token);
     }
 }

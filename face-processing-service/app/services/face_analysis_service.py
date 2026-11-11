@@ -30,10 +30,18 @@ from app.services.face_shape_service import analyze_face
 
 logger = logging.getLogger(__name__)
 
+# S3 key extension per allowed upload content type (the router validates the type).
+_EXTENSIONS = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
+
 
 class HistoryItemNotFoundError(Exception):
     """Raised when a history item doesn't exist, or exists but isn't owned by the
     caller — both cases use this same error so the router can't leak which is true."""
+
+
+class ImageStorageUnavailableError(Exception):
+    """Raised when the photo can't be uploaded to S3/MinIO (error or timeout) — the
+    router maps it to 503."""
 
 
 class FaceAnalysisService:
@@ -63,6 +71,8 @@ class FaceAnalysisService:
         Propagates `NoFaceDetectedError` / `MultipleFacesDetectedError` / `InvalidImageError` /
         `FacePoseError` / `FaceTooSmallError` from `analyze_face` unchanged — the router maps them to HTTP responses.
         `analyze_face` is CPU-bound, so it runs in the threadpool (keeps the event loop free).
+        Raises `ImageStorageUnavailableError` if the photo upload fails. `filename` is not
+        used in the S3 key (AC51).
         """
         started = time.perf_counter()
         outcome = await run_in_threadpool(
@@ -77,20 +87,40 @@ class FaceAnalysisService:
         measurements = outcome.measurements
         result = outcome.result
 
-        s3_key = f"{uuid.uuid4()}-{filename or 'upload'}"
-        self._image_storage.upload(key=s3_key, data=data, content_type=content_type)
+        # The user's filename never goes into the key (AC51) — only a UUID + an extension
+        # derived from the already-validated content type.
+        s3_key = f"{uuid.uuid4()}{_EXTENSIONS.get(content_type, '')}"
+        try:
+            # boto3 is blocking — run it in the threadpool so a slow MinIO can't stall the loop.
+            await run_in_threadpool(
+                self._image_storage.upload, key=s3_key, data=data, content_type=content_type
+            )
+        except (ClientError, BotoCoreError) as exc:
+            logger.warning("Không thể tải ảnh %s lên bộ nhớ đối tượng", s3_key, exc_info=True)
+            raise ImageStorageUnavailableError("Không thể lưu ảnh lúc này.") from exc
         image_url = self._image_storage.get_presigned_url(s3_key)
 
-        row = await self._face_analysis_repo.create(
-            user_id=user_id,
-            s3_key=s3_key,
-            face_shape=result.face_shape,
-            measurements=measurements.model_dump(),
-            confidence=result.confidence,
-            model_version=result.model_version,
-            method=result.method,
-            probabilities={shape.value: p for shape, p in result.probabilities.items()},
-        )
+        try:
+            row = await self._face_analysis_repo.create(
+                user_id=user_id,
+                s3_key=s3_key,
+                face_shape=result.face_shape,
+                measurements=measurements.model_dump(),
+                confidence=result.confidence,
+                model_version=result.model_version,
+                method=result.method,
+                probabilities={shape.value: p for shape, p in result.probabilities.items()},
+            )
+        except Exception:
+            # Don't leave an orphan photo behind: remove it (best effort), then re-raise the
+            # original DB error.
+            try:
+                await run_in_threadpool(self._image_storage.delete, s3_key)
+            except (ClientError, BotoCoreError):
+                logger.warning(
+                    "Không thể xóa ảnh mồ côi %s sau khi lưu DB thất bại", s3_key, exc_info=True
+                )
+            raise
 
         return AnalyzeResponse(
             id=str(row.id),
@@ -162,16 +192,18 @@ class FaceAnalysisService:
 
         Raises `HistoryItemNotFoundError` if the row doesn't exist OR belongs to a
         different user (same error for both — no signal to the caller which is true).
-        The S3 object delete is best-effort: a failure is logged but does not stop the
-        DB row from being deleted, so the item still disappears from the user's list
-        even if MinIO has a transient hiccup.
+        The DB row is deleted first, then the S3 object (best effort): a storage failure
+        is logged but the item is already gone from the user's list, and a DB failure
+        never leaves a row pointing at a deleted photo.
         """
         row = await self._face_analysis_repo.get_by_id(analysis_id)
         if row is None or row.user_id != user_id:
             raise HistoryItemNotFoundError("Không tìm thấy lịch sử phân tích.")
 
+        await self._face_analysis_repo.delete(analysis_id, user_id)
+
         try:
-            self._image_storage.delete(row.s3_key)
+            await run_in_threadpool(self._image_storage.delete, row.s3_key)
         except (ClientError, BotoCoreError):
             logger.warning(
                 "Không thể xóa ảnh %s khỏi bộ nhớ đối tượng cho lịch sử %s",
@@ -179,8 +211,6 @@ class FaceAnalysisService:
                 analysis_id,
                 exc_info=True,
             )
-
-        await self._face_analysis_repo.delete(analysis_id, user_id)
 
 
 def get_face_analysis_service(

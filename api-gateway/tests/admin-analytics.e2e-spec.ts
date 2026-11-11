@@ -17,7 +17,7 @@ import { RedisService } from '../src/services/redis.service';
  */
 describe('Admin AI + analytics (e2e)', () => {
   let app: INestApplication;
-  let permissions: { getPermissions: jest.Mock };
+  let permissions: { getPermissions: jest.Mock; getAuthState: jest.Mock };
   let proxy: Record<string, jest.Mock>;
   let token: string;
 
@@ -25,7 +25,13 @@ describe('Admin AI + analytics (e2e)', () => {
   const data = { success: true, message: 'Thành công', data: {} };
 
   beforeEach(async () => {
-    permissions = { getPermissions: jest.fn().mockResolvedValue(['order:manage']) };
+    permissions = {
+      getPermissions: jest.fn().mockResolvedValue(['order:manage']),
+      // JwtGuard checks token revocation: an ACTIVE user with no cut-off.
+      getAuthState: jest
+        .fn()
+        .mockResolvedValue({ permissions: [], status: 'ACTIVE', tokensValidAfter: null }),
+    };
     proxy = {
       getFaceShapeModelInfo: jest.fn().mockResolvedValue(data),
       getPreferenceModelInfo: jest.fn().mockResolvedValue(data),

@@ -70,6 +70,17 @@ export function WishlistPage() {
 
   const products = response?.data ?? [];
 
+  // Un-liking the last product of a later page leaves it empty: go back to the last page that
+  // still has products (AC67).
+  const emptiedLaterPage =
+    !isLoading && !error && response !== null && page > 1 && response.data.length === 0;
+  useEffect(() => {
+    if (!emptiedLaterPage || !response) return;
+    setPage(Math.max(1, Math.min(page - 1, response.meta.totalPages)));
+    // Runs once when the page turns out empty; `setPage` is a new function every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [emptiedLaterPage]);
+
   return (
     <section aria-labelledby="wishlist-heading" className="orders-page">
       <h1 id="wishlist-heading">Sản phẩm yêu thích</h1>

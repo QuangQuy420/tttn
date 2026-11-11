@@ -113,6 +113,8 @@ public class UserServiceImpl implements UserService {
         user.setPasswordHash(
                 passwordEncoder.encode(request.newPassword())
         );
+        // Also revokes the caller's own token: the client must log in again.
+        user.revokeIssuedTokens();
 
         userRepository.save(user);
     }
@@ -121,7 +123,8 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public Page<UserResponse> listUsers(int page, int limit) {
         return userRepository.findAll(
-                PageRequests.of(page, limit, Sort.unsorted())
+                // Stable order across pages: newest first, id breaks createdAt ties.
+                PageRequests.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt", "id"))
         ).map(this::toUserResponse);
     }
 

@@ -122,6 +122,9 @@ class ProductEventConsumer:
             await message.reject(requeue=False)
             return
 
+        # Before the first await: a catalog fetch in flight must not cache its (possibly
+        # pre-change) result.
+        self._catalog_cache.mark_invalidated()
         # A Redis error is logged inside `invalidate`; anything unexpected is logged here.
         # Either way the message is acked — the TTL bounds the staleness.
         try:

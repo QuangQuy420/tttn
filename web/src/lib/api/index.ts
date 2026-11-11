@@ -1,4 +1,4 @@
-export { ApiError, apiFetch, apiFetchData, apiFetchPage } from "./client";
+export { ApiError, apiFetch, apiFetchData, apiFetchPage, getFieldErrors } from "./client";
 
 export {
   login,
@@ -40,6 +40,7 @@ export {
   updateVariant,
   uploadProductImage,
 } from "./products";
+export type { ProductReadOptions } from "./products";
 
 export {
   addCartItem,

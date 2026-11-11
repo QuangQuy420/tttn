@@ -18,6 +18,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ProductsService, toImageResponse } from '../services/products.service';
 import { ProductImagesService } from '../services/product-images.service';
 import { ListProductsQueryDto } from './dto/list-products-query.dto';
+import { IncludeAllStatusesQueryDto } from './dto/include-all-statuses-query.dto';
 import {
   ProductResponseDto,
   ProductImageResponseDto,
@@ -49,13 +50,19 @@ export class ProductsController {
   // Declared before `:id` — a two-segment path never matches `:id`, but keeping the
   // literal route first makes the precedence explicit.
   @Get('slug/:slug')
-  findOneBySlug(@Param('slug') slug: string): Promise<ProductResponseDto> {
-    return this.productsService.findOneBySlug(slug);
+  findOneBySlug(
+    @Param('slug') slug: string,
+    @Query() query: IncludeAllStatusesQueryDto,
+  ): Promise<ProductResponseDto> {
+    return this.productsService.findOneBySlug(slug, query);
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string): Promise<ProductResponseDto> {
-    return this.productsService.findOne(id);
+  findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: IncludeAllStatusesQueryDto,
+  ): Promise<ProductResponseDto> {
+    return this.productsService.findOne(id, query);
   }
 
   @Post()
@@ -78,7 +85,9 @@ export class ProductsController {
   }
 
   @Post(':id/images')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: MAX_IMAGE_SIZE_BYTES } }),
+  )
   async uploadImage(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: UploadProductImageDto,
@@ -95,13 +104,8 @@ export class ProductsController {
     if (file.size > MAX_IMAGE_SIZE_BYTES) {
       throw new BadRequestException('Tệp phải nhỏ hơn hoặc bằng 5 MB');
     }
-    if (body.variantId) {
-      await this.productImagesService.assertVariantBelongsToProduct(
-        id,
-        body.variantId,
-      );
-    }
 
+    // Checks the product (404) and the variant before anything is stored.
     const image = await this.productImagesService.uploadAndAttach(
       id,
       body.variantId ?? null,

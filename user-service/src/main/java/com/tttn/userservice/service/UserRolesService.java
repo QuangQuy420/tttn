@@ -6,7 +6,8 @@ import java.util.UUID;
 
 public interface UserRolesService {
 
-    UserResponse assignRole(UUID userId, UUID roleId);
+    // callingUserId must hold every permission of the role (no self-escalation through assignment).
+    UserResponse assignRole(UUID callingUserId, UUID userId, UUID roleId);
 
     UserResponse removeRole(UUID userId, UUID roleId);
 }

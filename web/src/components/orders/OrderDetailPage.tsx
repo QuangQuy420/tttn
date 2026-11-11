@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ErrorState } from "@/components/common/ErrorState";
 import { LoadingState } from "@/components/common/LoadingState";
+import { dispatchCartChange } from "@/hooks/useCart";
 import { ApiError, cancelOrder, getOrderById } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth/session";
 import { getColorSwatch } from "@/lib/format/color";
 import { formatPriceVnd } from "@/lib/format/price";
-import { formatOrderStatusVi } from "@/lib/labels";
+import { formatOrderStatusVi, formatPaymentStatusVi } from "@/lib/labels";
 import type { Order } from "@/types/order";
 
 interface OrderDetailPageProps {
@@ -16,6 +17,11 @@ interface OrderDetailPageProps {
 }
 
 const CANCELLABLE_STATUSES = new Set(["PENDING", "AWAITING_PAYMENT", "CONFIRMED"]);
+
+// While the checkout saga is still running the page re-reads the order (AC59).
+const IN_PROGRESS_STATUSES = new Set(["PENDING", "AWAITING_PAYMENT"]);
+const POLL_INTERVAL_MS = 3000;
+const POLL_MAX_DURATION_MS = 2 * 60 * 1000;
 
 // FR3/FR4/T18: full order detail (items + status history), plus a cancel action shown only
 // while the order is still PENDING/AWAITING_PAYMENT/CONFIRMED (matches order-service's
@@ -81,6 +87,56 @@ export function OrderDetailPage({ id }: OrderDetailPageProps) {
     };
   }, [id]);
 
+  const isInProgress = order !== null && IN_PROGRESS_STATUSES.has(order.status);
+  // A cancelled paid order is waiting for its refund (PAID → REFUNDED).
+  const isRefundPending =
+    order !== null && order.status === "CANCELLED" && order.paymentStatus === "PAID";
+  const shouldPoll = isInProgress || isRefundPending;
+
+  // Poll every 3 s (for at most 2 min) while the order is PENDING / AWAITING_PAYMENT, or
+  // CANCELLED but still PAID (refund pending). Each poll starts only after the previous one
+  // finished, so slow responses never pile up.
+  useEffect(() => {
+    if (!shouldPoll) return;
+    const token = getAccessToken();
+    if (!token) return;
+
+    let cancelled = false;
+    let timer: number | undefined;
+    const startedAt = Date.now();
+
+    function schedule() {
+      if (cancelled || Date.now() - startedAt >= POLL_MAX_DURATION_MS) return;
+      timer = window.setTimeout(poll, POLL_INTERVAL_MS);
+    }
+
+    async function poll() {
+      try {
+        const result = await getOrderById(token as string, id);
+        if (!cancelled) setOrder(result);
+      } catch {
+        // Keep showing the last known order; the next poll tries again.
+      }
+      schedule();
+    }
+
+    schedule();
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [id, shouldPoll]);
+
+  // The checked-out items leave the cart only once the saga finishes: refresh the cart badge when
+  // the order leaves PENDING / AWAITING_PAYMENT.
+  const wasInProgressRef = useRef(false);
+  useEffect(() => {
+    if (order === null) return;
+    if (wasInProgressRef.current && !isInProgress) dispatchCartChange();
+    wasInProgressRef.current = isInProgress;
+  }, [order, isInProgress]);
+
   async function handleCancel() {
     const token = getAccessToken();
     if (!token) return;
@@ -121,6 +177,9 @@ export function OrderDetailPage({ id }: OrderDetailPageProps) {
 
       <h1 id="order-detail-heading">Đơn hàng {order.orderCode}</h1>
       <p className="order-detail__status">Trạng thái: {formatOrderStatusVi(order.status)}</p>
+      <p className="order-detail__status">
+        Thanh toán: {formatPaymentStatusVi(order.paymentStatus)}
+      </p>
 
       <section aria-label="Lịch sử trạng thái" className="order-detail__section">
         <h2>Lịch sử trạng thái</h2>

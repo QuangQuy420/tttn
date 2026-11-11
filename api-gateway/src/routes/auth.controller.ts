@@ -1,6 +1,8 @@
 import {
     Body,
     Controller,
+    HttpCode,
+    HttpStatus,
     Post,
 } from '@nestjs/common';
 import { RateLimitTier } from '../auth/rate-limit';
@@ -21,6 +23,7 @@ export class AuthController {
     }
 
     @Post('login')
+    @HttpCode(HttpStatus.OK)
     @RateLimitTier('auth')
     login(
         @Body() body: Record<string, unknown>,
@@ -29,6 +32,7 @@ export class AuthController {
     }
 
     @Post('forgot-password')
+    @HttpCode(HttpStatus.OK)
     @RateLimitTier('auth')
     forgotPassword(
         @Body() body: Record<string, unknown>,
@@ -37,6 +41,7 @@ export class AuthController {
     }
 
     @Post('reset-password')
+    @HttpCode(HttpStatus.OK)
     @RateLimitTier('auth')
     resetPassword(
         @Body() body: Record<string, unknown>,

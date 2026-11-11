@@ -71,6 +71,10 @@ class Settings(BaseSettings):
     # the global product stats (in-process). Bounds staleness when an event is lost and for
     # newly created products (product-service publishes no `product.created`).
     CATALOG_TTL_SECONDS: float = 300.0
+    # Popularity of the global product stats replays only the events of the last
+    # STATS_WINDOW_DAYS days (older ones have decayed away); view/purchase counts and the
+    # first event date stay all-time (one aggregate query) like training.
+    STATS_WINDOW_DAYS: int = 180
 
     # Diversity caps on the top-10 of `GET /recommendations/for-you`.
     MAX_PER_FRAME_SHAPE: int = 3

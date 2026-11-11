@@ -12,7 +12,11 @@ import { ProductVariant } from '../db/entities/product-variant.entity';
 import { MaterialType } from '../db/enums/material-type.enum';
 import { ImageKind } from '../db/enums/image-kind.enum';
 
-jest.mock('fs', () => ({ readFileSync: jest.fn() }));
+// Keep the rest of `fs`: typeorm (imported by ProductImagesService) needs it at load time.
+jest.mock('fs', () => ({
+  ...jest.requireActual<typeof import('fs')>('fs'),
+  readFileSync: jest.fn(),
+}));
 
 const mockedReadFileSync = readFileSync as jest.Mock;
 

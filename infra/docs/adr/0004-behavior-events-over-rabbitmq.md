@@ -36,7 +36,9 @@ Requirements:
    `x-dead-letter-exchange=behavior-events.dlx`) bound to `behavior.*`, and a fanout DLX
    `behavior-events.dlx` → `behavior-events.dlq`. This mirrors the saga queues. Malformed messages
    are rejected without requeue (straight to the DLQ); transient errors are requeued after a short
-   delay and dead-lettered after 10 deliveries. The consumer uses `aio-pika`'s `connect_robust`,
+   delay and dead-lettered after 10 deliveries. (2026-11-11: the delay is now a capped
+   exponential back-off, 2 s → 60 s, ended early once the DB answers — see the contract.)
+   The consumer uses `aio-pika`'s `connect_robust`,
    so it reconnects and re-declares the topology after a broker restart, and it runs as a
    background task so HTTP startup is never blocked.
 3. **Consumer-side dedupe by `eventId`.** `interactions.event_id` is UNIQUE and the insert uses

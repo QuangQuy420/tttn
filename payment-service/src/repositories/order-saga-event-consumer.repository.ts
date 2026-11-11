@@ -20,8 +20,14 @@ interface PaymentCreateRequestedPayload {
   paymentMethod: string;
 }
 
+interface PaymentRefundRequestedPayload {
+  orderId: string;
+  reason?: string;
+}
+
 const QUEUE_NAME = 'payment-service.order-saga-events';
 const PAYMENT_CREATE_REQUESTED = 'payment.create.requested';
+const PAYMENT_REFUND_REQUESTED = 'payment.refund.requested';
 // Same retry/backoff constants as RabbitMqOrderSagaEventPublisher — see that file for why.
 const INITIAL_CONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY_MS = 3000;
@@ -31,8 +37,9 @@ const RECONNECT_DELAY_MS = 3000;
 const DEFAULT_SAGA_QUEUE_DELIVERY_LIMIT = 10;
 
 /**
- * Consumes the checkout saga's `payment.create.requested` step off the `order-saga-events`
- * topic exchange (see `infra/contracts/order-checkout-saga.md`). Mirrors
+ * Consumes the checkout saga's `payment.create.requested` step and the cancel flow's
+ * `payment.refund.requested` off the `order-saga-events` topic exchange (see
+ * `infra/contracts/order-checkout-saga.md`). Mirrors
  * `product-service/src/repositories/order-saga-event-consumer.repository.ts`'s raw
  * `amqplib` connect/retry/reconnect style. Manually acks after the handler completes, nacks
  * + requeues on unexpected (e.g. transient DB) errors so a broker restart or brief DB blip
@@ -48,6 +55,11 @@ const DEFAULT_SAGA_QUEUE_DELIVERY_LIMIT = 10;
  * that exceeds the queue's `x-delivery-limit` from repeated nack-and-requeue. This class's
  * own nack/ack decisions are unchanged either way; only the queue declaration knows about
  * the DLX.
+ *
+ * A dropped connection or channel never crashes the process: `ack` / `nack` on a closed
+ * channel are logged (the broker redelivers the unacked message after reconnect), handler
+ * rejections are caught, and channel `error` / `close` trigger the same background reconnect
+ * as a lost connection.
  */
 @Injectable()
 export class OrderSagaEventConsumer implements OnModuleInit, OnModuleDestroy {
@@ -118,41 +130,81 @@ export class OrderSagaEventConsumer implements OnModuleInit, OnModuleDestroy {
 
   private async connect(): Promise<void> {
     const connection = await amqplib.connect(this.url);
-    connection.on('error', (error) => this.handleDisconnect(error));
-    connection.on('close', () =>
-      this.handleDisconnect(new Error('connection closed')),
-    );
-    const channel = await connection.createChannel();
-    await channel.assertExchange(ORDER_SAGA_EVENTS_EXCHANGE, 'topic', {
-      durable: true,
-    });
-    // Shared DLX for the saga queues (idempotent to assert repeatedly). Only order-service
-    // asserts/binds the actual DLQ — this just ensures the exchange this queue's
-    // `x-dead-letter-exchange` argument points at actually exists.
-    await channel.assertExchange(ORDER_SAGA_EVENTS_DLX, 'fanout', {
-      durable: true,
-    });
-    const queue = await channel.assertQueue(QUEUE_NAME, {
-      durable: true,
-      arguments: {
-        'x-queue-type': 'quorum',
-        'x-dead-letter-exchange': ORDER_SAGA_EVENTS_DLX,
-        'x-delivery-limit': this.deliveryLimit,
-      },
-    });
-    await channel.bindQueue(
-      queue.queue,
-      ORDER_SAGA_EVENTS_EXCHANGE,
-      PAYMENT_CREATE_REQUESTED,
-    );
-    await channel.prefetch(1);
-    await channel.consume(queue.queue, (msg) => {
-      if (msg) {
-        void this.handleMessage(channel, msg);
+    // Only the active connection may trigger a reconnect — events from a connection that
+    // failed setup (closed below) or was already replaced are ignored.
+    connection.on('error', (error) => {
+      if (this.connection === connection) {
+        this.handleDisconnect(error);
       }
     });
-    this.connection = connection;
-    this.channel = channel;
+    connection.on('close', () => {
+      if (this.connection === connection) {
+        this.handleDisconnect(new Error('connection closed'));
+      }
+    });
+    try {
+      const channel = await connection.createChannel();
+      // A channel-level error (e.g. acking on a stale delivery tag) closes only the channel;
+      // without a listener the 'error' event would crash the process. 'close' drops the whole
+      // connection and reconnects so consuming resumes on a fresh channel.
+      channel.on('error', (error: Error) =>
+        this.logger.warn(`RabbitMQ channel error: ${error.message}`),
+      );
+      channel.on('close', () => {
+        if (this.shuttingDown || this.channel !== channel) {
+          return;
+        }
+        this.handleDisconnect(new Error('channel closed'));
+        connection.close().catch(() => undefined);
+      });
+      await channel.assertExchange(ORDER_SAGA_EVENTS_EXCHANGE, 'topic', {
+        durable: true,
+      });
+      // Shared DLX for the saga queues (idempotent to assert repeatedly). Only order-service
+      // asserts/binds the actual DLQ — this just ensures the exchange this queue's
+      // `x-dead-letter-exchange` argument points at actually exists.
+      await channel.assertExchange(ORDER_SAGA_EVENTS_DLX, 'fanout', {
+        durable: true,
+      });
+      const queue = await channel.assertQueue(QUEUE_NAME, {
+        durable: true,
+        arguments: {
+          'x-queue-type': 'quorum',
+          'x-dead-letter-exchange': ORDER_SAGA_EVENTS_DLX,
+          'x-delivery-limit': this.deliveryLimit,
+        },
+      });
+      await channel.bindQueue(
+        queue.queue,
+        ORDER_SAGA_EVENTS_EXCHANGE,
+        PAYMENT_CREATE_REQUESTED,
+      );
+      await channel.bindQueue(
+        queue.queue,
+        ORDER_SAGA_EVENTS_EXCHANGE,
+        PAYMENT_REFUND_REQUESTED,
+      );
+      await channel.prefetch(1);
+      // Set before consume() so the channel 'close' guard above already sees this channel
+      // as the active one when the first delivery arrives.
+      this.connection = connection;
+      this.channel = channel;
+      await channel.consume(queue.queue, (msg) => {
+        if (msg) {
+          this.handleMessage(channel, msg).catch((error) =>
+            this.logger.error(
+              `Unexpected error while handling "${msg.fields.routingKey}" message`,
+              error instanceof Error ? error.stack : String(error),
+            ),
+          );
+        }
+      });
+    } catch (error) {
+      this.channel = undefined;
+      this.connection = undefined;
+      connection.close().catch(() => undefined);
+      throw error;
+    }
   }
 
   private async handleMessage(
@@ -160,9 +212,9 @@ export class OrderSagaEventConsumer implements OnModuleInit, OnModuleDestroy {
     msg: amqplib.ConsumeMessage,
   ): Promise<void> {
     const routingKey = msg.fields.routingKey;
-    let payload: PaymentCreateRequestedPayload;
+    let handle: () => Promise<void>;
     try {
-      payload = this.parsePayload(msg);
+      handle = this.buildHandler(routingKey, msg);
     } catch (error) {
       // Permanent failure — the message itself is malformed, so redelivery would never
       // succeed. Drop it (no dead-letter exchange configured) instead of requeuing forever
@@ -172,48 +224,88 @@ export class OrderSagaEventConsumer implements OnModuleInit, OnModuleDestroy {
           error instanceof Error ? error.message : String(error)
         }`,
       );
-      channel.nack(msg, false, false);
+      this.settle(msg, () => channel.nack(msg, false, false));
       return;
     }
 
     try {
-      if (routingKey === PAYMENT_CREATE_REQUESTED) {
-        await this.paymentsService.processPayment(
+      await handle();
+      this.settle(msg, () => channel.ack(msg));
+    } catch (error) {
+      this.logger.error(
+        `Failed to handle "${routingKey}" message — nacking for redelivery in ${RECONNECT_DELAY_MS} ms`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      // Wait before requeueing: under prefetch(1) an immediate requeue comes straight back,
+      // so a short outage (e.g. the publisher still reconnecting) would burn every quorum
+      // delivery and dead-letter a valid request. unref() so the timer never holds the
+      // process open on shutdown; settling on a closed channel is already safe.
+      await new Promise((resolve) =>
+        setTimeout(resolve, RECONNECT_DELAY_MS).unref(),
+      );
+      this.settle(msg, () => channel.nack(msg, false, true));
+    }
+  }
+
+  /**
+   * Parses the body for the given routing key and returns the call to run. Throws
+   * (synchronously) on invalid JSON or a missing/wrong-typed required field — the caller
+   * treats that as a permanent, non-retryable failure.
+   */
+  private buildHandler(
+    routingKey: string,
+    msg: amqplib.ConsumeMessage,
+  ): () => Promise<void> {
+    if (routingKey === PAYMENT_CREATE_REQUESTED) {
+      const payload = this.parseCreatePayload(this.parseJson(msg));
+      return () =>
+        this.paymentsService.processPayment(
           payload.orderId,
           payload.userId,
           payload.orderCode,
           payload.amount,
           payload.paymentMethod,
         );
-      } else {
-        this.logger.warn(
-          `Ignoring message with unexpected routing key "${routingKey}"`,
-        );
-      }
-      channel.ack(msg);
-    } catch (error) {
-      this.logger.error(
-        `Failed to handle "${routingKey}" message — nacking for redelivery`,
-        error instanceof Error ? error.stack : String(error),
-      );
-      channel.nack(msg, false, true);
     }
+    if (routingKey === PAYMENT_REFUND_REQUESTED) {
+      const payload = this.parseRefundPayload(this.parseJson(msg));
+      return () =>
+        this.paymentsService.refundPayment(payload.orderId, payload.reason);
+    }
+    return () => {
+      this.logger.warn(
+        `Ignoring message with unexpected routing key "${routingKey}"`,
+      );
+      return Promise.resolve();
+    };
   }
 
   /**
-   * Parses and shape-checks the message body. Throws (synchronously) on invalid JSON or a
-   * missing/wrong-typed required field — the caller treats that as a permanent,
-   * non-retryable failure.
+   * Acks / nacks without throwing: when the channel closed mid-handling the call throws, the
+   * message stays unacked and the broker redelivers it on the next connection — handlers are
+   * idempotent, so that is safe.
    */
-  private parsePayload(
-    msg: amqplib.ConsumeMessage,
-  ): PaymentCreateRequestedPayload {
-    let parsed: unknown;
+  private settle(msg: amqplib.ConsumeMessage, action: () => void): void {
     try {
-      parsed = JSON.parse(msg.content.toString());
+      action();
+    } catch (error) {
+      this.logger.warn(
+        `Could not ack/nack "${msg.fields.routingKey}" message (channel closed?) — the broker will redeliver it: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
+  private parseJson(msg: amqplib.ConsumeMessage): unknown {
+    try {
+      return JSON.parse(msg.content.toString()) as unknown;
     } catch {
       throw new Error('message body is not valid JSON');
     }
+  }
+
+  private parseCreatePayload(parsed: unknown): PaymentCreateRequestedPayload {
     const candidate = parsed as Partial<PaymentCreateRequestedPayload> | null;
     if (
       typeof candidate !== 'object' ||
@@ -229,6 +321,22 @@ export class OrderSagaEventConsumer implements OnModuleInit, OnModuleDestroy {
       );
     }
     return candidate as PaymentCreateRequestedPayload;
+  }
+
+  private parseRefundPayload(parsed: unknown): PaymentRefundRequestedPayload {
+    const candidate = parsed as Partial<PaymentRefundRequestedPayload> | null;
+    if (
+      typeof candidate !== 'object' ||
+      candidate === null ||
+      typeof candidate.orderId !== 'string'
+    ) {
+      throw new Error('message payload is missing required "orderId" field');
+    }
+    return {
+      orderId: candidate.orderId,
+      reason:
+        typeof candidate.reason === 'string' ? candidate.reason : undefined,
+    };
   }
 
   private handleDisconnect(error: Error): void {

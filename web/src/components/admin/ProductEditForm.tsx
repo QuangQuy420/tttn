@@ -116,7 +116,8 @@ function formFromProduct(product: Product): FormState {
     description: product.description ?? "",
     faceFitNote: product.faceFitNote ?? "",
     faceShapes: product.faceShapes,
-    status: product.status === "ARCHIVED" ? "ARCHIVED" : "PUBLISHED",
+    // Keep the real status (a DRAFT stays DRAFT unless the admin toggles it — AC69).
+    status: product.status,
   };
 }
 
@@ -217,7 +218,7 @@ export function ProductEditForm({ product }: ProductEditFormProps) {
       measurements[field.key] = value;
     }
 
-    const payload = {
+    const basePayload = {
       name: form.name.trim(),
       categoryId: form.categoryId,
       brandId: form.brandId,
@@ -230,7 +231,6 @@ export function ProductEditForm({ product }: ProductEditFormProps) {
       description: form.description.trim() || null,
       faceFitNote: form.faceFitNote.trim() || null,
       faceShapes: form.faceShapes,
-      status: form.status,
     };
 
     const token = getAccessToken();
@@ -242,12 +242,21 @@ export function ProductEditForm({ product }: ProductEditFormProps) {
     setIsSubmitting(true);
     try {
       if (savedProductId) {
-        await updateProduct(savedProductId, payload, token);
+        // Send `status` only when the admin changed it, so saving other fields never moves a
+        // product between DRAFT / PUBLISHED / ARCHIVED (AC69).
+        const statusChanged = form.status !== product?.status;
+        await updateProduct(
+          savedProductId,
+          statusChanged ? { ...basePayload, status: form.status } : basePayload,
+          token,
+        );
+        router.push("/admin/products");
       } else {
-        const created = await createProduct(payload, token);
+        const created = await createProduct({ ...basePayload, status: form.status }, token);
         setSavedProductId(created.id);
+        // Stay on the new product's edit page so variants and images can be added (AC63).
+        router.replace(`/admin/products/${created.id}/edit`);
       }
-      router.push("/admin/products");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Lưu sản phẩm thất bại.");
     } finally {
@@ -515,7 +524,9 @@ export function ProductEditForm({ product }: ProductEditFormProps) {
               <div>
                 <div className="admin-form-card__status-label">Trạng thái bán</div>
                 <div className="admin-form-card__status-hint">
-                  Ẩn sản phẩm khỏi danh mục nếu hết hàng.
+                  {form.status === "DRAFT"
+                    ? "Bản nháp — chưa hiển thị trên cửa hàng. Bật để mở bán."
+                    : "Ẩn sản phẩm khỏi danh mục nếu hết hàng."}
                 </div>
               </div>
               <button

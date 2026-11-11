@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     # Photos whose cheekbone width (234 <-> 454, pixels) is below this are rejected — same
     # `min_cheek_px` filter as the training data (ml/face-shape/config.yaml).
     FACE_MIN_CHEEK_PX: float = 80.0
+    # Uploads whose width x height (read from the image header, before full decode) is above
+    # this are rejected with 400 — about 5000 x 5000.
+    FACE_MAX_PIXELS: int = 25_000_000
 
     # Shared secret for `/internal/*` endpoints (`X-Internal-Key` header) — same value as
     # `infra/.env` `INTERNAL_API_KEY`.

@@ -12,6 +12,7 @@ import com.tttn.orderservice.dto.response.ProductVariantResponse;
 import com.tttn.orderservice.enums.CartItemUnavailableReason;
 import com.tttn.orderservice.enums.ProductStatus;
 import com.tttn.orderservice.exception.BadRequestException;
+import com.tttn.orderservice.exception.ConflictException;
 import com.tttn.orderservice.exception.ResourceNotFoundException;
 import com.tttn.orderservice.mapper.CartMapper;
 import com.tttn.orderservice.messaging.BehaviorEventPublisher;
@@ -19,9 +20,14 @@ import com.tttn.orderservice.model.cart.Cart;
 import com.tttn.orderservice.model.cart.CartItem;
 import com.tttn.orderservice.service.CartService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ScanOptions;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -35,20 +41,42 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CartServiceImpl implements CartService {
 
-    private static final String CART_KEY_PREFIX = "cart:";
-    private static final Duration CART_TTL = Duration.ofDays(7);
     private static final int MAX_ITEM_QUANTITY = 99;
     private static final long SCAN_BATCH_SIZE = 100;
+
+    // Per-cart lock (SET NX PX) around every read-modify-write of a cart, so two concurrent
+    // writes (e.g. two "add" clicks, or an add racing a background product sync) cannot
+    // overwrite each other. Never held across a product-service HTTP call. syncProduct skips
+    // these keys in its cart scan. The lock is not re-entrant. TTL covers the 2-3 Redis calls
+    // done under it (3 s command timeout each).
+    private static final String CART_LOCK_PREFIX = "cart-lock:";
+    private static final Duration CART_LOCK_TTL = Duration.ofSeconds(10);
+    private static final long CART_LOCK_RETRY_DELAY_MS = 50;
+    private static final int CART_LOCK_MAX_TRIES = 60;
+    private static final RedisScript<Long> RELEASE_CART_LOCK_SCRIPT = new DefaultRedisScript<>(
+            "if redis.call('GET', KEYS[1]) == ARGV[1] then "
+                    + "return redis.call('DEL', KEYS[1]) else return 0 end",
+            Long.class
+    );
 
     private final RedisTemplate<String, Cart> cartRedisTemplate;
     private final ProductClient productClient;
     private final CartMapper cartMapper;
     private final BehaviorEventPublisher behaviorEventPublisher;
+    private final StringRedisTemplate stringRedisTemplate;
+
+    @Value("${cart.key-prefix}")
+    private String cartKeyPrefix;
+
+    @Value("${cart.expiration-days}")
+    private long cartExpirationDays;
 
     @Override
     public CartResponse getCart(UUID userId) {
@@ -72,50 +100,54 @@ public class CartServiceImpl implements CartService {
         ProductVariantResponse variant =
                 findVariant(product, request.variantId());
 
-        Cart cart = getOrCreateCart(userId);
+        CartResponse response = withCartLock(buildCartKey(userId), () -> {
+            Cart cart = getOrCreateCart(userId);
 
-        Optional<CartItem> existingItem =
-                cart.getItems()
-                        .stream()
-                        .filter(item ->
-                                Objects.equals(
-                                        item.getVariantId(),
-                                        request.variantId()
-                                )
-                        )
-                        .findFirst();
+            Optional<CartItem> existingItem =
+                    cart.getItems()
+                            .stream()
+                            .filter(item ->
+                                    Objects.equals(
+                                            item.getVariantId(),
+                                            request.variantId()
+                                    )
+                            )
+                            .findFirst();
 
-        if (existingItem.isPresent()) {
-            CartItem item = existingItem.get();
+            if (existingItem.isPresent()) {
+                CartItem item = existingItem.get();
 
-            int newQuantity =
-                    item.getQuantity() + request.quantity();
+                int newQuantity =
+                        item.getQuantity() + request.quantity();
 
-            validateQuantity(newQuantity);
-            validateStock(variant, newQuantity);
+                validateQuantity(newQuantity);
+                validateStock(variant, newQuantity);
 
-            item.setQuantity(newQuantity);
+                item.setQuantity(newQuantity);
 
-            refreshItemSnapshot(
-                    item,
-                    product,
-                    variant
-            );
-            applyAvailability(item, product, variant);
-        } else {
-            validateStock(variant, request.quantity());
+                refreshItemSnapshot(
+                        item,
+                        product,
+                        variant
+                );
+                applyAvailability(item, product, variant);
+            } else {
+                validateStock(variant, request.quantity());
 
-            CartItem newItem = createCartItem(
-                    product,
-                    variant,
-                    request.quantity()
-            );
-            applyAvailability(newItem, product, variant);
+                CartItem newItem = createCartItem(
+                        product,
+                        variant,
+                        request.quantity()
+                );
+                applyAvailability(newItem, product, variant);
 
-            cart.getItems().add(newItem);
-        }
+                cart.getItems().add(newItem);
+            }
 
-        saveCart(cart);
+            saveCart(cart);
+
+            return cartMapper.toResponse(cart);
+        });
 
         behaviorEventPublisher.publishAddToCart(
                 userId,
@@ -124,7 +156,7 @@ public class CartServiceImpl implements CartService {
                 request.quantity()
         );
 
-        return cartMapper.toResponse(cart);
+        return response;
     }
 
     @Override
@@ -149,16 +181,16 @@ public class CartServiceImpl implements CartService {
 
         validateQuantity(request.quantity());
 
-        Cart cart = getExistingCart(userId);
-
-        CartItem cartItem = findCartItem(
-                cart,
+        // Read without the lock only to know which product to fetch (no HTTP call under the
+        // lock); the cart is re-read under the lock before it is changed.
+        CartItem currentItem = findCartItem(
+                getExistingCart(userId),
                 variantId
         );
 
         ProductResponse product =
                 productClient.getProductById(
-                        cartItem.getProductId()
+                        currentItem.getProductId()
                 );
 
         validateProduct(product);
@@ -168,18 +200,27 @@ public class CartServiceImpl implements CartService {
 
         validateStock(variant, request.quantity());
 
-        cartItem.setQuantity(request.quantity());
+        return withCartLock(buildCartKey(userId), () -> {
+            Cart cart = getExistingCart(userId);
 
-        refreshItemSnapshot(
-                cartItem,
-                product,
-                variant
-        );
-        applyAvailability(cartItem, product, variant);
+            CartItem cartItem = findCartItem(
+                    cart,
+                    variantId
+            );
 
-        saveCart(cart);
+            cartItem.setQuantity(request.quantity());
 
-        return cartMapper.toResponse(cart);
+            refreshItemSnapshot(
+                    cartItem,
+                    product,
+                    variant
+            );
+            applyAvailability(cartItem, product, variant);
+
+            saveCart(cart);
+
+            return cartMapper.toResponse(cart);
+        });
     }
 
     @Override
@@ -195,39 +236,47 @@ public class CartServiceImpl implements CartService {
             );
         }
 
-        Cart cart = getExistingCart(userId);
+        return withCartLock(buildCartKey(userId), () -> {
+            Cart cart = getExistingCart(userId);
 
-        boolean removed = cart.getItems()
-                .removeIf(item ->
-                        Objects.equals(
-                                item.getVariantId(),
-                                variantId
-                        )
+            boolean removed = cart.getItems()
+                    .removeIf(item ->
+                            Objects.equals(
+                                    item.getVariantId(),
+                                    variantId
+                            )
+                    );
+
+            if (!removed) {
+                throw new ResourceNotFoundException(
+                        "Biến thể sản phẩm không tồn tại trong giỏ hàng"
                 );
+            }
 
-        if (!removed) {
-            throw new ResourceNotFoundException(
-                    "Biến thể sản phẩm không tồn tại trong giỏ hàng"
-            );
-        }
+            if (cart.getItems().isEmpty()) {
+                deleteCart(userId);
 
-        if (cart.getItems().isEmpty()) {
-            clearCart(userId);
+                return cartMapper.toResponse(
+                        createEmptyCart(userId)
+                );
+            }
 
-            return cartMapper.toResponse(
-                    createEmptyCart(userId)
-            );
-        }
+            saveCart(cart);
 
-        saveCart(cart);
-
-        return cartMapper.toResponse(cart);
+            return cartMapper.toResponse(cart);
+        });
     }
 
     @Override
     public void clearCart(UUID userId) {
         validateUserId(userId);
 
+        // Locked so a concurrent add / sync cannot write the cart back after the delete.
+        runWithCartLock(buildCartKey(userId), () -> deleteCart(userId));
+    }
+
+    // No lock: for callers that already hold the cart lock (it is not re-entrant).
+    private void deleteCart(UUID userId) {
         cartRedisTemplate.delete(
                 buildCartKey(userId)
         );
@@ -241,25 +290,27 @@ public class CartServiceImpl implements CartService {
             return;
         }
 
-        Cart cart = cartRedisTemplate.opsForValue().get(buildCartKey(userId));
+        runWithCartLock(buildCartKey(userId), () -> {
+            Cart cart = cartRedisTemplate.opsForValue().get(buildCartKey(userId));
 
-        if (cart == null) {
-            return;
-        }
+            if (cart == null) {
+                return;
+            }
 
-        initializeCartItems(cart);
+            initializeCartItems(cart);
 
-        cart.getItems()
-                .removeIf(item ->
-                        variantIds.contains(item.getVariantId())
-                );
+            cart.getItems()
+                    .removeIf(item ->
+                            variantIds.contains(item.getVariantId())
+                    );
 
-        if (cart.getItems().isEmpty()) {
-            clearCart(userId);
-            return;
-        }
+            if (cart.getItems().isEmpty()) {
+                deleteCart(userId);
+                return;
+            }
 
-        saveCart(cart);
+            saveCart(cart);
+        });
     }
 
     @Override
@@ -276,32 +327,40 @@ public class CartServiceImpl implements CartService {
         ProductResponse product = fetchProductOrNull(productId);
 
         ScanOptions options = ScanOptions.scanOptions()
-                .match(CART_KEY_PREFIX + "*")
+                .match(cartKeyPrefix + "*")
                 .count(SCAN_BATCH_SIZE)
                 .build();
 
         try (Cursor<String> keys = cartRedisTemplate.scan(options)) {
             while (keys.hasNext()) {
-                syncCartKey(keys.next(), productId, product);
+                String key = keys.next();
+
+                // A prefix without a trailing ':' (e.g. "cart") would also match lock keys.
+                if (key.startsWith(CART_LOCK_PREFIX)) {
+                    continue;
+                }
+
+                syncCartKey(key, productId, product);
             }
         }
     }
 
     @Override
     public CartRefreshResponse refreshCart(UUID userId) {
-        Cart cart = getOrCreateCart(userId);
+        Cart snapshot = getOrCreateCart(userId);
 
-        if (cart.isEmpty()) {
+        if (snapshot.isEmpty()) {
             return new CartRefreshResponse(
-                    cartMapper.toResponse(cart),
+                    cartMapper.toResponse(snapshot),
                     List.of()
             );
         }
 
-        // One product-service call per distinct product; null = product returned 404.
+        // One product-service call per distinct product; null = product returned 404. Fetched
+        // before taking the cart lock, then applied to a fresh read of the cart under the lock.
         Map<UUID, ProductResponse> products = new HashMap<>();
 
-        for (CartItem item : cart.getItems()) {
+        for (CartItem item : snapshot.getItems()) {
             if (!products.containsKey(item.getProductId())) {
                 products.put(
                         item.getProductId(),
@@ -310,33 +369,42 @@ public class CartServiceImpl implements CartService {
             }
         }
 
-        List<UUID> changedVariantIds = new ArrayList<>();
-        boolean cartChanged = false;
+        return withCartLock(buildCartKey(userId), () -> {
+            Cart cart = getOrCreateCart(userId);
 
-        for (CartItem item : cart.getItems()) {
-            BigDecimal previousUnitPrice = item.getUnitPrice();
-            boolean previouslyAvailable =
-                    !Boolean.FALSE.equals(item.getAvailable());
+            List<UUID> changedVariantIds = new ArrayList<>();
+            boolean cartChanged = false;
 
-            cartChanged |= applyProductState(
-                    item,
-                    products.get(item.getProductId())
-            );
+            for (CartItem item : cart.getItems()) {
+                // Added after the fetch above: left as is until the next refresh.
+                if (!products.containsKey(item.getProductId())) {
+                    continue;
+                }
 
-            if (!samePrice(previousUnitPrice, item.getUnitPrice())
-                    || previouslyAvailable != item.getAvailable()) {
-                changedVariantIds.add(item.getVariantId());
+                BigDecimal previousUnitPrice = item.getUnitPrice();
+                boolean previouslyAvailable =
+                        !Boolean.FALSE.equals(item.getAvailable());
+
+                cartChanged |= applyProductState(
+                        item,
+                        products.get(item.getProductId())
+                );
+
+                if (!samePrice(previousUnitPrice, item.getUnitPrice())
+                        || previouslyAvailable != item.getAvailable()) {
+                    changedVariantIds.add(item.getVariantId());
+                }
             }
-        }
 
-        if (cartChanged) {
-            saveCart(cart);
-        }
+            if (cartChanged) {
+                saveCart(cart);
+            }
 
-        return new CartRefreshResponse(
-                cartMapper.toResponse(cart),
-                changedVariantIds
-        );
+            return new CartRefreshResponse(
+                    cartMapper.toResponse(cart),
+                    changedVariantIds
+            );
+        });
     }
 
     private void syncCartKey(
@@ -344,42 +412,118 @@ public class CartServiceImpl implements CartService {
             UUID productId,
             ProductResponse product
     ) {
-        Cart cart = cartRedisTemplate.opsForValue().get(key);
-
-        if (cart == null || cart.isEmpty()) {
+        // Cheap unlocked check first, so carts without this product never take the lock.
+        if (!containsProduct(cartRedisTemplate.opsForValue().get(key), productId)) {
             return;
         }
 
-        boolean changed = false;
+        runWithCartLock(key, () -> {
+            Cart cart = cartRedisTemplate.opsForValue().get(key);
 
-        for (CartItem item : cart.getItems()) {
-            if (Objects.equals(item.getProductId(), productId)) {
-                changed |= applyProductState(item, product);
+            if (cart == null || cart.isEmpty()) {
+                return;
+            }
+
+            boolean changed = false;
+
+            for (CartItem item : cart.getItems()) {
+                if (Objects.equals(item.getProductId(), productId)) {
+                    changed |= applyProductState(item, product);
+                }
+            }
+
+            if (!changed) {
+                return;
+            }
+
+            // A background sync is not user activity — keep the cart's remaining lifetime
+            // instead of resetting it to the full TTL like saveCart() does.
+            Long ttlSeconds = cartRedisTemplate.getExpire(key);
+
+            if (ttlSeconds == null || ttlSeconds == -2) {
+                // Key expired or was cleared (e.g. checkout) since we read it.
+                return;
+            }
+
+            cartRedisTemplate
+                    .opsForValue()
+                    .set(
+                            key,
+                            cart,
+                            ttlSeconds > 0
+                                    ? Duration.ofSeconds(ttlSeconds)
+                                    : cartTtl()
+                    );
+        });
+    }
+
+    private boolean containsProduct(Cart cart, UUID productId) {
+        return cart != null
+                && !cart.isEmpty()
+                && cart.getItems()
+                .stream()
+                .anyMatch(item -> Objects.equals(item.getProductId(), productId));
+    }
+
+    private <T> T withCartLock(String cartKey, Supplier<T> action) {
+        String lockKey = CART_LOCK_PREFIX + cartKey.substring(cartKeyPrefix.length());
+        String token = UUID.randomUUID().toString();
+
+        acquireCartLock(lockKey, token);
+
+        try {
+            return action.get();
+        } finally {
+            releaseCartLock(lockKey, token);
+        }
+    }
+
+    private void runWithCartLock(String cartKey, Runnable action) {
+        withCartLock(cartKey, () -> {
+            action.run();
+            return null;
+        });
+    }
+
+    private void acquireCartLock(String lockKey, String token) {
+        for (int attempt = 0; attempt < CART_LOCK_MAX_TRIES; attempt++) {
+            if (Boolean.TRUE.equals(
+                    stringRedisTemplate
+                            .opsForValue()
+                            .setIfAbsent(lockKey, token, CART_LOCK_TTL)
+            )) {
+                return;
+            }
+
+            try {
+                Thread.sleep(CART_LOCK_RETRY_DELAY_MS);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                break;
             }
         }
 
-        if (!changed) {
-            return;
+        throw new ConflictException(
+                "Giỏ hàng đang được cập nhật, vui lòng thử lại"
+        );
+    }
+
+    // Deletes the lock only if it is still ours (it may have expired and been taken by another
+    // writer). A failure here is only logged: the lock expires on its own after CART_LOCK_TTL.
+    private void releaseCartLock(String lockKey, String token) {
+        try {
+            stringRedisTemplate.execute(
+                    RELEASE_CART_LOCK_SCRIPT,
+                    List.of(lockKey),
+                    token
+            );
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "Không thể mở khóa giỏ hàng {}: {}",
+                    lockKey,
+                    exception.getMessage()
+            );
         }
-
-        // A background sync is not user activity — keep the cart's remaining lifetime
-        // instead of resetting it to CART_TTL like saveCart() does.
-        Long ttlSeconds = cartRedisTemplate.getExpire(key);
-
-        if (ttlSeconds == null || ttlSeconds == -2) {
-            // Key expired or was cleared (e.g. checkout) since we read it.
-            return;
-        }
-
-        cartRedisTemplate
-                .opsForValue()
-                .set(
-                        key,
-                        cart,
-                        ttlSeconds > 0
-                                ? Duration.ofSeconds(ttlSeconds)
-                                : CART_TTL
-                );
     }
 
     /**
@@ -605,8 +749,12 @@ public class CartServiceImpl implements CartService {
                                 cart.getUserId()
                         ),
                         cart,
-                        CART_TTL
+                        cartTtl()
                 );
+    }
+
+    private Duration cartTtl() {
+        return Duration.ofDays(cartExpirationDays);
     }
 
     private CartItem findCartItem(
@@ -864,7 +1012,7 @@ public class CartServiceImpl implements CartService {
     private String buildCartKey(
             UUID userId
     ) {
-        return CART_KEY_PREFIX + userId;
+        return cartKeyPrefix + userId;
     }
 
     private BigDecimal defaultMoney(

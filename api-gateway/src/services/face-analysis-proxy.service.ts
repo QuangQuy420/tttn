@@ -73,7 +73,7 @@ export class FaceAnalysisProxyService {
   }
 
   async deleteHistoryItem(id: string, userId: string): Promise<unknown> {
-    const path = `/analyses/${id}`;
+    const path = `/analyses/${encodeURIComponent(id)}`;
 
     try {
       const response = await firstValueFrom(

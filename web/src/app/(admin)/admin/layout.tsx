@@ -5,25 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { Suspense } from "react";
 import { AdminGuard, useAdminProfile } from "@/components/admin/AdminGuard";
 import { LoadingState } from "@/components/common/LoadingState";
+import { visibleAdminPages } from "@/lib/auth/admin-access";
 import { removeAccessToken } from "@/lib/auth/session";
-
-const NAV_ITEMS = [
-  { label: "Tổng quan", href: "/admin" },
-  { label: "Sản phẩm", href: "/admin/products" },
-  { label: "Đánh giá", href: "/admin/reviews" },
-  { label: "Đơn hàng", href: "/admin/orders" },
-  { label: "Nhật ký xử lý đơn hàng", href: "/admin/saga-logs" },
-  { label: "Khách hàng", href: "/admin/users" },
-  { label: "Vai trò", href: "/admin/roles" },
-  { label: "Cài đặt", href: "/admin/settings" },
-  { label: "Model AI", href: "/admin/ai-models" },
-  { label: "Hành vi người dùng", href: "/admin/analytics" },
-];
-
-const CATALOG_NAV_ITEMS = [
-  { label: "Thương hiệu", href: "/admin/brands" },
-  { label: "Danh mục", href: "/admin/categories" },
-];
 
 export default function AdminLayout({
                                       children,
@@ -52,8 +35,8 @@ function AdminLayoutContent({
   onLogout: () => void;
 }) {
   const profile = useAdminProfile();
-  const isAdmin = profile?.roles.some((role) => role.toUpperCase() === "ADMIN");
-  const navItems = isAdmin ? [...NAV_ITEMS, ...CATALOG_NAV_ITEMS] : CATALOG_NAV_ITEMS;
+  // Only the pages the user's permissions open (AC7) — same table AdminGuard checks.
+  const navItems = visibleAdminPages(profile?.permissions ?? []);
 
   return (
         <div className="admin-shell">

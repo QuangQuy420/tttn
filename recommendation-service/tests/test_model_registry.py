@@ -40,6 +40,29 @@ def test_load_raises_when_the_card_feature_schema_differs_from_the_code_AC12(
     assert get_preference_model() is None
 
 
+def test_load_raises_when_the_card_has_no_calibration_AC57(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(model_registry, "MODELS_DIR", tmp_path)
+    folder = tmp_path / "v-no-calibration"
+    folder.mkdir()
+    (folder / "model.json").write_text("{}", encoding="utf-8")
+    (folder / "model_card.json").write_text(
+        json.dumps(
+            {
+                "version": "v-no-calibration",
+                "feature_schema_version": FEATURE_SCHEMA_VERSION,
+                "price_band_edges": [900_000.0, 1_800_000.0, 4_200_000.0],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ModelLoadError, match="calibration"):
+        load_preference_model("v-no-calibration")
+    assert get_preference_model() is None
+
+
 def test_load_with_an_empty_version_is_legacy_mode() -> None:
     assert load_preference_model("") is None
     assert get_preference_model() is None

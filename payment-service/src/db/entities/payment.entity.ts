@@ -32,7 +32,8 @@ export class Payment {
 
   @Column({
     type: 'numeric',
-    precision: 12,
+    // Same width as order-service's order total column, so any order amount fits.
+    precision: 19,
     scale: 2,
     transformer: numericTransformer,
   })

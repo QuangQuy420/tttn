@@ -6,8 +6,13 @@ import { StockReservationStatus } from '../db/enums/stock-reservation-status.enu
 import { ReserveItem } from './inventory.repository';
 
 export interface IStockReservationRepository {
-  /** Idempotency check before reserving (NFR2): is there already a RESERVED row for this order? */
-  hasReservedForOrder(orderId: string): Promise<boolean>;
+  /**
+   * Idempotency check before reserving (NFR2): the distinct statuses of every reservation row
+   * already recorded for this order (empty when the order was never reserved).
+   */
+  findStatusesForOrder(orderId: string): Promise<StockReservationStatus[]>;
+  /** Does any order currently hold (RESERVED) stock of this variant? */
+  hasReservedForVariant(variantId: string): Promise<boolean>;
   /**
    * Records one RESERVED row per item, right after a successful `IInventoryRepository.reserve()`.
    * Accepts an optional `manager` so `InventoryService.reserve()` can run this in the same
@@ -46,6 +51,25 @@ export interface IStockReservationRepository {
     reservations: StockReservation[],
     manager: EntityManager,
   ): Promise<void>;
+  /**
+   * Locks and returns the order's RESERVED and COMMITTED rows in ONE `FOR UPDATE` query —
+   * everything a restock may still have to undo. Same transaction rule as
+   * `lockReservedForOrder()`.
+   */
+  lockReservedOrCommittedForOrder(
+    orderId: string,
+    manager: EntityManager,
+  ): Promise<StockReservation[]>;
+  /** COMMITTED → RESTOCKED for exactly these rows. */
+  markRestocked(
+    reservations: StockReservation[],
+    manager: EntityManager,
+  ): Promise<void>;
+  /** RESERVED → RELEASED for exactly these rows. */
+  markReleased(
+    reservations: StockReservation[],
+    manager: EntityManager,
+  ): Promise<void>;
 }
 
 @Injectable()
@@ -55,9 +79,20 @@ export class TypeOrmStockReservationRepository implements IStockReservationRepos
     private readonly repo: Repository<StockReservation>,
   ) {}
 
-  async hasReservedForOrder(orderId: string): Promise<boolean> {
+  async findStatusesForOrder(
+    orderId: string,
+  ): Promise<StockReservationStatus[]> {
+    const rows = await this.repo
+      .createQueryBuilder('reservation')
+      .select('DISTINCT reservation.status', 'status')
+      .where('reservation.order_id = :orderId', { orderId })
+      .getRawMany<{ status: StockReservationStatus }>();
+    return rows.map((row) => row.status);
+  }
+
+  async hasReservedForVariant(variantId: string): Promise<boolean> {
     const count = await this.repo.count({
-      where: { orderId, status: StockReservationStatus.RESERVED },
+      where: { variantId, status: StockReservationStatus.RESERVED },
     });
     return count > 0;
   }
@@ -111,13 +146,70 @@ export class TypeOrmStockReservationRepository implements IStockReservationRepos
     reservations: StockReservation[],
     manager: EntityManager,
   ): Promise<void> {
+    await this.transition(
+      reservations,
+      StockReservationStatus.RESERVED,
+      StockReservationStatus.COMMITTED,
+      manager,
+    );
+  }
+
+  async lockReservedOrCommittedForOrder(
+    orderId: string,
+    manager: EntityManager,
+  ): Promise<StockReservation[]> {
+    return manager
+      .getRepository(StockReservation)
+      .createQueryBuilder('reservation')
+      .setLock('pessimistic_write')
+      .where('reservation.order_id = :orderId', { orderId })
+      .andWhere('reservation.status IN (:...statuses)', {
+        statuses: [
+          StockReservationStatus.RESERVED,
+          StockReservationStatus.COMMITTED,
+        ],
+      })
+      .orderBy('reservation.variant_id', 'ASC')
+      .getMany();
+  }
+
+  async markRestocked(
+    reservations: StockReservation[],
+    manager: EntityManager,
+  ): Promise<void> {
+    await this.transition(
+      reservations,
+      StockReservationStatus.COMMITTED,
+      StockReservationStatus.RESTOCKED,
+      manager,
+    );
+  }
+
+  async markReleased(
+    reservations: StockReservation[],
+    manager: EntityManager,
+  ): Promise<void> {
+    await this.transition(
+      reservations,
+      StockReservationStatus.RESERVED,
+      StockReservationStatus.RELEASED,
+      manager,
+    );
+  }
+
+  private async transition(
+    reservations: StockReservation[],
+    from: StockReservationStatus,
+    to: StockReservationStatus,
+    manager: EntityManager,
+  ): Promise<void> {
     if (reservations.length === 0) return;
     await manager.getRepository(StockReservation).update(
       {
         id: In(reservations.map((reservation) => reservation.id)),
-        status: StockReservationStatus.RESERVED,
+        status: from,
       },
-      { status: StockReservationStatus.COMMITTED },
+      { status: to },
     );
   }
 }

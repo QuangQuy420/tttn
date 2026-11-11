@@ -1,8 +1,9 @@
 """PreferenceScore model loaded once at startup — `(xgboost.Booster, model_card)` singleton.
 
 `load_preference_model` runs inside the app lifespan (`app/main.py`). It raises when the
-version folder is missing or the card's `feature_schema_version` differs from
-`app.ml.features.FEATURE_SCHEMA_VERSION`, so the app fails to start (and the container fails
+version folder is missing, the card's `feature_schema_version` differs from
+`app.ml.features.FEATURE_SCHEMA_VERSION`, or the card lacks `price_band_edges` /
+`calibration.{method,a,b,raw_score}`, so the app fails to start (and the container fails
 its healthcheck) instead of serving scores from a mismatched model.
 
 An unset/empty `PREFERENCE_MODEL_VERSION` is legacy mode: nothing is loaded and
@@ -22,6 +23,8 @@ logger = logging.getLogger(__name__)
 MODELS_DIR = Path(__file__).resolve().parents[2] / "models" / "preference"
 MODEL_FILE = "model.json"
 CARD_FILE = "model_card.json"
+# `calibration` keys `rank()` needs (with `price_band_edges`).
+CALIBRATION_KEYS = ("method", "a", "b", "raw_score")
 
 PreferenceModel = tuple[Any, dict[str, Any]]  # (xgboost.Booster, model_card)
 
@@ -54,6 +57,19 @@ def load_preference_model(version: str) -> PreferenceModel | None:
         raise ModelLoadError(
             f"Preference model {version!r} has feature_schema_version {schema!r}, "
             f"code expects {FEATURE_SCHEMA_VERSION!r}"
+        )
+    # `rank()` reads these per request — fail at startup, not on the first recommendation.
+    if not isinstance(card.get("price_band_edges"), list) or not card["price_band_edges"]:
+        raise ModelLoadError(f"Preference model {version!r} card has no price_band_edges")
+    calibration = card.get("calibration")
+    missing = [
+        key
+        for key in CALIBRATION_KEYS
+        if not isinstance(calibration, dict) or calibration.get(key) is None
+    ]
+    if missing:
+        raise ModelLoadError(
+            f"Preference model {version!r} card has no calibration.{', calibration.'.join(missing)}"
         )
 
     import xgboost

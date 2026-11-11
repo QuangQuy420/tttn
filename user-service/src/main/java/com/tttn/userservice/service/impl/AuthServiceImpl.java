@@ -13,6 +13,7 @@ import com.tttn.userservice.service.AuthService;
 import com.tttn.userservice.exception.BusinessException;
 import com.tttn.userservice.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,6 +49,7 @@ public class AuthServiceImpl implements AuthService {
     private static final int RESET_TOKEN_EXPIRATION_MINUTES = 15;
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final String DEFAULT_ROLE_NAME = "CUSTOMER";
+    private static final String USERNAME_UNIQUE_CONSTRAINT = "uk_users_username";
 
     @Override
     @Transactional
@@ -79,7 +81,13 @@ public class AuthServiceImpl implements AuthService {
                 .status(UserStatus.ACTIVE)
                 .build();
 
-        user = userRepository.save(user);
+        // saveAndFlush so a concurrent register with the same email/username hits the unique
+        // constraint here and maps to 409, instead of failing at commit outside this method.
+        try {
+            user = userRepository.saveAndFlush(user);
+        } catch (DataIntegrityViolationException exception) {
+            throw toDuplicateUserException(exception);
+        }
 
         Profile profile = Profile.builder()
                 .user(user)
@@ -96,6 +104,18 @@ public class AuthServiceImpl implements AuthService {
                 toRoleNames(user),
                 user.getStatus()
         );
+    }
+
+    // Constraint names from V1__baseline_schema.sql (uk_users_email / uk_users_username);
+    // anything other than the username constraint is reported as a duplicate email.
+    private BusinessException toDuplicateUserException(DataIntegrityViolationException exception) {
+        String message = String.valueOf(exception.getMostSpecificCause().getMessage());
+
+        if (message.contains(USERNAME_UNIQUE_CONSTRAINT)) {
+            return new BusinessException(ErrorCode.USERNAME_ALREADY_EXISTS);
+        }
+
+        return new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS);
     }
 
     private List<String> toRoleNames(User user) {
@@ -167,8 +187,10 @@ public AuthResponse login(LoginRequest request) {
         /*
          * Luôn trả về thành công kể cả email không tồn tại,
          * tránh tiết lộ tài khoản nào đã đăng ký.
+         * Vẫn sinh và băm token để thời gian xử lý tương đương.
          */
         if (user == null) {
+            hashToken(generateResetToken());
             return;
         }
 
@@ -189,10 +211,10 @@ public AuthResponse login(LoginRequest request) {
         passwordResetTokenRepository.save(resetToken);
 
         /*
-         * Chỉ dùng trong môi trường dev.
+         * Chỉ dùng trong môi trường dev (mức DEBUG, không ghi ở INFO).
          * Sau này thay bằng gửi email.
          */
-        log.info(
+        log.debug(
                 "Password reset token for {}: {}",
                 user.getEmail(),
                 rawToken
@@ -204,6 +226,16 @@ public AuthResponse login(LoginRequest request) {
     public void resetPassword(ResetPasswordRequest request) {
         String tokenHash = hashToken(request.token().trim());
 
+        /*
+         * Consume the token with one conditional UPDATE: the row lock makes a concurrent
+         * request with the same token wait and then match 0 rows, so a token works once.
+         * Any exception below rolls the consumption back.
+         */
+        int consumed = passwordResetTokenRepository.markUsedIfValid(
+                tokenHash,
+                LocalDateTime.now()
+        );
+
         PasswordResetToken resetToken =
                 passwordResetTokenRepository.findByTokenHash(tokenHash)
                         .orElseThrow(() ->
@@ -212,19 +244,17 @@ public AuthResponse login(LoginRequest request) {
                                 )
                         );
 
-        if (resetToken.isUsed()) {
-            throw new BusinessException(
-                    ErrorCode.RESET_TOKEN_USED
-            );
-        }
-
-        if (resetToken.isExpired()) {
-            throw new BusinessException(
-                    ErrorCode.RESET_TOKEN_EXPIRED
-            );
+        if (consumed != 1) {
+            throw new BusinessException(rejectionFor(resetToken));
         }
 
         User user = resetToken.getUser();
+
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            throw new BusinessException(
+                    ErrorCode.RESET_TOKEN_INVALID
+            );
+        }
 
         if (passwordEncoder.matches(
                 request.newPassword(),
@@ -238,11 +268,21 @@ public AuthResponse login(LoginRequest request) {
         user.setPasswordHash(
                 passwordEncoder.encode(request.newPassword())
         );
-
-        resetToken.setUsedAt(LocalDateTime.now());
+        user.revokeIssuedTokens();
 
         userRepository.save(user);
-        passwordResetTokenRepository.save(resetToken);
+    }
+
+    private ErrorCode rejectionFor(PasswordResetToken resetToken) {
+        if (resetToken.isUsed()) {
+            return ErrorCode.RESET_TOKEN_USED;
+        }
+
+        if (resetToken.isExpired()) {
+            return ErrorCode.RESET_TOKEN_EXPIRED;
+        }
+
+        return ErrorCode.RESET_TOKEN_INVALID;
     }
 
     private String generateResetToken() {

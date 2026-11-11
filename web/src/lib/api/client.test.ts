@@ -1,4 +1,4 @@
-import { ApiError, apiFetch, apiFetchData, apiFetchPage } from "./client";
+import { ApiError, apiFetch, apiFetchData, apiFetchPage, getFieldErrors } from "./client";
 
 const originalBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 const originalFetch = global.fetch;
@@ -95,6 +95,50 @@ describe("apiFetch", () => {
     await expect(apiFetch("/products")).rejects.toMatchObject({ status: 0 });
   });
 
+  describe("401 handling (AC6)", () => {
+    const unauthorized = {
+      ok: false,
+      status: 401,
+      statusText: "Unauthorized",
+      json: async () => ({ success: false, message: "Phiên đăng nhập đã hết hạn" }),
+    };
+
+    beforeEach(() => {
+      localStorage.setItem("accessToken", "expired-token");
+      // Already on /login, so expireSession does not try a real jsdom navigation.
+      window.history.pushState({}, "", "/login");
+    });
+
+    afterEach(() => {
+      localStorage.clear();
+      window.history.pushState({}, "", "/");
+    });
+
+    it("clears the stored token and fires auth-change on a 401 for a request that sent a token (AC6)", async () => {
+      global.fetch = jest.fn().mockResolvedValue(unauthorized) as unknown as typeof fetch;
+      const onAuthChange = jest.fn();
+      window.addEventListener("auth-change", onAuthChange);
+
+      await expect(
+        apiFetch("/cart", { headers: { Authorization: "Bearer expired-token" } }),
+      ).rejects.toMatchObject({ status: 401 });
+
+      window.removeEventListener("auth-change", onAuthChange);
+      expect(localStorage.getItem("accessToken")).toBeNull();
+      expect(onAuthChange).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps the token on a 401 for a request without an Authorization header (AC6)", async () => {
+      global.fetch = jest.fn().mockResolvedValue(unauthorized) as unknown as typeof fetch;
+
+      await expect(apiFetch("/auth/login", { method: "POST" })).rejects.toMatchObject({
+        status: 401,
+      });
+
+      expect(localStorage.getItem("accessToken")).toBe("expired-token");
+    });
+  });
+
   it("throws without calling fetch when NEXT_PUBLIC_API_BASE_URL is not configured", async () => {
     delete process.env.NEXT_PUBLIC_API_BASE_URL;
     const mockFetch = jest.fn();
@@ -169,5 +213,27 @@ describe("envelope helpers", () => {
       code: "CART_CHANGED",
       details,
     });
+  });
+});
+
+describe("getFieldErrors (AC65)", () => {
+  it("maps object details { field: message } to a field → message map (AC65)", () => {
+    const error = new ApiError("Dữ liệu không hợp lệ", 400, "VALIDATION_ERROR", {
+      email: "Email đã được sử dụng",
+      phone: "Số điện thoại không hợp lệ",
+    });
+
+    expect(getFieldErrors(error)).toEqual({
+      email: "Email đã được sử dụng",
+      phone: "Số điện thoại không hợp lệ",
+    });
+  });
+
+  it("returns an empty map for string[] details, which carry no field names (AC65)", () => {
+    const error = new ApiError("Dữ liệu không hợp lệ", 400, "VALIDATION_ERROR", [
+      "email must be an email",
+    ]);
+
+    expect(getFieldErrors(error)).toEqual({});
   });
 });

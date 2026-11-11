@@ -91,7 +91,9 @@ public class AddressServiceImpl implements AddressService {
         address.setAddress(normalize(request.address()));
         address.setDefaultAddress(makeDefault);
 
-        addressRepository.saveAndFlush(address);
+        // clearDefaultForUser detached `address`; saveAndFlush merges it back and writes every
+        // field, including an unchanged defaultAddress=true.
+        address = addressRepository.saveAndFlush(address);
 
         return toResponse(address);
     }

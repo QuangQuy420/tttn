@@ -25,8 +25,27 @@ function authHeaders(token: string): HeadersInit {
   };
 }
 
+// Admin reads (AC20): with a token of a `product:manage` holder, the gateway forwards
+// `includeAllStatuses=true` so DRAFT / ARCHIVED products show up; for anyone else it drops the
+// flag. Without a token the call is anonymous, as on the storefront.
+export interface ProductReadOptions {
+  token?: string | null;
+  includeAllStatuses?: boolean;
+}
+
+// Sends the Authorization header only when a token is given (anonymous storefront reads keep
+// calling apiFetch* with the path alone).
+function readProduct<T>(
+  fetcher: (path: string, options?: RequestInit) => Promise<T>,
+  path: string,
+  token: string | null | undefined,
+): Promise<T> {
+  return token ? fetcher(path, { headers: authHeaders(token) }) : fetcher(path);
+}
+
 export function getProducts(
   params: ProductListParams = {},
+  token?: string | null,
 ): Promise<Paginated<Product>> {
   const query = new URLSearchParams();
   if (params.categoryId) query.set("categoryId", params.categoryId);
@@ -47,11 +66,23 @@ export function getProducts(
   if (params.includeAllStatuses) query.set("includeAllStatuses", "true");
 
   const queryString = query.toString();
-  return apiFetchPage<Product>(`/products${queryString ? `?${queryString}` : ""}`);
+  return readProduct(
+    apiFetchPage<Product>,
+    `/products${queryString ? `?${queryString}` : ""}`,
+    token,
+  );
 }
 
-export function getProductById(id: string): Promise<Product> {
-  return apiFetchData<Product>(`/products/${encodeURIComponent(id)}`);
+export function getProductById(
+  id: string,
+  options: ProductReadOptions = {},
+): Promise<Product> {
+  const query = options.includeAllStatuses ? "?includeAllStatuses=true" : "";
+  return readProduct(
+    apiFetchData<Product>,
+    `/products/${encodeURIComponent(id)}${query}`,
+    options.token,
+  );
 }
 
 export function getProductBySlug(slug: string): Promise<Product> {

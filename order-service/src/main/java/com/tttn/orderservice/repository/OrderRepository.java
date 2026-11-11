@@ -39,5 +39,7 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     // (whichever is set) — not expressible as a single simple derived-query condition.
     List<Order> findByStatusInAndReconciliationExhaustedFalse(List<OrderStatus> statuses);
 
-    List<Order> findByStockReleasePendingTrueAndReconciliationExhaustedFalse();
+    // Includes exhausted orders: a release whose outbox row was given up must still be retried,
+    // or the reserved stock leaks.
+    List<Order> findByStockReleasePendingTrue();
 }

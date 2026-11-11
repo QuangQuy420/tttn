@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { login } from "@/lib/api";
 import { saveAccessToken } from "@/lib/auth/session";
 import { useAuthForm } from "@/hooks/useAuthForm";
@@ -31,8 +31,15 @@ function validate(
   return errors;
 }
 
+// Notices other pages can show here through `/login?notice=...`.
+const LOGIN_NOTICES: Record<string, string> = {
+  "password-changed": "Đổi mật khẩu thành công, vui lòng đăng nhập lại.",
+};
+
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const notice = LOGIN_NOTICES[searchParams.get("notice") ?? ""] ?? null;
 
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -85,6 +92,12 @@ export function LoginForm() {
           onSubmit={handleSubmit}
           noValidate
       >
+        {notice && (
+            <p role="status">
+              {notice}
+            </p>
+        )}
+
         <label htmlFor="login-identifier">
           Email hoặc tên đăng nhập
           <input

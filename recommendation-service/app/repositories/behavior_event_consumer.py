@@ -9,7 +9,7 @@ Topology (declared here, idempotently, on every (re)connect — see
 
 Delivery semantics mirror product-service's saga consumer
 (`product-service/src/repositories/order-saga-event-consumer.repository.ts`): manual ack,
-malformed → dead-letter immediately, any other failure → requeue. `connect_robust`
+malformed → dead-letter immediately, any other failure → requeue after a back-off. `connect_robust`
 reconnects and re-declares the topology by itself after a broker restart.
 
 NOTE: the queue's `x-*` arguments must never change once the queue exists — RabbitMQ
@@ -28,6 +28,7 @@ from aio_pika.abc import (
 )
 
 from app.core.config import Settings
+from app.repositories.interaction_repository import ping_database
 from app.services.interaction_ingest_service import (
     InteractionIngestService,
     MalformedEventError,
@@ -40,9 +41,14 @@ BEHAVIOR_EVENTS_DLX = "behavior-events.dlx"
 BEHAVIOR_EVENTS_DLQ = "behavior-events.dlq"
 QUEUE_NAME = "recommendation-service.behavior-events"
 BINDING_KEY = "behavior.*"
-# Pause before requeuing after a transient failure (e.g. Postgres down), so a short outage
-# doesn't burn through the delivery limit in milliseconds.
+# Back-off before requeuing after a transient failure (e.g. Postgres down), doubled per
+# delivery (`x-delivery-count`) and capped: 2+4+8+16+32+60 ≈ 122 s over 6 deliveries, so a
+# ~2 min outage stays under the delivery limit (10) instead of dead-lettering in ~20 s.
+# The message is held unacked meanwhile and requeued early once `SELECT 1` succeeds again
+# (never before REQUEUE_DELAY_SECONDS).
 REQUEUE_DELAY_SECONDS = 2
+MAX_REQUEUE_DELAY_SECONDS = 60
+DB_PING_INTERVAL_SECONDS = 2
 
 
 def _event_id_for_log(body: bytes) -> str:
@@ -52,6 +58,28 @@ def _event_id_for_log(body: bytes) -> str:
     except ValueError:
         return "?"
     return str(payload.get("eventId", "?")) if isinstance(payload, dict) else "?"
+
+
+def _requeue_delay_seconds(message: AbstractIncomingMessage) -> float:
+    """Capped exponential back-off keyed on the quorum queue's `x-delivery-count` header
+    (absent on the first delivery)."""
+    try:
+        delivery_count = max(0, int((message.headers or {}).get("x-delivery-count", 0)))
+    except (TypeError, ValueError):
+        delivery_count = 0
+    return min(REQUEUE_DELAY_SECONDS * 2 ** min(delivery_count, 16), MAX_REQUEUE_DELAY_SECONDS)
+
+
+async def _wait_before_requeue(delay_seconds: float) -> None:
+    """Sleep at least REQUEUE_DELAY_SECONDS, then until the DB answers or `delay_seconds`
+    has passed."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + delay_seconds
+    await asyncio.sleep(min(REQUEUE_DELAY_SECONDS, delay_seconds))
+    while (remaining := deadline - loop.time()) > 0:
+        if await ping_database(min(DB_PING_INTERVAL_SECONDS, remaining)):
+            return
+        await asyncio.sleep(min(DB_PING_INTERVAL_SECONDS, max(0.0, deadline - loop.time())))
 
 
 class BehaviorEventConsumer:
@@ -128,12 +156,13 @@ class BehaviorEventConsumer:
             await message.reject(requeue=False)
             return
         except Exception:
+            delay_seconds = _requeue_delay_seconds(message)
             logger.exception(
-                "Failed to store behavior event %s — requeuing in %ss",
+                "Failed to store behavior event %s — requeuing within %ss",
                 event_id,
-                REQUEUE_DELAY_SECONDS,
+                delay_seconds,
             )
-            await asyncio.sleep(REQUEUE_DELAY_SECONDS)
+            await _wait_before_requeue(delay_seconds)
             await message.nack(requeue=True)
             return
 

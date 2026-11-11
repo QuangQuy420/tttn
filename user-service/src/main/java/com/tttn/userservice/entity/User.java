@@ -19,6 +19,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -59,6 +62,19 @@ public class User extends BaseEntity {
     @Column(nullable = false, length = 20)
     private UserStatus status;
 
+    // Stored as UTC wall-clock time truncated to whole seconds, because JWT iat is whole seconds.
+    @Column(name = "tokens_valid_after")
+    private LocalDateTime tokensValidAfter;
+
+    // Revokes every token issued before the current second (a token issued in this same second
+    // stays valid, so logging in right after a password change/reset works).
+    public void revokeIssuedTokens() {
+        tokensValidAfter = LocalDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.SECONDS);
+    }
+
+    public Long tokensValidAfterEpochSecond() {
+        return tokensValidAfter == null ? null : tokensValidAfter.toEpochSecond(ZoneOffset.UTC);
+    }
 
     @PrePersist
     protected void setDefaults() {

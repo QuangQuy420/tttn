@@ -7,6 +7,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.request_id import RequestIdMiddleware, configure_logging
@@ -128,4 +129,4 @@ async def on_startup() -> None:
     the service fails at boot) and ensure the private `face-images` bucket exists."""
     get_face_shape_classifier()
     image_storage = get_image_storage_repository()
-    image_storage.ensure_bucket()
+    await run_in_threadpool(image_storage.ensure_bucket)

@@ -1,9 +1,10 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ProductImagesService } from './product-images.service';
 import { IProductVariantRepository } from '../repositories/product-variant.repository';
 import { IProductImageRepository } from '../repositories/product-image.repository';
 import { IImageStorageRepository } from '../repositories/image-storage.repository';
 import { IProductEventPublisher } from '../repositories/product-event-publisher.repository';
+import { IProductRepository } from '../repositories/product.repository';
 import { ProductVariant } from '../db/entities/product-variant.entity';
 import { ImageKind } from '../db/enums/image-kind.enum';
 
@@ -19,6 +20,7 @@ describe('ProductImagesService', () => {
   let imageRepository: jest.Mocked<IProductImageRepository>;
   let imageStorageRepository: jest.Mocked<IImageStorageRepository>;
   let eventPublisher: jest.Mocked<IProductEventPublisher>;
+  let productRepository: { findByIdWithBrandAndCategory: jest.Mock };
   let service: ProductImagesService;
 
   beforeEach(() => {
@@ -47,11 +49,17 @@ describe('ProductImagesService', () => {
     eventPublisher = {
       publish: jest.fn(),
     };
+    productRepository = {
+      findByIdWithBrandAndCategory: jest
+        .fn()
+        .mockResolvedValue({ id: 'product-1' }),
+    };
     service = new ProductImagesService(
       variantRepository,
       imageRepository,
       imageStorageRepository,
       eventPublisher,
+      productRepository as unknown as IProductRepository,
     );
   });
 
@@ -209,6 +217,43 @@ describe('ProductImagesService', () => {
       expect(imageStorageRepository.upload).not.toHaveBeenCalled();
       expect(imageRepository.createDemotingTryOn).not.toHaveBeenCalled();
       expect(imageRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('returns 404 for a missing product without storing a file (AC26)', async () => {
+      productRepository.findByIdWithBrandAndCategory.mockResolvedValue(null);
+
+      await expect(
+        service.uploadAndAttach(
+          'missing-product',
+          null,
+          makeFile('image/jpeg', JPEG_BYTES),
+        ),
+      ).rejects.toThrow(
+        new NotFoundException('Không tìm thấy sản phẩm missing-product'),
+      );
+      expect(imageStorageRepository.upload).not.toHaveBeenCalled();
+      expect(imageRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('deletes the stored file and rethrows when the DB insert fails (AC26)', async () => {
+      imageRepository.findByProductIds.mockResolvedValue([]);
+      imageStorageRepository.upload.mockResolvedValue(
+        'https://example.test/gallery.jpg',
+      );
+      const dbError = new Error('insert failed');
+      imageRepository.create.mockRejectedValue(dbError);
+
+      await expect(
+        service.uploadAndAttach(
+          'product-1',
+          null,
+          makeFile('image/jpeg', JPEG_BYTES),
+        ),
+      ).rejects.toBe(dbError);
+      expect(imageStorageRepository.deleteByUrl).toHaveBeenCalledWith(
+        'https://example.test/gallery.jpg',
+      );
+      expect(eventPublisher.publish).not.toHaveBeenCalled();
     });
   });
 

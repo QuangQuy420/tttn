@@ -116,9 +116,13 @@ class FakeInteractionRepository:
         if self._error is not None:
             raise self._error
 
-    async def list_all_events(self):
+    async def list_all_events(self, since=None):
         self._check()
         return self._rows
+
+    async def product_totals(self):
+        self._check()
+        return []
 
     async def list_all_by_user(self, user_id: UUID):
         self._check()
@@ -281,6 +285,49 @@ def test_for_you_raises_behavior_store_unavailable_when_the_db_fails() -> None:
 
     with pytest.raises(BehaviorStoreUnavailableError):
         asyncio.run(service.for_you(USER, limit=10, face_analysis_id=None))
+
+
+class _WindowedInteractionRepository(FakeInteractionRepository):
+    """Records the `since` of `list_all_events` and serves fixed all-time `totals`."""
+
+    def __init__(self, rows, totals):
+        super().__init__(rows)
+        self._totals = list(totals)
+        self.since_calls: list[datetime] = []
+
+    async def list_all_events(self, since=None):
+        self.since_calls.append(since)
+        return self._rows
+
+    async def product_totals(self):
+        return self._totals
+
+
+def test_product_stats_replay_window_then_all_time_totals_overwrite_counts_AC58() -> None:
+    now = datetime.now(UTC)
+    first_ever = now - timedelta(days=400)  # outside the 180-day window
+    window_rows = [
+        (USER, UUID(P_ROUND), BehaviorEventType.VIEW, now - timedelta(days=2)),
+        (USER, UUID(P_ROUND), BehaviorEventType.VIEW, now - timedelta(days=1)),
+    ]
+    totals = [
+        (UUID(P_ROUND), 5, 1, first_ever),  # all-time: includes the 2 windowed views
+        (UUID(P_RECT), 3, 0, first_ever),  # events only before the window
+    ]
+    interactions = _WindowedInteractionRepository(window_rows, totals)
+    service = _service(
+        interactions=interactions,
+        settings=_SETTINGS.model_copy(update={"STATS_WINDOW_DAYS": 180}),
+    )
+
+    stats = asyncio.run(service._product_stats())
+
+    (since,) = interactions.since_calls
+    assert abs((now - since) - timedelta(days=180)) < timedelta(minutes=1)
+    popularity, n_view, n_purchase, first_event_at = stats.snapshot(P_ROUND, now)
+    assert (n_view, n_purchase, first_event_at) == (5, 1, first_ever)  # not 5 + 2
+    assert popularity > 0  # from the windowed replay
+    assert stats.snapshot(P_RECT, now) == (0.0, 3, 0, first_ever)
 
 
 def test_settings_default_to_rank_norm_with_alpha_0_6_beta_0_4_AC13(monkeypatch: pytest.MonkeyPatch) -> None:

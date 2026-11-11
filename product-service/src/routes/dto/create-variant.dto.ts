@@ -4,9 +4,14 @@ import {
   IsOptional,
   IsString,
   Matches,
+  Max,
   Min,
   MaxLength,
 } from 'class-validator';
+import { MAX_PRICE } from './create-product.dto';
+
+/** Upper bound of an admin-entered variant stock. */
+export const MAX_STOCK = 1_000_000;
 
 export class CreateVariantDto {
   @IsString()
@@ -23,10 +28,15 @@ export class CreateVariantDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
+  @Max(MAX_PRICE, {
+    message: 'Giá cộng thêm không được vượt quá 99.999.999,99',
+  })
   extraPrice?: number;
 
+  /** Available stock (what the shop can still sell), not counting held reservations. */
   @IsOptional()
   @IsInt()
   @Min(0)
+  @Max(MAX_STOCK, { message: 'Tồn kho không được vượt quá 1.000.000' })
   stock?: number;
 }

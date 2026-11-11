@@ -173,6 +173,10 @@ class _FakeCatalogCache:
     def __init__(self, cached=None) -> None:
         self.value = cached
         self.set_calls: list = []
+        self.invalidation_count = 0
+
+    def mark_invalidated(self) -> None:
+        self.invalidation_count += 1
 
     async def get(self):
         return self.value
@@ -223,6 +227,32 @@ def test_list_catalog_miss_fetches_and_stores_in_cache_then_hit_skips_http_AC7(
     assert cache.set_calls == [first]
     assert second == first
     assert len(calls) == 1  # second call served from the cache
+
+
+def test_list_catalog_invalidated_during_the_fetch_is_returned_but_not_cached_AC52(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list = []
+    cache = _FakeCatalogCache()
+    fetch_catalog = _catalog_handler(calls)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if not calls:
+            # A product event arrives while the first fetch is in flight.
+            cache.mark_invalidated()
+        return fetch_catalog(request)
+
+    _install_mock_transport(monkeypatch, httpx.MockTransport(handler))
+    client = HttpxProductServiceClient(_SETTINGS, cache)
+
+    async def scenario():
+        return await client.list_catalog(), await client.list_catalog()
+
+    first, second = asyncio.run(scenario())
+
+    assert [p.id for p in first] == ["p1"]  # the caller still gets its result
+    assert len(calls) == 2  # not reused: the second call fetches again
+    assert cache.set_calls == [second]  # only the clean fetch reached the cache
 
 
 def test_list_catalog_cache_hit_makes_no_http_call_AC7(monkeypatch: pytest.MonkeyPatch) -> None:

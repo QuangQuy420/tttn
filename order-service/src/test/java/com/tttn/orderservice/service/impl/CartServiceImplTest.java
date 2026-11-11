@@ -27,7 +27,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ScanOptions;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -44,6 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -64,6 +67,12 @@ class CartServiceImplTest {
 
     @Mock
     private ValueOperations<String, Cart> valueOperations;
+
+    @Mock
+    private StringRedisTemplate stringRedisTemplate;
+
+    @Mock
+    private ValueOperations<String, String> lockValueOperations;
 
     @Mock
     private ProductClient productClient;
@@ -87,8 +96,13 @@ class CartServiceImplTest {
                 cartRedisTemplate,
                 productClient,
                 cartMapper,
-                behaviorEventPublisher
+                behaviorEventPublisher,
+                stringRedisTemplate
         );
+
+        // @Value fields are not injected when the service is built with `new`.
+        ReflectionTestUtils.setField(cartService, "cartKeyPrefix", CART_KEY_PREFIX);
+        ReflectionTestUtils.setField(cartService, "cartExpirationDays", CART_TTL.toDays());
 
         userId = UUID.randomUUID();
         productId = UUID.randomUUID();
@@ -97,6 +111,14 @@ class CartServiceImplTest {
         lenient()
                 .when(cartRedisTemplate.opsForValue())
                 .thenReturn(valueOperations);
+
+        // Per-cart lock (SET NX PX) is always free in these tests.
+        lenient()
+                .when(stringRedisTemplate.opsForValue())
+                .thenReturn(lockValueOperations);
+        lenient()
+                .when(lockValueOperations.setIfAbsent(anyString(), anyString(), any(Duration.class)))
+                .thenReturn(true);
     }
 
     @Nested
@@ -152,6 +174,37 @@ class CartServiceImplTest {
                             any(Cart.class),
                             any(Duration.class)
                     );
+        }
+
+        @Test
+        @DisplayName("Tổng tiền và tổng số lượng bỏ qua món không khả dụng (AC41)")
+        void getCart_whenCartHasUnavailableItem_shouldExcludeItFromTotals() {
+            Cart cart = createCartWithOneItem();
+
+            CartItem unavailableItem = CartItem.builder()
+                    .productId(UUID.randomUUID())
+                    .variantId(UUID.randomUUID())
+                    .productName("Kính đã ngừng bán")
+                    .unitPrice(new BigDecimal("500000"))
+                    .quantity(3)
+                    .available(false)
+                    .unavailableReason(CartItemUnavailableReason.PRODUCT_UNAVAILABLE)
+                    .build();
+
+            cart.getItems().add(unavailableItem);
+
+            when(valueOperations.get(buildCartKey(userId)))
+                    .thenReturn(cart);
+
+            CartResponse response = cartService.getCart(userId);
+
+            // The unavailable item stays listed, but only the available one (2 x 1,200,000) counts.
+            assertEquals(2, response.items().size());
+            assertEquals(2, response.totalQuantity());
+            assertEquals(
+                    new BigDecimal("2400000"),
+                    response.totalAmount()
+            );
         }
 
         @Test

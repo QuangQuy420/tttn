@@ -42,6 +42,11 @@ export interface IReviewRepository {
   ): Promise<void>;
   delete(id: string, manager?: EntityManager): Promise<void>;
   /**
+   * `SELECT ... FOR UPDATE` on the product row. Called first in every review write
+   * transaction so concurrent writes for one product serialize before recomputing (AC27).
+   */
+  lockProduct(productId: string, manager: EntityManager): Promise<void>;
+  /**
    * Rewrites `ps_products.avg_rating`/`review_count` from the product's PUBLISHED reviews
    * (AC8). Called inside the same transaction as every review write.
    */
@@ -123,6 +128,13 @@ export class TypeOrmReviewRepository implements IReviewRepository {
   async delete(id: string, manager?: EntityManager): Promise<void> {
     const repo = manager ? manager.getRepository(Review) : this.repo;
     await repo.delete({ id });
+  }
+
+  async lockProduct(productId: string, manager: EntityManager): Promise<void> {
+    await manager.query(
+      `SELECT "id" FROM "ps_products" WHERE "id" = $1 FOR UPDATE`,
+      [productId],
+    );
   }
 
   async recomputeProductRating(

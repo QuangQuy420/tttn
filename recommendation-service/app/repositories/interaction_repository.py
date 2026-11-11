@@ -4,6 +4,7 @@ The ONLY layer that queries the `interactions` table. The repository never commi
 caller owns the session/transaction (`get_db_session` for HTTP reads, the consumer's
 repository scope for writes — see `app/services/interaction_ingest_service.py`).
 """
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime, time, timedelta
@@ -11,7 +12,7 @@ from typing import Literal, Protocol
 from uuid import UUID
 
 from fastapi import Depends
-from sqlalchemy import ColumnElement, func, select
+from sqlalchemy import ColumnElement, func, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -48,10 +49,14 @@ class IInteractionRepository(Protocol):
         ranker profile uses the full history, like training)."""
 
     async def list_all_events(
-        self,
+        self, since: datetime
     ) -> list[tuple[UUID, UUID, BehaviorEventType, datetime]]:
         """`(user_id, product_id, event_type, occurred_at)` of every interaction of every
-        user, oldest first — the replay input of the global product stats."""
+        user at/after `since`, oldest first — the replay input of the global product stats."""
+
+    async def product_totals(self) -> list[tuple[UUID, int, int, datetime]]:
+        """`(product_id, n_view, n_purchase, first_event_at)` per product over ALL time;
+        `first_event_at` is the earliest event of any type."""
 
     async def purchased_product_ids(self, user_id: UUID) -> set[UUID]:
         """Products `user_id` has a PURCHASE event for."""
@@ -143,17 +148,37 @@ class SqlAlchemyInteractionRepository:
         return list(result.scalars().all())
 
     async def list_all_events(
-        self,
+        self, since: datetime
     ) -> list[tuple[UUID, UUID, BehaviorEventType, datetime]]:
-        statement = select(
-            Interaction.user_id,
-            Interaction.product_id,
-            Interaction.event_type,
-            Interaction.occurred_at,
-        ).order_by(Interaction.occurred_at, Interaction.id)
+        statement = (
+            select(
+                Interaction.user_id,
+                Interaction.product_id,
+                Interaction.event_type,
+                Interaction.occurred_at,
+            )
+            .where(Interaction.occurred_at >= since)
+            .order_by(Interaction.occurred_at, Interaction.id)
+        )
         result = await self._session.execute(statement)
         return [
             (row.user_id, row.product_id, row.event_type, row.occurred_at) for row in result
+        ]
+
+    async def product_totals(self) -> list[tuple[UUID, int, int, datetime]]:
+        statement = select(
+            Interaction.product_id,
+            func.count()
+            .filter(Interaction.event_type == BehaviorEventType.VIEW)
+            .label("n_view"),
+            func.count()
+            .filter(Interaction.event_type == BehaviorEventType.PURCHASE)
+            .label("n_purchase"),
+            func.min(Interaction.occurred_at).label("first_event_at"),
+        ).group_by(Interaction.product_id)
+        result = await self._session.execute(statement)
+        return [
+            (row.product_id, row.n_view, row.n_purchase, row.first_event_at) for row in result
         ]
 
     async def purchased_product_ids(self, user_id: UUID) -> set[UUID]:
@@ -249,3 +274,13 @@ async def interaction_repository_scope() -> AsyncIterator[IInteractionRepository
     async with get_sessionmaker()() as session:
         yield SqlAlchemyInteractionRepository(session)
         await session.commit()
+
+
+async def ping_database(timeout_seconds: float) -> bool:
+    """True when `SELECT 1` succeeds within `timeout_seconds` (any error → False)."""
+    try:
+        async with get_sessionmaker()() as session:
+            await asyncio.wait_for(session.execute(text("SELECT 1")), timeout_seconds)
+    except Exception:
+        return False
+    return True

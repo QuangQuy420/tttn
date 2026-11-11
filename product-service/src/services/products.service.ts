@@ -1,10 +1,12 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
+import { QueryFailedError } from 'typeorm';
 import {
   IProductRepository,
   ProductListFilter,
@@ -36,6 +38,11 @@ import { ProductVariant } from '../db/entities/product-variant.entity';
 import { ProductImage } from '../db/entities/product-image.entity';
 import { ProductStatus } from '../db/enums/product-status.enum';
 import { Paginated, paginated } from '../common/api-response';
+
+/** Public reads see PUBLISHED products only unless the caller opts in (admin, via the gateway). */
+export interface ProductVisibilityOptions {
+  includeAllStatuses?: boolean;
+}
 
 /** Single image → response mapping, shared by the product DTO and the image endpoints. */
 export function toImageResponse(image: ProductImage): ProductImageResponseDto {
@@ -135,24 +142,38 @@ export class ProductsService {
       .map((product) => this.toResponseDto(product, variants, images));
   }
 
-  async findOne(id: string): Promise<ProductResponseDto> {
+  /**
+   * 404 for a non-PUBLISHED product unless `includeAllStatuses` — a draft must look exactly
+   * like a missing product to the public (order-service maps 404 to "product unavailable").
+   */
+  async findOne(
+    id: string,
+    { includeAllStatuses = false }: ProductVisibilityOptions = {},
+  ): Promise<ProductResponseDto> {
     const product =
       await this.productRepository.findByIdWithBrandAndCategory(id);
-    if (!product) {
+    if (!product || !this.isVisible(product, includeAllStatuses)) {
       throw new NotFoundException(`Không tìm thấy sản phẩm ${id}`);
     }
 
     return this.toDetailResponseDto(product);
   }
 
-  async findOneBySlug(slug: string): Promise<ProductResponseDto> {
+  async findOneBySlug(
+    slug: string,
+    { includeAllStatuses = false }: ProductVisibilityOptions = {},
+  ): Promise<ProductResponseDto> {
     const product =
       await this.productRepository.findBySlugWithBrandAndCategory(slug);
-    if (!product) {
+    if (!product || !this.isVisible(product, includeAllStatuses)) {
       throw new NotFoundException(`Không tìm thấy sản phẩm ${slug}`);
     }
 
     return this.toDetailResponseDto(product);
+  }
+
+  private isVisible(product: Product, includeAllStatuses: boolean): boolean {
+    return includeAllStatuses || product.status === ProductStatus.PUBLISHED;
   }
 
   private async toDetailResponseDto(
@@ -179,28 +200,43 @@ export class ProductsService {
     const slug = await this.generateUniqueSlug(dto.name);
     const sku = await this.generateUniqueSku();
 
-    const product = await this.productRepository.create({
-      brandId: dto.brandId,
-      categoryId: dto.categoryId,
-      sku,
-      name: dto.name,
-      slug,
-      description: dto.description ?? null,
-      faceFitNote: dto.faceFitNote ?? null,
-      faceShapes: dto.faceShapes ?? [],
-      frameShape: dto.frameShape,
-      genderTarget: dto.genderTarget,
-      material: dto.material ?? null,
-      materialType: dto.materialType ?? null,
-      lensWidthMm: dto.lensWidthMm ?? null,
-      bridgeWidthMm: dto.bridgeWidthMm ?? null,
-      templeLengthMm: dto.templeLengthMm ?? null,
-      frameWidthMm: dto.frameWidthMm ?? null,
-      basePrice: dto.basePrice,
-      status: dto.status ?? ProductStatus.PUBLISHED,
-    });
+    let product: Product;
+    try {
+      product = await this.productRepository.create({
+        brandId: dto.brandId,
+        categoryId: dto.categoryId,
+        sku,
+        name: dto.name,
+        slug,
+        description: dto.description ?? null,
+        faceFitNote: dto.faceFitNote ?? null,
+        faceShapes: dto.faceShapes ?? [],
+        frameShape: dto.frameShape,
+        genderTarget: dto.genderTarget,
+        material: dto.material ?? null,
+        materialType: dto.materialType ?? null,
+        lensWidthMm: dto.lensWidthMm ?? null,
+        bridgeWidthMm: dto.bridgeWidthMm ?? null,
+        templeLengthMm: dto.templeLengthMm ?? null,
+        frameWidthMm: dto.frameWidthMm ?? null,
+        basePrice: dto.basePrice,
+        status: dto.status ?? ProductStatus.PUBLISHED,
+      });
+    } catch (error) {
+      // A concurrent create took the same slug/sku between the check and the insert.
+      if (
+        error instanceof QueryFailedError &&
+        (error.driverError as { code?: string }).code === '23505'
+      ) {
+        throw new ConflictException(
+          'Sản phẩm trùng tên vừa được tạo cùng lúc, vui lòng thử lại.',
+        );
+      }
+      throw error;
+    }
 
-    return this.findOne(product.id);
+    // The admin who just created it must see it whatever its status.
+    return this.findOne(product.id, { includeAllStatuses: true });
   }
 
   async update(id: string, dto: UpdateProductDto): Promise<ProductResponseDto> {
@@ -249,7 +285,7 @@ export class ProductsService {
       productId: id,
     });
 
-    return this.findOne(id);
+    return this.findOne(id, { includeAllStatuses: true });
   }
 
   async remove(id: string): Promise<void> {
@@ -293,6 +329,11 @@ export class ProductsService {
       .trim()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '');
+    if (base === '') {
+      throw new BadRequestException(
+        'Tên sản phẩm phải có ít nhất một chữ cái hoặc chữ số',
+      );
+    }
 
     let slug = base;
     let suffix = 2;

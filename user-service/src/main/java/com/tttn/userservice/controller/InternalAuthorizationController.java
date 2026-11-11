@@ -23,8 +23,7 @@ public class InternalAuthorizationController {
     public ResponseEntity<ApiResponse<PermissionListResponse>> getPermissions(
             @PathVariable UUID userId
     ) {
-        PermissionListResponse response =
-                new PermissionListResponse(permissionService.getPermissions(userId));
+        PermissionListResponse response = permissionService.getAuthorizationState(userId);
 
         return ResponseEntity.ok(
                 ApiResponse.success(

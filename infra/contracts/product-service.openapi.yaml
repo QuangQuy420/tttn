@@ -20,7 +20,15 @@ info:
     review moderation (`/admin/reviews`), `avgRating`/`reviewCount` on products and the
     `rating` sort (.planning/2026-09-29-02-wishlist-and-reviews.md). The caller's identity comes
     from the `X-User-Id`/`X-User-Name` headers set by api-gateway after its JWT check.
-  version: "0.5.0"
+    0.6.0 (.planning/2026-11-11-review-findings-bugfix-all-services.md): non-PUBLISHED products
+    are hidden from the public detail / review reads unless `includeAllStatuses=true` (404
+    otherwise); `includeAllStatuses` only accepts the strings `true` / `false`; api-gateway
+    forwards `status` / `includeAllStatuses` only for callers holding `product:manage`.
+    Variant PATCH (`/products/{id}/variants/{variantId}`, not detailed here) treats `stock` as
+    the new AVAILABLE stock (`quantity = stock + reservedQuantity`); a duplicate color/size is
+    409 (was 400) and deleting a variant with RESERVED stock is 409. Update bodies reject `null`
+    on NOT NULL fields (400); prices are capped at 99,999,999.99 and stock at 1,000,000.
+  version: "0.6.0"
 servers:
   - url: http://localhost:3002
     description: product-service, direct (local dev only)
@@ -125,7 +133,9 @@ paths:
             Admin-only escape hatch (AC1): when `true` and `status` is not given, skips
             the default `status = PUBLISHED` filter and returns products in any status.
             Ignored if `status` is set. Public storefront behavior (default-to-PUBLISHED)
-            is unchanged when this is omitted.
+            is unchanged when this is omitted. Only the strings `true` / `false` are
+            accepted (anything else → 400). api-gateway strips this and `status` for callers
+            without `product:manage`.
           schema:
             type: boolean
         - name: minPrice
@@ -192,6 +202,9 @@ paths:
           description: >
             Validation failure, or `categoryId`/`brandId` does not reference an
             existing row.
+        "409":
+          description: >
+            A product with the same generated slug / sku was created concurrently — retry.
 
   /products/slug/{slug}:
     get:
@@ -208,6 +221,7 @@ paths:
           required: true
           schema:
             type: string
+        - $ref: "#/components/parameters/IncludeAllStatuses"
       responses:
         "200":
           description: Product found
@@ -216,7 +230,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProductEnvelope"
         "404":
-          description: Product not found
+          description: >
+            Product not found, or not `PUBLISHED` and `includeAllStatuses` is not `true`.
 
   /products/{id}:
     get:
@@ -230,6 +245,7 @@ paths:
           schema:
             type: string
             format: uuid
+        - $ref: "#/components/parameters/IncludeAllStatuses"
       responses:
         "200":
           description: Product found
@@ -238,7 +254,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ProductEnvelope"
         "404":
-          description: Product not found
+          description: >
+            Product not found, or not `PUBLISHED` and `includeAllStatuses` is not `true`.
 
     patch:
       tags: [products]
@@ -344,12 +361,16 @@ paths:
                 $ref: "#/components/schemas/ProductImageEnvelope"
         "400":
           description: >
-            Missing file, disallowed content type, file over 5 MB, `kind=TRY_ON` with a
+            Missing file, disallowed content type, `kind=TRY_ON` with a
             non-PNG file, `variantId` not
             belonging to this product, or the group's image count limit (8 for the
             product, 5 for a variant) already reached.
         "404":
-          description: Product not found
+          description: Product not found (checked before the file is stored)
+        "409":
+          description: Another `TRY_ON` image is being set for this product at the same time — retry.
+        "413":
+          description: File over 5 MB (`PAYLOAD_TOO_LARGE`).
 
   /products/{id}/images/{imageId}:
     patch:
@@ -736,6 +757,7 @@ paths:
       operationId: getReviewSummary
       parameters:
         - $ref: "#/components/parameters/ResourceId"
+        - $ref: "#/components/parameters/IncludeAllStatuses"
       responses:
         "200":
           description: Average, count and 1–5 star distribution over PUBLISHED reviews
@@ -744,7 +766,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReviewSummaryEnvelope"
         "404":
-          description: Product not found
+          description: Product not found, or not `PUBLISHED` and `includeAllStatuses` is not `true`
           content:
             application/json:
               schema:
@@ -759,6 +781,7 @@ paths:
         - $ref: "#/components/parameters/ResourceId"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/IncludeAllStatuses"
       responses:
         "200":
           description: Paginated reviews
@@ -766,6 +789,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PaginatedReviewResponse"
+        "404":
+          description: Product not found, or not `PUBLISHED` and `includeAllStatuses` is not `true`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     post:
       tags: [reviews]
       summary: Review a purchased product
@@ -864,6 +893,12 @@ paths:
           $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          description: The review is HIDDEN by a moderator — the owner can no longer edit or delete it
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: Bạn chưa đánh giá sản phẩm này
           content:
@@ -882,6 +917,12 @@ paths:
           description: Review deleted
         "401":
           $ref: "#/components/responses/UnauthorizedError"
+        "403":
+          description: The review is HIDDEN by a moderator — the owner can no longer edit or delete it
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: Bạn chưa đánh giá sản phẩm này
           content:
@@ -1177,7 +1218,8 @@ components:
           type: integer
           description: >
             Available stock (`quantity - reservedQuantity`). Present only in
-            `GET /products/:id`; omitted from catalog listing responses.
+            `GET /products/:id`; omitted from catalog listing responses. A variant PATCH
+            with `stock` sets this available number (`quantity = stock + reservedQuantity`).
       required: [id, color, colorHex, size, extraPrice, skuVariant]
 
     ProductImageResponse:
@@ -1726,6 +1768,17 @@ components:
       schema:
         type: string
         format: uuid
+    IncludeAllStatuses:
+      name: includeAllStatuses
+      in: query
+      required: false
+      description: >
+        `true` also returns a product that is not `PUBLISHED` (admin reads). Only the strings
+        `true` / `false` are accepted. api-gateway forwards it only for callers holding
+        `product:manage`.
+      schema:
+        type: boolean
+        default: false
     Page:
       name: page
       in: query

@@ -5,6 +5,7 @@ import com.tttn.orderservice.entity.Order;
 import com.tttn.orderservice.enums.OrderStatus;
 import com.tttn.orderservice.enums.OutboxStatus;
 import com.tttn.orderservice.messaging.OrderSagaEventPublisher;
+import com.tttn.orderservice.messaging.OrderSagaRoutingKeys;
 import com.tttn.orderservice.repository.OrderRepository;
 import com.tttn.orderservice.repository.OutboxEventRepository;
 import com.tttn.orderservice.service.OrderSagaLogService;
@@ -18,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -54,7 +56,8 @@ class SagaReconciliationJobTest {
                 orderSagaEventPublisher,
                 orderSagaLogService,
                 reconciliationSettingsService,
-                outboxEventRepository
+                outboxEventRepository,
+                mock(org.springframework.transaction.PlatformTransactionManager.class)
         );
 
         when(reconciliationSettingsService.get()).thenReturn(
@@ -70,7 +73,12 @@ class SagaReconciliationJobTest {
 
         when(orderRepository.findByStatusInAndReconciliationExhaustedFalse(anyList()))
                 .thenReturn(List.of(order));
-        when(outboxEventRepository.existsByAggregateIdAndStatus(order.getId(), OutboxStatus.PENDING))
+        when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(outboxEventRepository.existsByAggregateIdAndStatusAndRoutingKeyNotIn(
+                order.getId(),
+                OutboxStatus.PENDING,
+                OrderSagaRoutingKeys.RETRIED_UNTIL_SENT
+        ))
                 .thenReturn(true);
 
         job.reconcile();
@@ -90,7 +98,12 @@ class SagaReconciliationJobTest {
 
         when(orderRepository.findByStatusInAndReconciliationExhaustedFalse(anyList()))
                 .thenReturn(List.of(order));
-        when(outboxEventRepository.existsByAggregateIdAndStatus(order.getId(), OutboxStatus.PENDING))
+        when(orderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(outboxEventRepository.existsByAggregateIdAndStatusAndRoutingKeyNotIn(
+                order.getId(),
+                OutboxStatus.PENDING,
+                OrderSagaRoutingKeys.RETRIED_UNTIL_SENT
+        ))
                 .thenReturn(false);
 
         job.reconcile();

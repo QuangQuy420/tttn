@@ -286,13 +286,24 @@ class ProductStats:
         if first is None or event.occurred_at < first:
             self._first_event_at[product_id] = event.occurred_at
 
+    def set_totals(
+        self, product_id: str, n_view: int, n_purchase: int, first_event_at: datetime
+    ) -> None:
+        """Overwrite the counters of `product_id` with all-time values (serving replays only
+        a recent window with `add` but the counter features need the full history). Never
+        add these on top of replayed counts."""
+        self._n_view[product_id] = n_view
+        self._n_purchase[product_id] = n_purchase
+        self._first_event_at[product_id] = first_event_at
+
     def snapshot(self, product_id: str, now: datetime) -> tuple[float, int, int, datetime | None]:
         """(decayed_popularity, n_view, n_purchase, first_event_at | None) at `now`."""
         entry = self._pop.get(product_id)
         popularity = 0.0
         if entry is not None:
             value, at = entry
-            popularity = value * math.exp(-_days_between(now, at) / TAU_DAYS)
+            # Clamped at 0: a future-dated event must not weigh more than a current one.
+            popularity = value * math.exp(-max(0.0, _days_between(now, at)) / TAU_DAYS)
         return (
             popularity,
             self._n_view.get(product_id, 0),

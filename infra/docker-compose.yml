@@ -89,6 +89,7 @@ services:
   api-gateway:
     build: ../api-gateway
     env_file: ../api-gateway/.env
+    restart: unless-stopped
     ports:
       - "${API_GATEWAY_PORT:-8080}:8080"
     # user-service intentionally NOT listed here: the gateway proxies `/api/auth/*`,
@@ -115,6 +116,7 @@ services:
   user-service:
     build: ../user-service     # Spring Boot (Maven), real Dockerfile now
     env_file: ../user-service/.env
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
@@ -130,6 +132,7 @@ services:
   product-service:
     build: ../product-service
     env_file: ../product-service/.env
+    restart: unless-stopped
     # The seed runner (T11, src/seed.ts) resolves the seed file to /infra/seed/products.json
     # (matches the monorepo layout when run on the host) — bind-mount the same path so
     # `docker compose exec product-service node dist/seed.js` also works from a clean checkout.
@@ -155,6 +158,7 @@ services:
   order-service:
     build: ../order-service    # Spring Boot (Maven), real Dockerfile now
     env_file: ../order-service/.env
+    restart: unless-stopped
     # payment-service intentionally NOT listed here: order-service only talks to it via
     # RabbitMQ (payment.create.requested), not a direct call at startup, so there's no hard
     # startup-order dependency between the two services.
@@ -177,6 +181,7 @@ services:
   payment-service:
     build: ../payment-service
     env_file: ../payment-service/.env
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
@@ -195,6 +200,7 @@ services:
   face-processing-service:
     build: ../face-processing-service
     env_file: ../face-processing-service/.env
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
@@ -210,6 +216,7 @@ services:
   recommendation-service:
     build: ../recommendation-service
     env_file: ../recommendation-service/.env
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
@@ -238,6 +245,7 @@ services:
       args:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080/api}
     env_file: ../web/.env
+    restart: unless-stopped
     ports:
       - "${WEB_PORT:-3000}:3000"
     depends_on:

@@ -10,6 +10,8 @@ interface UseFaceAnalysisResult {
   isLoading: boolean;
   error: string | null;
   analyze: (file: File) => Promise<void>;
+  // Drops a failed analysis' error, e.g. when the user opens a history item instead (AC66).
+  clearError: () => void;
 }
 
 // Action-triggered (not fetch-on-mount like useProduct) — analyze() runs on file select.
@@ -43,5 +45,9 @@ export function useFaceAnalysis(): UseFaceAnalysisResult {
     }
   }
 
-  return { result, isLoading, error, analyze };
+  function clearError() {
+    setError(null);
+  }
+
+  return { result, isLoading, error, analyze, clearError };
 }

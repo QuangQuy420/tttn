@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ApiError, deleteProduct } from "@/lib/api";
 import { ErrorState } from "@/components/common/ErrorState";
 import { ImageWithFallback } from "@/components/common/ImageWithFallback";
@@ -15,19 +15,33 @@ import { formatPriceVnd } from "@/lib/format/price";
 
 // Admin product list (T17, AC1/AC4) — matches Admin Products.dc.html: stat cards (no AR stat,
 // intentionally dropped, see plan Summary), search-by-name, and a table with edit/delete actions.
+const SEARCH_DEBOUNCE_MS = 300;
+
 export default function AdminProductsPage() {
   const [searchInput, setSearchInput] = useState("");
+  // The search term actually sent to the API, trailing the input by SEARCH_DEBOUNCE_MS.
+  const [search, setSearch] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [page, setPage] = usePageParam();
-  const { products, meta, isLoading, error, refetch } = useProducts({ includeAllStatuses: true, page });
-
-  const term = searchInput.trim().toLowerCase();
-  const filteredProducts = useMemo(
-    () => (term ? products.filter((p) => p.name.toLowerCase().includes(term)) : products),
-    [products, term],
+  // Search runs on the whole catalog server-side (AC64); token + includeAllStatuses so DRAFT /
+  // ARCHIVED products are listed and counted for a `product:manage` holder (AC20, AC69).
+  const { products, meta, isLoading, error, refetch } = useProducts(
+    { includeAllStatuses: true, page, search: search || undefined },
+    getAccessToken(),
   );
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => setSearch(searchInput.trim()), SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(handle);
+  }, [searchInput]);
+
+  function handleSearchChange(value: string) {
+    setSearchInput(value);
+    // A new search starts from the first page.
+    if (page > 1) setPage(1);
+  }
 
   // "Tổng sản phẩm" is the whole catalog (meta.total); the on-sale split only covers the page
   // currently loaded, since the list is paginated.
@@ -54,7 +68,9 @@ export default function AdminProductsPage() {
     setDeletingId(id);
     try {
       await deleteProduct(id, token);
-      await refetch();
+      // Deleting the only row of a later page: go back one page (that change refetches) (AC67).
+      if (products.length === 1 && page > 1) setPage(page - 1);
+      else await refetch();
     } catch (err) {
       setDeleteError(err instanceof ApiError ? err.message : "Xoá sản phẩm thất bại.");
     } finally {
@@ -100,7 +116,7 @@ export default function AdminProductsPage() {
               aria-label="Tìm sản phẩm"
               placeholder="Tìm sản phẩm…"
               value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
+              onChange={(event) => handleSearchChange(event.target.value)}
             />
           </div>
           <Link href="/admin/products/new" className="btn btn--primary">
@@ -123,7 +139,7 @@ export default function AdminProductsPage() {
               <span>Trạng thái</span>
               <span></span>
             </div>
-            {filteredProducts.map((product) => {
+            {products.map((product) => {
               const thumbnail = product.images.find((image) => image.isThumbnail) ?? product.images[0];
               const isOnSale = product.status === "PUBLISHED";
               return (
@@ -146,7 +162,7 @@ export default function AdminProductsPage() {
                   <span className="admin-table__shape">{formatFrameShapeVi(product.frameShape)}</span>
                   <span className="admin-table__price">{formatPriceVnd(product.basePrice)}</span>
                   <span className={`admin-status-badge${isOnSale ? " admin-status-badge--active" : ""}`}>
-                    {isOnSale ? "Đang bán" : "Hết hàng"}
+                    {isOnSale ? "Đang bán" : product.status === "DRAFT" ? "Bản nháp" : "Hết hàng"}
                   </span>
                   <div className="admin-table__actions">
                     <Link
@@ -175,9 +191,11 @@ export default function AdminProductsPage() {
                 </div>
               );
             })}
-            {filteredProducts.length === 0 && (
+            {products.length === 0 && (
               <div className="admin-table__empty">
-                Không tìm thấy sản phẩm nào khớp với &quot;{searchInput}&quot;.
+                {search
+                  ? <>Không tìm thấy sản phẩm nào khớp với &quot;{search}&quot;.</>
+                  : "Chưa có sản phẩm nào."}
               </div>
             )}
           </div>

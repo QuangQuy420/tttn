@@ -16,7 +16,12 @@ interface UseProductsResult {
   refetch: () => Promise<void>;
 }
 
-export function useProducts(params: ProductListParams): UseProductsResult {
+// `token` (admin pages) is sent as the Authorization header so the gateway honours
+// `includeAllStatuses` for a `product:manage` holder (AC20); storefront callers omit it.
+export function useProducts(
+  params: ProductListParams,
+  token?: string | null,
+): UseProductsResult {
   const [products, setProducts] = useState<Product[]>([]);
   const [meta, setMeta] = useState<PageMeta | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -45,7 +50,7 @@ export function useProducts(params: ProductListParams): UseProductsResult {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await getProducts({
+      const listParams: ProductListParams = {
         categoryId,
         brandId,
         brandIds: brandIdsKey ? brandIdsKey.split(",") : undefined,
@@ -60,7 +65,9 @@ export function useProducts(params: ProductListParams): UseProductsResult {
         minPrice,
         maxPrice,
         includeAllStatuses,
-      });
+      };
+      // Anonymous callers call getProducts(params) alone; the token goes along only when set.
+      const response = await (token ? getProducts(listParams, token) : getProducts(listParams));
       setProducts(response.data);
       setMeta(response.meta);
     } catch (err) {
@@ -77,7 +84,7 @@ export function useProducts(params: ProductListParams): UseProductsResult {
       setIsLoading(true);
       setError(null);
       try {
-        const response = await getProducts({
+        const listParams: ProductListParams = {
           categoryId,
           brandId,
           brandIds: brandIdsKey ? brandIdsKey.split(",") : undefined,
@@ -92,7 +99,8 @@ export function useProducts(params: ProductListParams): UseProductsResult {
           minPrice,
           maxPrice,
           includeAllStatuses,
-        });
+        };
+        const response = await (token ? getProducts(listParams, token) : getProducts(listParams));
         if (!cancelled) {
           setProducts(response.data);
           setMeta(response.meta);
@@ -126,6 +134,7 @@ export function useProducts(params: ProductListParams): UseProductsResult {
     minPrice,
     maxPrice,
     includeAllStatuses,
+    token,
   ]);
 
   return { products, meta, isLoading, error, refetch: run };

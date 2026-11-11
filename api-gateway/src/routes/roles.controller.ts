@@ -13,6 +13,7 @@ import {
 import { JwtGuard } from '../auth/jwt.guard';
 import { RequirePermission } from '../auth/permissions.decorator';
 import { PermissionsGuard } from '../auth/permissions.guard';
+import { UuidPipe } from '../common/uuid.pipe';
 import { PermissionsCacheService } from '../services/permissions-cache.service';
 import { UsersProxyService } from '../services/users-proxy.service';
 
@@ -57,7 +58,7 @@ export class RolesController {
   @UseGuards(JwtGuard, PermissionsGuard)
   @RequirePermission('role:manage')
   async update(
-    @Param('id') id: string,
+    @Param('id', UuidPipe) id: string,
     @Body() body: Record<string, unknown>,
     @Headers('authorization') authorization?: string,
   ): Promise<unknown> {
@@ -71,7 +72,7 @@ export class RolesController {
   @UseGuards(JwtGuard, PermissionsGuard)
   @RequirePermission('role:manage')
   async remove(
-    @Param('id') id: string,
+    @Param('id', UuidPipe) id: string,
     @Headers('authorization') authorization?: string,
   ): Promise<unknown> {
     const result = await this.usersProxyService.deleteRole(id, authorization);

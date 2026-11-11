@@ -5,6 +5,7 @@ import { ProductEditForm } from "@/components/admin/ProductEditForm";
 import { ErrorState } from "@/components/common/ErrorState";
 import { LoadingState } from "@/components/common/LoadingState";
 import { useProduct } from "@/hooks/useProduct";
+import { getAccessToken } from "@/lib/auth/session";
 
 export default function EditProductPage() {
   const params = useParams<{ id: string }>();
@@ -16,7 +17,11 @@ export default function EditProductPage() {
 }
 
 function EditProductForm({ id }: { id: string }) {
-  const { product, isLoading, error } = useProduct(id);
+  // Token + includeAllStatuses so a DRAFT / ARCHIVED product still opens for editing (AC20).
+  const { product, isLoading, error } = useProduct(id, {
+    token: getAccessToken(),
+    includeAllStatuses: true,
+  });
 
   if (isLoading) return <LoadingState label="Đang tải sản phẩm..." />;
   if (error || !product) return <ErrorState message={error ?? "Không tìm thấy sản phẩm."} />;

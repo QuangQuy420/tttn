@@ -12,7 +12,10 @@ import {
   Query,
 } from '@nestjs/common';
 import { ReviewsService } from '../services/reviews.service';
-import { PaginationQueryDto } from './dto/pagination-query.dto';
+import {
+  IncludeAllStatusesQueryDto,
+  ListProductReviewsQueryDto,
+} from './dto/include-all-statuses-query.dto';
 import { ListReviewsQueryDto } from './dto/list-reviews-query.dto';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
@@ -36,14 +39,15 @@ export class ReviewsController {
   @Get('products/:id/reviews/summary')
   summary(
     @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: IncludeAllStatusesQueryDto,
   ): Promise<ReviewSummaryResponseDto> {
-    return this.reviewsService.summary(id);
+    return this.reviewsService.summary(id, query);
   }
 
   @Get('products/:id/reviews')
   listForProduct(
     @Param('id', ParseUUIDPipe) id: string,
-    @Query() query: PaginationQueryDto,
+    @Query() query: ListProductReviewsQueryDto,
   ): Promise<Paginated<ReviewResponseDto>> {
     return this.reviewsService.listForProduct(id, query);
   }

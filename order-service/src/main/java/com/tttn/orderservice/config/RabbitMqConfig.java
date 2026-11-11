@@ -20,9 +20,10 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * Declares the {@code order-saga-events} topic exchange this service publishes to
- * (stock.reserve.requested / payment.create.requested / stock.release.requested) and the
- * durable queue it consumes saga replies from (stock.reserved / stock.reserve.rejected /
- * payment.completed / payment.failed) — see {@link com.tttn.orderservice.messaging.OrderSagaEventPublisher}
+ * (stock.reserve.requested / payment.create.requested / stock.release.requested /
+ * payment.refund.requested / stock.restock.requested) and the durable queue it consumes saga
+ * replies from (stock.reserved / stock.reserve.rejected / payment.completed / payment.failed /
+ * payment.refunded) — see {@link com.tttn.orderservice.messaging.OrderSagaEventPublisher}
  * and {@link com.tttn.orderservice.messaging.OrderSagaEventListener}.
  *
  * <p>Also declares the shared dead-letter exchange/queue (FR10-FR12): {@link #orderSagaEventsQueue}
@@ -131,6 +132,17 @@ public class RabbitMqConfig {
                 .bind(orderSagaEventsQueue)
                 .to(orderSagaEventsExchange)
                 .with(OrderSagaRoutingKeys.PAYMENT_FAILED);
+    }
+
+    @Bean
+    public Binding paymentRefundedBinding(
+            Queue orderSagaEventsQueue,
+            TopicExchange orderSagaEventsExchange
+    ) {
+        return BindingBuilder
+                .bind(orderSagaEventsQueue)
+                .to(orderSagaEventsExchange)
+                .with(OrderSagaRoutingKeys.PAYMENT_REFUNDED);
     }
 
     // Same args as product-service's assertExchange('product-events', 'topic', {durable: true})

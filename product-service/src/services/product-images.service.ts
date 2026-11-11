@@ -1,15 +1,19 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { QueryFailedError } from 'typeorm';
+import { IProductRepository } from '../repositories/product.repository';
 import { IProductVariantRepository } from '../repositories/product-variant.repository';
 import { IProductImageRepository } from '../repositories/product-image.repository';
 import { IImageStorageRepository } from '../repositories/image-storage.repository';
 import { IProductEventPublisher } from '../repositories/product-event-publisher.repository';
 import {
+  PRODUCT_REPOSITORY,
   PRODUCT_VARIANT_REPOSITORY,
   PRODUCT_IMAGE_REPOSITORY,
   IMAGE_STORAGE_REPOSITORY,
@@ -53,6 +57,8 @@ export class ProductImagesService {
     private readonly imageStorageRepository: IImageStorageRepository,
     @Inject(PRODUCT_EVENT_PUBLISHER)
     private readonly eventPublisher: IProductEventPublisher,
+    @Inject(PRODUCT_REPOSITORY)
+    private readonly productRepository: IProductRepository,
   ) {}
 
   async create(input: CreateProductImageInput): Promise<ProductImage> {
@@ -71,9 +77,34 @@ export class ProductImagesService {
       sortOrder: input.sortOrder ?? 0,
     };
     if (input.kind === ImageKind.TRY_ON) {
-      return this.imageRepository.createDemotingTryOn(data);
+      return this.createTryOn(data);
     }
     return this.imageRepository.create({ ...data, kind: ImageKind.GALLERY });
+  }
+
+  /**
+   * Two concurrent TRY_ON uploads both demote "nothing" and then collide on the partial
+   * unique index — the loser retries the demote + insert once (now demoting the winner's
+   * image), and only a second collision becomes a 409.
+   */
+  private async createTryOn(
+    data: Partial<ProductImage>,
+  ): Promise<ProductImage> {
+    try {
+      return await this.imageRepository.createDemotingTryOn(data);
+    } catch (error) {
+      if (!this.isUniqueViolation(error)) throw error;
+    }
+    try {
+      return await this.imageRepository.createDemotingTryOn(data);
+    } catch (error) {
+      if (this.isUniqueViolation(error)) {
+        throw new ConflictException(
+          'Ảnh thử kính đang được cập nhật đồng thời, vui lòng thử lại',
+        );
+      }
+      throw error;
+    }
   }
 
   /**
@@ -85,6 +116,9 @@ export class ProductImagesService {
    *
    * `kind=TRY_ON` must be a PNG (transparent overlay for the try-on) and replaces the
    * product's current TRY_ON image, which is demoted to GALLERY.
+   *
+   * The product (404) and variant (400) are checked before anything is stored, and the
+   * stored object is deleted again when the DB insert fails, so no orphan file is left.
    */
   async uploadAndAttach(
     productId: string,
@@ -92,6 +126,14 @@ export class ProductImagesService {
     file: Express.Multer.File,
     kind: ImageKind = ImageKind.GALLERY,
   ): Promise<ProductImage> {
+    const product =
+      await this.productRepository.findByIdWithBrandAndCategory(productId);
+    if (!product) {
+      throw new NotFoundException(`Không tìm thấy sản phẩm ${productId}`);
+    }
+    if (variantId) {
+      await this.assertVariantBelongsToProduct(productId, variantId);
+    }
     if (kind === ImageKind.TRY_ON && !this.isPng(file)) {
       throw new BadRequestException('Ảnh thử kính phải là PNG nền trong suốt');
     }
@@ -121,18 +163,42 @@ export class ProductImagesService {
       contentType: file.mimetype,
     });
 
-    const image = await this.create({
-      productId,
-      variantId,
-      imageUrl,
-      isThumbnail: false,
-      sortOrder,
-      kind,
-    });
+    let image: ProductImage;
+    try {
+      image = await this.create({
+        productId,
+        variantId,
+        imageUrl,
+        isThumbnail: false,
+        sortOrder,
+        kind,
+      });
+    } catch (error) {
+      await this.deleteStoredObjectQuietly(imageUrl);
+      throw error;
+    }
 
     await this.eventPublisher.publish({ type: 'product.updated', productId });
 
     return image;
+  }
+
+  /** Best-effort cleanup — the original error is what the caller must see. */
+  private async deleteStoredObjectQuietly(imageUrl: string): Promise<void> {
+    try {
+      await this.imageStorageRepository.deleteByUrl(imageUrl);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to delete orphan storage object ${imageUrl}: ${error instanceof Error ? error.message : error}`,
+      );
+    }
+  }
+
+  private isUniqueViolation(error: unknown): boolean {
+    return (
+      error instanceof QueryFailedError &&
+      (error.driverError as { code?: string }).code === '23505'
+    );
   }
 
   /**

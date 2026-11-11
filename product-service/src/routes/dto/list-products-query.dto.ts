@@ -1,7 +1,6 @@
 import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
-  IsBoolean,
   IsEnum,
   IsIn,
   IsNumber,
@@ -16,6 +15,7 @@ import { ProductStatus } from '../../db/enums/product-status.enum';
 import { FaceShape } from '../../db/enums/face-shape.enum';
 import { MaterialType } from '../../db/enums/material-type.enum';
 import { PaginationQueryDto } from './pagination-query.dto';
+import { IncludeAllStatusesQuery } from './include-all-statuses-query.dto';
 
 export const PRODUCT_SORT_OPTIONS = [
   'newest',
@@ -75,9 +75,7 @@ export class ListProductsQueryDto extends PaginationQueryDto {
   status?: ProductStatus;
 
   /** Admin-only escape hatch: see all statuses, not just PUBLISHED (AC1). Ignored if `status` is set. */
-  @IsOptional()
-  @Type(() => Boolean)
-  @IsBoolean()
+  @IncludeAllStatusesQuery()
   includeAllStatuses?: boolean;
 
   @IsOptional()

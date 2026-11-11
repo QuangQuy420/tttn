@@ -9,7 +9,7 @@ import com.tttn.userservice.exception.BusinessException;
 import com.tttn.userservice.exception.ErrorCode;
 import com.tttn.userservice.service.PermissionService;
 import com.tttn.userservice.service.UserService;
-import com.tttn.userservice.util.JwtUtil;
+import com.tttn.userservice.util.AuthTokenResolver;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -33,7 +33,7 @@ public class UserController {
 
     private final UserService userService;
     private final PermissionService permissionService;
-    private final JwtUtil jwtUtil;
+    private final AuthTokenResolver authTokenResolver;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<UserResponse>>> listUsers(
@@ -61,7 +61,7 @@ public class UserController {
                     required = false
             ) String authorizationHeader
     ) {
-        UUID userId = extractUserId(authorizationHeader);
+        UUID userId = authTokenResolver.resolveUserId(authorizationHeader);
 
         return ResponseEntity.ok(
                 ApiResponse.success(
@@ -79,7 +79,7 @@ public class UserController {
             ) String authorizationHeader,
             @Valid @RequestBody UpdateProfileRequest request
     ) {
-        UUID userId = extractUserId(authorizationHeader);
+        UUID userId = authTokenResolver.resolveUserId(authorizationHeader);
 
         return ResponseEntity.ok(
                 ApiResponse.success(
@@ -97,7 +97,7 @@ public class UserController {
             ) String authorizationHeader,
             @Valid @RequestBody ChangePasswordRequest request
     ) {
-        UUID userId = extractUserId(authorizationHeader);
+        UUID userId = authTokenResolver.resolveUserId(authorizationHeader);
 
         userService.changePassword(userId, request);
 
@@ -110,25 +110,10 @@ public class UserController {
     }
 
     private void requirePermission(String authorizationHeader) {
-        UUID callingUserId = extractUserId(authorizationHeader);
+        UUID callingUserId = authTokenResolver.resolveUserId(authorizationHeader);
 
         if (!permissionService.hasPermission(callingUserId, MANAGE_USER_ROLES_PERMISSION)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-    }
-
-    private UUID extractUserId(String authorizationHeader) {
-        if (authorizationHeader == null
-                || !authorizationHeader.startsWith("Bearer ")) {
-            throw new BusinessException(ErrorCode.INVALID_TOKEN);
-        }
-
-        String token = authorizationHeader.substring(7);
-
-        if (!jwtUtil.validateToken(token)) {
-            throw new BusinessException(ErrorCode.INVALID_TOKEN);
-        }
-
-        return jwtUtil.extractUserId(token);
     }
 }

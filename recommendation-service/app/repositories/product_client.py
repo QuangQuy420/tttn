@@ -38,6 +38,9 @@ CATALOG_PAGE_SIZE = 100
 # Without it, a Redis outage (every `get` misses, `set` is a no-op) would make every waiting
 # request run its own full fetch, one after another (AC8 allows 5 s).
 RECENT_CATALOG_FETCH_REUSE_SECONDS = 2.0
+# A failed catalog fetch is re-raised to callers for this long instead of each waiter
+# running its own timeout one after another while product-service is down.
+RECENT_CATALOG_FAILURE_REUSE_SECONDS = 2.0
 
 
 class ProductServiceError(Exception):
@@ -89,6 +92,9 @@ class HttpxProductServiceClient:
         # (monotonic time, catalog) of the last successful fetch — see
         # RECENT_CATALOG_FETCH_REUSE_SECONDS.
         self._last_fetch: tuple[float, list[CatalogProductDto]] | None = None
+        # (monotonic time, error) of the last failed fetch — see
+        # RECENT_CATALOG_FAILURE_REUSE_SECONDS.
+        self._last_failure: tuple[float, ProductServiceError] | None = None
 
     async def list_products(
         self,
@@ -149,12 +155,27 @@ class HttpxProductServiceClient:
                 fetched_at, catalog = self._last_fetch
                 if time.monotonic() - fetched_at < RECENT_CATALOG_FETCH_REUSE_SECONDS:
                     return catalog
+            if self._last_failure is not None:
+                failed_at, error = self._last_failure
+                if time.monotonic() - failed_at < RECENT_CATALOG_FAILURE_REUSE_SECONDS:
+                    # A new instance each time — re-raising the stored one would chain
+                    # tracebacks across requests.
+                    raise type(error)(*error.args)
             cached = await self._catalog_cache.get()
             if cached is not None:
                 return cached
-            catalog = await self._fetch_catalog()
-            self._last_fetch = (time.monotonic(), catalog)
-            await self._catalog_cache.set(catalog)
+            # A product event during the fetch bumps the counter: the result may predate the
+            # change, so it goes back to this caller only (not to Redis, not reused).
+            invalidations_before = self._catalog_cache.invalidation_count
+            try:
+                catalog = await self._fetch_catalog()
+            except ProductServiceError as exc:
+                self._last_failure = (time.monotonic(), exc)
+                raise
+            self._last_failure = None
+            if self._catalog_cache.invalidation_count == invalidations_before:
+                self._last_fetch = (time.monotonic(), catalog)
+                await self._catalog_cache.set(catalog)
             return catalog
 
     async def _fetch_catalog(self) -> list[CatalogProductDto]:
@@ -187,6 +208,11 @@ class HttpxProductServiceClient:
         except httpx.HTTPError as exc:
             raise ProductServiceUnavailableError(
                 "Không thể kết nối tới product-service."
+            ) from exc
+        except (ValueError, KeyError, TypeError, AttributeError) as exc:
+            # Malformed body: bad JSON, missing `data` / `meta`, bad `totalPages`, non-dict item.
+            raise ProductServiceUnavailableError(
+                "product-service trả về dữ liệu không hợp lệ."
             ) from exc
 
         return list(products.values())

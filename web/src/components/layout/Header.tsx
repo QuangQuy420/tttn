@@ -5,13 +5,11 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useCart } from "@/hooks/useCart";
 import { ApiError, getMyProfile } from "@/lib/api";
+import { defaultAdminPath } from "@/lib/auth/admin-access";
 import {
     getAccessToken,
     removeAccessToken,
 } from "@/lib/auth/session";
-
-const ADMIN_ROLE_NAMES = ["ADMIN"];
-const CATALOG_PERMISSION = "catalog:manage";
 
 // "/" only matches the exact catalog root; every other tab also covers its sub-routes
 // (e.g. "/admin/orders" should still highlight "Quản trị").
@@ -31,9 +29,8 @@ export function Header() {
     // mismatch.
     const [authenticated, setAuthenticated] = useState(false);
 
-    // Roles are only known once we've fetched the profile — null covers both "not logged
-    // in" and "not fetched yet", so the Admin tab (FR7) stays hidden until we're sure.
-    const [roles, setRoles] = useState<string[] | null>(null);
+    // Permissions are only known once we've fetched the profile — null covers both "not
+    // logged in" and "not fetched yet", so the Admin tab (FR7) stays hidden until we're sure.
     const [permissions, setPermissions] = useState<string[] | null>(null);
 
     // Same fallback convention as profile/page.tsx: fullName if set, else username.
@@ -46,13 +43,15 @@ export function Header() {
     // calls for a logged-out user.
     const { totalQuantity } = useCart();
 
+    // First admin page the user's permissions open (AC7); null hides the "Quản trị" link.
+    const adminHref = permissions ? defaultAdminPath(permissions) : null;
+
     useEffect(() => {
         function syncAuthState() {
             const token = getAccessToken();
             setAuthenticated(Boolean(token));
 
             if (!token) {
-                setRoles(null);
                 setPermissions(null);
                 setDisplayName(null);
                 return;
@@ -60,15 +59,13 @@ export function Header() {
 
             void getMyProfile(token)
                 .then((response) => {
-                    setRoles(
-                        response.data.roles?.map((r) => r.toUpperCase()) ?? null,
-                    );
                     setPermissions(response.data.permissions ?? null);
                     setDisplayName(response.data.fullName || response.data.username);
                 })
+                // A 401 (expired / revoked token) is handled by apiFetch: it clears the token,
+                // which fires `auth-change` and re-runs this sync as signed out (AC6).
                 .catch((error) => {
                     if (!(error instanceof ApiError)) throw error;
-                    setRoles(null);
                     setPermissions(null);
                     setDisplayName(null);
                 });
@@ -100,7 +97,6 @@ export function Header() {
     function handleLogout() {
         removeAccessToken();
         setAuthenticated(false);
-        setRoles(null);
         setPermissions(null);
         setDisplayName(null);
         setMenuOpen(false);
@@ -147,12 +143,9 @@ export function Header() {
                     Yêu thích
                 </Link>
 
-                {authenticated && (
-                    roles?.some((r) => ADMIN_ROLE_NAMES.includes(r)) ||
-                    permissions?.includes(CATALOG_PERMISSION)
-                ) && (
+                {authenticated && adminHref && (
                     <Link
-                        href={roles?.some((r) => ADMIN_ROLE_NAMES.includes(r)) ? "/admin/products" : "/admin/brands"}
+                        href={adminHref}
                         className={`site-nav__link${isNavLinkActive(pathname, "/admin") ? " site-nav__link--active" : ""}`}
                         aria-current={isNavLinkActive(pathname, "/admin") ? "page" : undefined}
                     >

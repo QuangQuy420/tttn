@@ -6,7 +6,8 @@ Both run the hybrid pipeline of `app/services/ranking_service.py` over the WHOLE
 
 1. Catalog DTOs → `features.Product` (brand NAME, sorted distinct variant colors — same as
    training `ml/recommendation/src/recsys/catalog.py`).
-2. Global `ProductStats`: replay of every stored interaction in time order, cached for
+2. Global `ProductStats`: replay of the last `STATS_WINDOW_DAYS` of interactions in time
+   order (popularity) + all-time view/purchase counts and first event date, cached for
    `CATALOG_TTL_SECONDS`. User history: all of the user's interactions, oldest first.
    ORM rows become `features.Event` with `str` ids (catalog keys are `str`).
 3. Candidates = catalog minus request filters (`POST /recommend`) or minus purchased
@@ -22,7 +23,7 @@ import asyncio
 import logging
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import Depends
@@ -217,9 +218,11 @@ class RecommendationService:
             cached = self._stats_cache.get()
             if cached is not None:
                 return cached
-            rows = await self._interactions.list_all_events()
+            since = datetime.now(UTC) - timedelta(days=self._settings.STATS_WINDOW_DAYS)
+            rows = await self._interactions.list_all_events(since)
+            totals = await self._interactions.product_totals()
             # The replay is pure CPU (~1 s for 45k events) → off the event loop.
-            stats = await run_in_threadpool(_replay_stats, rows)
+            stats = await run_in_threadpool(_replay_stats, rows, totals)
             self._stats_cache.set(stats, self._settings.CATALOG_TTL_SECONDS)
             return stats
 
@@ -265,12 +268,17 @@ class RecommendationService:
 
 def _replay_stats(
     rows: Sequence[tuple[UUID, UUID, BehaviorEventType, datetime]],
+    totals: Sequence[tuple[UUID, int, int, datetime]],
 ) -> F.ProductStats:
-    """Global `ProductStats` from every interaction, replayed in time order (rows come
-    oldest first). No UNLIKE cancellation, like training."""
+    """Global `ProductStats`: popularity from the windowed interactions replayed in time
+    order (rows come oldest first, no UNLIKE cancellation, like training), then the
+    view/purchase counts and first event date OVERWRITTEN with all-time `totals` (products
+    with no event in the window get an entry too)."""
     stats = F.ProductStats()
     for user_id, product_id, event_type, occurred_at in rows:
         stats.add(F.Event(str(user_id), str(product_id), event_type.value, occurred_at))
+    for product_id, n_view, n_purchase, first_event_at in totals:
+        stats.set_totals(str(product_id), n_view, n_purchase, first_event_at)
     return stats
 
 

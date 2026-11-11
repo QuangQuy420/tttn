@@ -98,6 +98,69 @@ class OrderServiceUpdateOrderStatusTest {
     }
 
     @Test
+    @DisplayName("Admin không được chuyển PENDING sang AWAITING_PAYMENT (bước của saga) (AC33)")
+    void updateOrderStatus_FromPendingToAwaitingPayment_ShouldThrowException() {
+        assertInvalidTransition(
+                OrderStatus.PENDING,
+                OrderStatus.AWAITING_PAYMENT
+        );
+    }
+
+    @Test
+    @DisplayName("Admin không được chuyển AWAITING_PAYMENT sang CONFIRMED (bước của saga) (AC33)")
+    void updateOrderStatus_FromAwaitingPaymentToConfirmed_ShouldThrowException() {
+        assertInvalidTransition(
+                OrderStatus.AWAITING_PAYMENT,
+                OrderStatus.CONFIRMED
+        );
+    }
+
+    @Test
+    @DisplayName("Admin hủy đơn AWAITING_PAYMENT → gửi yêu cầu nhả hàng (AC34)")
+    void updateOrderStatus_AdminCancelsAwaitingPayment_ShouldRequestStockRelease() {
+        Order order = createOrder(OrderStatus.AWAITING_PAYMENT);
+        OrderResponse expectedResponse = mock(OrderResponse.class);
+
+        when(request.status())
+                .thenReturn(OrderStatus.CANCELLED);
+
+        when(request.note())
+                .thenReturn("Khách yêu cầu hủy qua điện thoại");
+
+        when(orderRepository.findById(orderId))
+                .thenReturn(Optional.of(order));
+
+        when(orderSagaEventPublisher.publishStockReleaseRequested(orderId, order.getItems()))
+                .thenReturn(true);
+
+        when(orderRepository.save(order))
+                .thenReturn(order);
+
+        when(orderMapper.toResponse(order))
+                .thenReturn(expectedResponse);
+
+        OrderResponse result = orderService.updateOrderStatus(
+                orderId,
+                changedBy,
+                request
+        );
+
+        assertSame(expectedResponse, result);
+        assertEquals(OrderStatus.CANCELLED, order.getStatus());
+        assertFalse(order.isStockReleasePending());
+
+        OrderStatusHistory history = order.getStatusHistories().get(0);
+        assertEquals(OrderStatus.CANCELLED, history.getStatus());
+        assertEquals(changedBy, history.getChangedBy());
+        assertEquals("Khách yêu cầu hủy qua điện thoại", history.getNote());
+
+        verify(orderSagaEventPublisher)
+                .publishStockReleaseRequested(orderId, order.getItems());
+        verify(orderSagaEventPublisher, never())
+                .publishPaymentRefundRequested(any(), any());
+    }
+
+    @Test
     @DisplayName("Chuyển trạng thái từ PENDING sang CANCELLED thành công")
     void updateOrderStatus_FromPendingToCancelled_ShouldSucceed() {
         assertValidTransition(
@@ -154,11 +217,11 @@ class OrderServiceUpdateOrderStatusTest {
     @Test
     @DisplayName("Cập nhật trạng thái và trả đúng kết quả từ mapper")
     void updateOrderStatus_ShouldReturnMapperResult() {
-        Order order = createOrder(OrderStatus.AWAITING_PAYMENT);
+        Order order = createOrder(OrderStatus.CONFIRMED);
         OrderResponse expectedResponse = mock(OrderResponse.class);
 
         when(request.status())
-                .thenReturn(OrderStatus.CONFIRMED);
+                .thenReturn(OrderStatus.PROCESSING);
 
         when(request.note())
                 .thenReturn("Quản trị viên xác nhận đơn hàng");
@@ -180,7 +243,7 @@ class OrderServiceUpdateOrderStatusTest {
 
         assertSame(expectedResponse, result);
         assertEquals(
-                OrderStatus.CONFIRMED,
+                OrderStatus.PROCESSING,
                 order.getStatus()
         );
 
@@ -284,12 +347,12 @@ class OrderServiceUpdateOrderStatusTest {
     @Test
     @DisplayName("Mapper nhận entity do repository save trả về")
     void updateOrderStatus_ShouldMapSavedEntity() {
-        Order foundOrder = createOrder(OrderStatus.AWAITING_PAYMENT);
-        Order savedOrder = createOrder(OrderStatus.CONFIRMED);
+        Order foundOrder = createOrder(OrderStatus.CONFIRMED);
+        Order savedOrder = createOrder(OrderStatus.PROCESSING);
         OrderResponse expectedResponse = mock(OrderResponse.class);
 
         when(request.status())
-                .thenReturn(OrderStatus.CONFIRMED);
+                .thenReturn(OrderStatus.PROCESSING);
 
         when(request.note())
                 .thenReturn("Xác nhận đơn");
@@ -319,10 +382,10 @@ class OrderServiceUpdateOrderStatusTest {
     @Test
     @DisplayName("Thực hiện tìm đơn, lưu đơn rồi mapping theo đúng thứ tự")
     void updateOrderStatus_ShouldExecuteInCorrectOrder() {
-        Order order = createOrder(OrderStatus.AWAITING_PAYMENT);
+        Order order = createOrder(OrderStatus.CONFIRMED);
 
         when(request.status())
-                .thenReturn(OrderStatus.CONFIRMED);
+                .thenReturn(OrderStatus.PROCESSING);
 
         when(request.note())
                 .thenReturn("Xác nhận đơn");
@@ -511,10 +574,10 @@ class OrderServiceUpdateOrderStatusTest {
     @Test
     @DisplayName("Không sử dụng các dependency không liên quan")
     void updateOrderStatus_ShouldNotUseUnrelatedDependencies() {
-        Order order = createOrder(OrderStatus.AWAITING_PAYMENT);
+        Order order = createOrder(OrderStatus.CONFIRMED);
 
         when(request.status())
-                .thenReturn(OrderStatus.CONFIRMED);
+                .thenReturn(OrderStatus.PROCESSING);
 
         when(request.note())
                 .thenReturn("Xác nhận đơn");

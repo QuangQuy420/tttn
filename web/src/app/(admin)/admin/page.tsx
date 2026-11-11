@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { ApiError, getAdminOrdersSummary, getProducts, listUsers } from "@/lib/api";
+import { useAdminProfile } from "@/components/admin/AdminGuard";
 import { ErrorState } from "@/components/common/ErrorState";
 import { LoadingState } from "@/components/common/LoadingState";
+import { hasPermission } from "@/lib/auth/admin-access";
 import { getAccessToken } from "@/lib/auth/session";
 import { formatOrderStatusVi, ORDER_STATUSES } from "@/lib/labels";
 import type { AdminOrdersSummary } from "@/types/order";
@@ -11,7 +13,13 @@ import type { AdminOrdersSummary } from "@/types/order";
 // Admin dashboard (T11, AC5) — total products/customers/orders plus a per-status order-count
 // breakdown, all read-only. Reuses getProducts/listUsers (already used by the products/users
 // admin pages for the same "total" numbers) alongside the new getAdminOrdersSummary.
+// Each card loads only when the user holds the permission its API needs (AC7).
 export default function AdminDashboardPage() {
+  const permissions = useAdminProfile()?.permissions ?? [];
+  const canSeeProducts = hasPermission(permissions, "product:manage");
+  const canSeeCustomers = hasPermission(permissions, "user:manage-roles");
+  const canSeeOrders = hasPermission(permissions, "order:manage");
+
   const [totalProducts, setTotalProducts] = useState(0);
   const [totalCustomers, setTotalCustomers] = useState(0);
   const [ordersSummary, setOrdersSummary] = useState<AdminOrdersSummary | null>(null);
@@ -35,13 +43,14 @@ export default function AdminDashboardPage() {
       setError(null);
       try {
         const [productsResult, usersResult, summaryResult] = await Promise.all([
-          getProducts({ limit: 1 }),
-          listUsers(token, 1, 1),
-          getAdminOrdersSummary(token),
+          // Token + includeAllStatuses: "Tổng sản phẩm" counts every status (AC69).
+          canSeeProducts ? getProducts({ limit: 1, includeAllStatuses: true }, token) : null,
+          canSeeCustomers ? listUsers(token, 1, 1) : null,
+          canSeeOrders ? getAdminOrdersSummary(token) : null,
         ]);
         if (!cancelled) {
-          setTotalProducts(productsResult.meta.total);
-          setTotalCustomers(usersResult.meta.total);
+          setTotalProducts(productsResult?.meta.total ?? 0);
+          setTotalCustomers(usersResult?.meta.total ?? 0);
           setOrdersSummary(summaryResult);
         }
       } catch (err) {
@@ -58,7 +67,7 @@ export default function AdminDashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [canSeeProducts, canSeeCustomers, canSeeOrders]);
 
   return (
     <>
@@ -73,32 +82,44 @@ export default function AdminDashboardPage() {
 
         {!isLoading && !error && (
           <>
-            <div className="admin-stats">
-              <div className="admin-stat-card">
-                <div className="admin-stat-card__label">Tổng sản phẩm</div>
-                <div className="admin-stat-card__value">{totalProducts}</div>
-              </div>
-              <div className="admin-stat-card">
-                <div className="admin-stat-card__label">Tổng khách hàng</div>
-                <div className="admin-stat-card__value">{totalCustomers}</div>
-              </div>
-              <div className="admin-stat-card">
-                <div className="admin-stat-card__label">Tổng đơn hàng</div>
-                <div className="admin-stat-card__value">{ordersSummary?.totalOrders ?? 0}</div>
-              </div>
-            </div>
-
-            <h2>Đơn hàng theo trạng thái</h2>
-            <div className="admin-stats">
-              {ORDER_STATUSES.map((status) => (
-                <div key={status} className="admin-stat-card">
-                  <div className="admin-stat-card__label">{formatOrderStatusVi(status)}</div>
-                  <div className="admin-stat-card__value">
-                    {ordersSummary?.ordersByStatus[status] ?? 0}
+            {(canSeeProducts || canSeeCustomers || canSeeOrders) && (
+              <div className="admin-stats">
+                {canSeeProducts && (
+                  <div className="admin-stat-card">
+                    <div className="admin-stat-card__label">Tổng sản phẩm</div>
+                    <div className="admin-stat-card__value">{totalProducts}</div>
                   </div>
+                )}
+                {canSeeCustomers && (
+                  <div className="admin-stat-card">
+                    <div className="admin-stat-card__label">Tổng khách hàng</div>
+                    <div className="admin-stat-card__value">{totalCustomers}</div>
+                  </div>
+                )}
+                {canSeeOrders && (
+                  <div className="admin-stat-card">
+                    <div className="admin-stat-card__label">Tổng đơn hàng</div>
+                    <div className="admin-stat-card__value">{ordersSummary?.totalOrders ?? 0}</div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {canSeeOrders && (
+              <>
+                <h2>Đơn hàng theo trạng thái</h2>
+                <div className="admin-stats">
+                  {ORDER_STATUSES.map((status) => (
+                    <div key={status} className="admin-stat-card">
+                      <div className="admin-stat-card__label">{formatOrderStatusVi(status)}</div>
+                      <div className="admin-stat-card__value">
+                        {ordersSummary?.ordersByStatus[status] ?? 0}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
           </>
         )}
       </section>

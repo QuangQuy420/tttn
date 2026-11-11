@@ -21,6 +21,7 @@ import type { CheckoutPayload } from "@/types/order";
 const PAYMENT_METHODS = [{ value: "CARD", label: "Thanh toán qua thẻ" }];
 
 const CART_CHANGED_MESSAGE = "Giỏ hàng đã thay đổi, vui lòng kiểm tra lại";
+const ADDRESS_FORM_OPEN_MESSAGE = "Vui lòng lưu hoặc hủy địa chỉ đang nhập trước khi đặt hàng.";
 
 function parseVariantIds(value: string): string[] {
   return value
@@ -72,6 +73,8 @@ export function CheckoutPage() {
   const selectedVariantIds = parseVariantIds(variantIdsParam);
 
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  // True while AddressBook shows an unsaved add / edit form (AC60).
+  const [isEditingAddress, setIsEditingAddress] = useState(false);
 
   const [note, setNote] = useState("");
   const [paymentMethod, setPaymentMethod] = useState(PAYMENT_METHODS[0].value);
@@ -120,6 +123,11 @@ export function CheckoutPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (isEditingAddress) {
+      setSubmitError(ADDRESS_FORM_OPEN_MESSAGE);
+      return;
+    }
 
     const selectedAddress = addresses.find((address) => address.id === effectiveSelectedAddressId);
     if (!selectedAddress) {
@@ -229,6 +237,7 @@ export function CheckoutPage() {
             onAddressesChange={refetchAddresses}
             selectedAddressId={effectiveSelectedAddressId}
             onSelectAddress={(address) => setSelectedAddressId(address.id)}
+            onEditingChange={setIsEditingAddress}
           />
 
           <label htmlFor="checkout-note">
@@ -258,10 +267,14 @@ export function CheckoutPage() {
           <button
             type="submit"
             className="btn btn--primary"
-            disabled={isSubmitting || isRefreshing || cartChanged}
+            disabled={isSubmitting || isRefreshing || cartChanged || isEditingAddress}
           >
             {isSubmitting ? "Đang đặt hàng..." : "Đặt hàng"}
           </button>
+
+          {isEditingAddress && addresses.length > 0 && (
+            <p className="field-error">{ADDRESS_FORM_OPEN_MESSAGE}</p>
+          )}
 
           {cartChanged && (
             <p role="alert" className="error-state">

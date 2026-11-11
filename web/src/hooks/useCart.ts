@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, getCart } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth/session";
 import type { Cart } from "@/types/cart";
@@ -29,71 +29,67 @@ export function useCart(): UseCartResult {
   const [cart, setCart] = useState<Cart | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Only the newest fetch may write state: a slower, older response (e.g. two quick cart edits)
+  // must not overwrite a newer cart (AC71).
+  const requestSeqRef = useRef(0);
+  // After the first load, refetches run in the background: `isLoading` stays false so pages
+  // like CheckoutPage keep their form (and its unsaved input) mounted (AC60).
+  const hasLoadedRef = useRef(false);
+  const unmountedRef = useRef(false);
 
-  async function run() {
+  const load = useCallback(async () => {
+    const seq = ++requestSeqRef.current;
+    const isStale = () => unmountedRef.current || seq !== requestSeqRef.current;
+
     const token = getAccessToken();
     if (!token) {
-      setCart(null);
-      setIsLoading(false);
-      setError(null);
+      // Signed out: the next login's first fetch shows the loading state again.
+      hasLoadedRef.current = false;
+      if (!isStale()) {
+        setCart(null);
+        setIsLoading(false);
+        setError(null);
+      }
       return;
     }
 
-    setIsLoading(true);
+    if (!hasLoadedRef.current) setIsLoading(true);
     setError(null);
     try {
       const response = await getCart(token);
-      setCart(response);
+      if (!isStale()) {
+        setCart(response);
+        hasLoadedRef.current = true;
+      }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Không thể tải giỏ hàng.");
+      if (!isStale()) {
+        setError(err instanceof ApiError ? err.message : "Không thể tải giỏ hàng.");
+      }
     } finally {
-      setIsLoading(false);
+      // A stale call leaves `isLoading` to the newer call, which always settles it.
+      if (!isStale()) setIsLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function runEffect() {
-      const token = getAccessToken();
-      if (!token) {
-        if (!cancelled) {
-          setCart(null);
-          setIsLoading(false);
-          setError(null);
-        }
-        return;
-      }
-
-      setIsLoading(true);
-      setError(null);
-      try {
-        const response = await getCart(token);
-        if (!cancelled) setCart(response);
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof ApiError ? err.message : "Không thể tải giỏ hàng.");
-        }
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    }
-
-    void runEffect();
+    unmountedRef.current = false;
 
     function handleCartChange() {
-      void runEffect();
+      void load();
     }
+
+    // Initial load (through the listener so this effect never calls setState in its own body).
+    handleCartChange();
 
     window.addEventListener("cart-change", handleCartChange);
     window.addEventListener("auth-change", handleCartChange);
 
     return () => {
-      cancelled = true;
+      unmountedRef.current = true;
       window.removeEventListener("cart-change", handleCartChange);
       window.removeEventListener("auth-change", handleCartChange);
     };
-  }, []);
+  }, [load]);
 
-  return { cart, totalQuantity: cart?.totalQuantity ?? 0, isLoading, error, refetch: run };
+  return { cart, totalQuantity: cart?.totalQuantity ?? 0, isLoading, error, refetch: load };
 }

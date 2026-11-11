@@ -106,7 +106,7 @@ const CAMERA_CAPTURE_FILE_LABEL = "Ảnh chụp từ camera";
 // accept list mirrors ImageUploadSlot.tsx (image/jpeg,image/png,image/webp — NFR1).
 export function FaceAnalysisPage() {
   const router = useRouter();
-  const { result, isLoading, error, analyze } = useFaceAnalysis();
+  const { result, isLoading, error, analyze, clearError } = useFaceAnalysis();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
 
@@ -123,6 +123,8 @@ export function FaceAnalysisPage() {
   // History is one section of this page (not the page's main list), so its page number lives in
   // local state rather than the URL.
   const [historyPage, setHistoryPage] = useState(1);
+  // Bumped to refetch the current history page (after a new analysis or a delete) (AC66).
+  const [historyReloadKey, setHistoryReloadKey] = useState(0);
   const [historyTotalPages, setHistoryTotalPages] = useState(1);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -144,7 +146,12 @@ export function FaceAnalysisPage() {
   const [previousResult, setPreviousResult] = useState(result);
   if (result !== previousResult) {
     setPreviousResult(result);
-    if (result) setSelectedHistoryItem(null);
+    if (result) {
+      setSelectedHistoryItem(null);
+      // The new analysis is the newest history entry: show the first page, refreshed (AC66).
+      setHistoryPage(1);
+      setHistoryReloadKey((key) => key + 1);
+    }
   }
 
   const activeResult = selectedHistoryItem ?? result;
@@ -214,7 +221,7 @@ export function FaceAnalysisPage() {
     return () => {
       cancelled = true;
     };
-  }, [historyPage]);
+  }, [historyPage, historyReloadKey]);
 
   // Revoke the local object URL once it's no longer the active preview (either replaced by a
   // new selection, or the component unmounts) — otherwise each upload leaks a blob URL.
@@ -232,6 +239,8 @@ export function FaceAnalysisPage() {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(URL.createObjectURL(file));
     setFileName(file.name);
+    // A new upload replaces any history item being viewed (AC66).
+    setSelectedHistoryItem(null);
     await analyze(file);
   }
 
@@ -244,6 +253,7 @@ export function FaceAnalysisPage() {
     setPreviewUrl(URL.createObjectURL(file));
     setFileName(CAMERA_CAPTURE_FILE_LABEL);
     setPhotoSource("idle");
+    setSelectedHistoryItem(null);
     await analyze(file);
   }
 
@@ -265,6 +275,10 @@ export function FaceAnalysisPage() {
       await deleteFaceAnalysisHistory(id, token);
       setHistory((prev) => prev.filter((item) => item.id !== id));
       setSelectedHistoryItem((prev) => (prev?.id === id ? null : prev));
+      // The last item of a later page is gone: go back one page (AC67); otherwise reload this
+      // page so the next item moves up into it.
+      if (history.length === 1 && historyPage > 1) setHistoryPage(historyPage - 1);
+      else setHistoryReloadKey((key) => key + 1);
     } catch (err) {
       setDeleteError(err instanceof ApiError ? err.message : "Không thể xóa kết quả phân tích này.");
     } finally {
@@ -569,7 +583,11 @@ export function FaceAnalysisPage() {
                   <button
                     type="button"
                     className="btn btn--outline btn--small"
-                    onClick={() => setSelectedHistoryItem(item)}
+                    onClick={() => {
+                      // A failed analysis must not hide the history item being opened (AC66).
+                      clearError();
+                      setSelectedHistoryItem(item);
+                    }}
                   >
                     Xem lại
                   </button>

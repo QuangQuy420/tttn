@@ -69,7 +69,8 @@ describe('Rate limit + request-id (e2e)', () => {
   it('login over the auth limit → 429 with the Vietnamese message and an X-Request-Id (AC2, AC9)', async () => {
     const server = app.getHttpServer();
     for (let i = 0; i < 2; i++) {
-      await request(server).post('/api/auth/login').send({ email: 'a@b.c' }).expect(201);
+      // Login answers 200 like user-service (not Nest's default 201).
+      await request(server).post('/api/auth/login').send({ email: 'a@b.c' }).expect(200);
     }
 
     const res = await request(server)

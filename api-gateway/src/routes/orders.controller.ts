@@ -19,6 +19,8 @@ import { Request, Response } from 'express';
 import { AuthenticatedUser, JwtGuard } from '../auth/jwt.guard';
 import { RequirePermission } from '../auth/permissions.decorator';
 import { PermissionsGuard } from '../auth/permissions.guard';
+import { IsoDatePipe } from '../common/pattern.pipe';
+import { UuidPipe } from '../common/uuid.pipe';
 import { OrdersProxyService } from '../services/orders-proxy.service';
 import { UpdateSagaSettingsDto } from './dto/update-saga-settings.dto';
 
@@ -51,7 +53,7 @@ export class CartController {
   @Put('items/:variantId')
   @UseGuards(JwtGuard)
   updateItem(
-    @Param('variantId') variantId: string,
+    @Param('variantId', UuidPipe) variantId: string,
     @Body() body: Record<string, unknown>,
     @Req() request: Request & { user: AuthenticatedUser },
   ): Promise<unknown> {
@@ -65,7 +67,7 @@ export class CartController {
   @Delete('items/:variantId')
   @UseGuards(JwtGuard)
   removeItem(
-    @Param('variantId') variantId: string,
+    @Param('variantId', UuidPipe) variantId: string,
     @Req() request: Request & { user: AuthenticatedUser },
   ): Promise<unknown> {
     return this.ordersProxyService.removeCartItem(
@@ -122,7 +124,7 @@ export class OrdersController {
   @Get(':id')
   @UseGuards(JwtGuard)
   findOne(
-    @Param('id') id: string,
+    @Param('id', UuidPipe) id: string,
     @Req() request: Request & { user: AuthenticatedUser },
   ): Promise<unknown> {
     return this.ordersProxyService.getOrderDetail(request.user.userId, id);
@@ -131,7 +133,7 @@ export class OrdersController {
   @Post(':id/cancel')
   @UseGuards(JwtGuard)
   cancel(
-    @Param('id') id: string,
+    @Param('id', UuidPipe) id: string,
     @Body() body: Record<string, unknown>,
     @Req() request: Request & { user: AuthenticatedUser },
   ): Promise<unknown> {
@@ -174,7 +176,7 @@ export class AdminOrdersController {
   @Get(':id')
   @UseGuards(JwtGuard, PermissionsGuard)
   @RequirePermission('order:manage')
-  findOne(@Param('id') id: string): Promise<unknown> {
+  findOne(@Param('id', UuidPipe) id: string): Promise<unknown> {
     return this.ordersProxyService.getAdminOrderDetail(id);
   }
 
@@ -182,7 +184,7 @@ export class AdminOrdersController {
   @UseGuards(JwtGuard, PermissionsGuard)
   @RequirePermission('order:manage')
   updateStatus(
-    @Param('id') id: string,
+    @Param('id', UuidPipe) id: string,
     @Body() body: Record<string, unknown>,
     @Req() request: Request & { user: AuthenticatedUser },
   ): Promise<unknown> {
@@ -216,7 +218,7 @@ export class AdminSagaLogsController {
   @UseGuards(JwtGuard, PermissionsGuard)
   @RequirePermission('order:manage')
   getOrdersForDay(
-    @Param('date') date: string,
+    @Param('date', IsoDatePipe) date: string,
     @Query() query: Record<string, unknown>,
   ): Promise<unknown> {
     return this.ordersProxyService.getSagaLogsForDay(date, query);
@@ -226,7 +228,7 @@ export class AdminSagaLogsController {
   @UseGuards(JwtGuard, PermissionsGuard)
   @RequirePermission('order:manage')
   getOrderLogs(
-    @Param('orderId') orderId: string,
+    @Param('orderId', UuidPipe) orderId: string,
     @Query() query: Record<string, unknown>,
   ): Promise<unknown> {
     return this.ordersProxyService.getOrderSagaLogs(orderId, query);

@@ -5,15 +5,35 @@ import { useRouter } from "next/navigation";
 import { AddressBook } from "@/components/account/AddressBook";
 import { useAddresses } from "@/hooks/useAddresses";
 import {
+    getFieldErrors,
     getMyProfile,
     updateMyProfile,
 } from "@/lib/api";
-import {
-    getAccessToken,
-    removeAccessToken,
-} from "@/lib/auth/session";
+import { getAccessToken } from "@/lib/auth/session";
 import type { UserProfile } from "@/types/user";
 import { ApiError } from "@/lib/api";
+
+// Same rules as user-service's UpdateProfileRequest (AC65).
+const PHONE_PATTERN = /^0\d{9}$/;
+
+interface ProfileFieldErrors {
+    fullName?: string;
+    phone?: string;
+    avatarUrl?: string;
+    dateOfBirth?: string;
+}
+
+function validateProfile(fullName: string, phone: string): ProfileFieldErrors {
+    const errors: ProfileFieldErrors = {};
+    const name = fullName.trim();
+    if (name && (name.length < 2 || name.length > 50)) {
+        errors.fullName = "Họ tên phải từ 2 đến 50 ký tự.";
+    }
+    if (phone.trim() && !PHONE_PATTERN.test(phone.trim())) {
+        errors.phone = "Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 0.";
+    }
+    return errors;
+}
 
 export default function ProfilePage() {
     const router = useRouter();
@@ -36,6 +56,7 @@ export default function ProfilePage() {
 
     const [error, setError] = useState("");
     const [message, setMessage] = useState("");
+    const [fieldErrors, setFieldErrors] = useState<ProfileFieldErrors>({});
 
     useEffect(() => {
         async function loadProfile() {
@@ -56,12 +77,6 @@ export default function ProfilePage() {
                 setAvatarUrl(user.avatarUrl ?? "");
                 setDateOfBirth(user.dateOfBirth ?? "");
             } catch (err) {
-                if (err instanceof ApiError && err.status === 401) {
-                    removeAccessToken();
-                    router.replace("/login");
-                    return;
-                }
-
                 setError(
                     err instanceof ApiError
                         ? err.message
@@ -87,9 +102,13 @@ export default function ProfilePage() {
             return;
         }
 
-        setSaving(true);
+        const errors = validateProfile(fullName, phone);
+        setFieldErrors(errors);
         setError("");
         setMessage("");
+        if (Object.keys(errors).length > 0) return;
+
+        setSaving(true);
 
         try {
             const response = await updateMyProfile(token, {
@@ -102,6 +121,13 @@ export default function ProfilePage() {
             setProfile(response.data);
             setMessage("Cập nhật thông tin thành công.");
         } catch (err) {
+            const serverErrors = getFieldErrors(err);
+            setFieldErrors({
+                fullName: serverErrors.fullName,
+                phone: serverErrors.phone,
+                avatarUrl: serverErrors.avatarUrl,
+                dateOfBirth: serverErrors.dateOfBirth,
+            });
             setError(
                 err instanceof ApiError
                     ? err.message
@@ -197,6 +223,9 @@ export default function ProfilePage() {
                                 setFullName(event.target.value)
                             }
                         />
+                        {fieldErrors.fullName && (
+                            <span className="field-error">{fieldErrors.fullName}</span>
+                        )}
                     </label>
 
                     <label>
@@ -208,6 +237,9 @@ export default function ProfilePage() {
                                 setPhone(event.target.value)
                             }
                         />
+                        {fieldErrors.phone && (
+                            <span className="field-error">{fieldErrors.phone}</span>
+                        )}
                     </label>
 
                     <label>
@@ -219,6 +251,9 @@ export default function ProfilePage() {
                                 setDateOfBirth(event.target.value)
                             }
                         />
+                        {fieldErrors.dateOfBirth && (
+                            <span className="field-error">{fieldErrors.dateOfBirth}</span>
+                        )}
                     </label>
 
                     <label className="profile-form__full">
@@ -230,6 +265,9 @@ export default function ProfilePage() {
                                 setAvatarUrl(event.target.value)
                             }
                         />
+                        {fieldErrors.avatarUrl && (
+                            <span className="field-error">{fieldErrors.avatarUrl}</span>
+                        )}
                     </label>
 
                     <div className="profile-form__actions">

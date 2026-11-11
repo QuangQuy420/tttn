@@ -22,7 +22,9 @@ public interface AddressRepository extends JpaRepository<Address, UUID> {
 
     boolean existsByUserId(UUID userId);
 
-    @Modifying
+    // Clears the persistence context afterwards: a managed Address still holding
+    // defaultAddress=true would otherwise see "no change" on re-set and never write it back.
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE Address a SET a.defaultAddress = false WHERE a.user.id = :userId")
     void clearDefaultForUser(@Param("userId") UUID userId);
 }

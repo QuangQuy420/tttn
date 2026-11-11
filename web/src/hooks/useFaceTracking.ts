@@ -188,6 +188,13 @@ export function useFaceTracking({
       originalConsoleError(...args);
     };
 
+    // Releases the camera as soon as the session cannot go on (error shown), instead of
+    // leaving the camera light on until unmount (AC62).
+    function stopStream() {
+      if (stream) stream.getTracks().forEach((track) => track.stop());
+      stream = null;
+    }
+
     async function start() {
       setStatus("requesting-camera");
       setErrorMessage(null);
@@ -212,9 +219,25 @@ export function useFaceTracking({
       }
 
       const video = videoRef.current;
-      if (!video) return;
+      if (!video) {
+        // Callers enable the hook only once <video> is mounted; never keep an orphaned stream,
+        // and never leave the status on "requesting-camera".
+        stopStream();
+        setStatus("error");
+        setErrorMessage("Không thể khởi động camera. Vui lòng tải lại trang.");
+        return;
+      }
       video.srcObject = stream;
-      await video.play();
+      try {
+        await video.play();
+      } catch {
+        if (!cancelled) {
+          stopStream();
+          setStatus("error");
+          setErrorMessage("Không thể phát video từ camera. Vui lòng tải lại trang và thử lại.");
+        }
+        return;
+      }
 
       if (cancelled) return;
 
@@ -225,6 +248,7 @@ export function useFaceTracking({
         delegate = created.delegate;
       } catch {
         if (!cancelled) {
+          stopStream();
           setStatus("error");
           setErrorMessage("Không thể tải mô hình nhận diện khuôn mặt. Vui lòng thử lại.");
         }
@@ -237,11 +261,16 @@ export function useFaceTracking({
       }
 
       const canvas = canvasRef.current;
-      if (!canvas || !video) return;
       // Fetched once: the context object survives canvas resizes, and a missing context must not
       // silently kill the loop mid-session.
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
+      const ctx = canvas?.getContext("2d") ?? null;
+      if (!canvas || !video || !ctx) {
+        // Never leave the status on "loading-model" with the camera still running.
+        stopStream();
+        setStatus("error");
+        setErrorMessage("Không thể khởi động camera. Vui lòng tải lại trang.");
+        return;
+      }
 
       const tracker = new LostFaceTracker();
       const fpsMeter = new FpsMeter();

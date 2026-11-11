@@ -42,6 +42,8 @@ Routing key = `behavior.<eventType lowercase>`.
   type `BEHAVIOR_EVENT`, not `ORDER`): the rows commit in the same transaction as `CONFIRMED`,
   and `OutboxRelay` publishes them. There the AMQP `messageId` is the **outbox row id**, not the
   `eventId`, so de-duplication relies on the payload `eventId` (deterministic per order + variant).
+  A row still unsent after 20 attempts becomes `FAILED` (the event is lost) and a WARN
+  `OUTBOX_FAILED` saga log is written on the order.
 - Producers are implemented in `.planning/2026-09-29-05-behavior-event-producers.md` (plan 05).
 
 ## Payload
@@ -115,8 +117,10 @@ kept as sent, even if it is in the future or very old.
 - Consumer outcome per message:
   - stored or duplicate → ack;
   - invalid JSON or a field rule broken → reject without requeue → goes straight to the DLQ;
-  - other error (e.g. Postgres down) → short wait, then requeue; after 10 deliveries the quorum
-    queue dead-letters the message to the DLQ.
+  - other error (e.g. Postgres down) → the message is held unacked for a back-off that doubles
+    per delivery (`x-delivery-count`: 2 s, 4 s, 8 s … capped at 60 s; ≈ 2 min over 6 deliveries),
+    requeued early once a `SELECT 1` succeeds again; after 10 deliveries the quorum queue
+    dead-letters the message to the DLQ.
 - Queue arguments are fixed. Changing them later means deleting the queue in the RabbitMQ UI
   first, or the next declare fails with `PRECONDITION_FAILED`.
 - A new consumer should add its own `behavior-events.<service>` queue rather than share this one.

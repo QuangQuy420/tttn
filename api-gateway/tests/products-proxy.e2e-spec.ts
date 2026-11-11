@@ -78,7 +78,8 @@ describe('Products/categories proxy (e2e)', () => {
     httpService.get.mockReturnValue(throwError(() => axiosError));
 
     const res = await request(app.getHttpServer())
-      .get('/api/products/missing-id')
+      // A well-formed UUID: non-UUID ids are now rejected at the gateway with 400.
+      .get('/api/products/33333333-3333-4333-8333-333333333333')
       .expect(404);
 
     expect(res.body).toEqual(envelope);

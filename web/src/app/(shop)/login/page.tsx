@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { LoginForm } from "@/components/auth/LoginForm";
 
 export default function LoginPage() {
@@ -23,7 +24,11 @@ export default function LoginPage() {
                     Đăng nhập để quản lý hồ sơ và trải nghiệm mua sắm.
                 </p>
 
-                <LoginForm />
+                {/* LoginForm reads `?notice=` via useSearchParams(), which Next.js requires to
+                    sit inside a Suspense boundary. */}
+                <Suspense fallback={null}>
+                    <LoginForm />
+                </Suspense>
 
                 <div className="auth-card__footer">
                     Chưa có tài khoản?{" "}

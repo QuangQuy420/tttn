@@ -392,7 +392,7 @@ class OrderServiceCancelOrderTest {
                 .save(any(Order.class));
 
         verifyNoInteractions(orderMapper);
-        verifyNoInteractions(cancelOrderRequest);
+        verifyNoInteractions(orderSagaEventPublisher);
     }
 
     @Test
@@ -510,12 +510,13 @@ class OrderServiceCancelOrderTest {
     }
 
     @Test
-    @DisplayName("Hủy đơn CONFIRMED không gửi nhả hàng (không có logic hoàn tiền/nhả hàng cho đơn đã thanh toán)")
-    void cancelOrder_WhenStatusIsConfirmed_ShouldNotAttemptStockRelease() {
+    @DisplayName("Hủy đơn CONFIRMED (đã thanh toán) → gửi yêu cầu hoàn tiền + hoàn kho, không nhả hàng (AC32)")
+    void cancelOrder_WhenStatusIsConfirmed_ShouldRequestRefundAndRestock() {
         Order order = createOrder(OrderStatus.CONFIRMED);
+        order.setPaymentStatus(PaymentStatus.PAID);
 
         when(cancelOrderRequest.reason())
-                .thenReturn("Hủy");
+                .thenReturn("Đổi ý không mua nữa");
 
         when(orderRepository.findByIdAndUserId(orderId, userId))
                 .thenReturn(Optional.of(order));
@@ -532,7 +533,16 @@ class OrderServiceCancelOrderTest {
                 cancelOrderRequest
         );
 
-        verifyNoInteractions(orderSagaEventPublisher);
+        assertEquals(OrderStatus.CANCELLED, order.getStatus());
+        // Stays PAID until payment-service replies 'payment.refunded'.
+        assertEquals(PaymentStatus.PAID, order.getPaymentStatus());
+
+        verify(orderSagaEventPublisher)
+                .publishPaymentRefundRequested(orderId, "Đổi ý không mua nữa");
+        verify(orderSagaEventPublisher)
+                .publishStockRestockRequested(orderId);
+        verify(orderSagaEventPublisher, never())
+                .publishStockReleaseRequested(any(), any());
     }
 
     private void assertCannotCancelStatus(OrderStatus status) {
@@ -561,7 +571,7 @@ class OrderServiceCancelOrderTest {
                 .save(any(Order.class));
 
         verifyNoInteractions(orderMapper);
-        verifyNoInteractions(cancelOrderRequest);
+        verifyNoInteractions(orderSagaEventPublisher);
     }
 
     private Order createOrder(OrderStatus status) {

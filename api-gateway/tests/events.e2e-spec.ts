@@ -6,6 +6,7 @@ import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { AppConfig } from '../src/config/configuration';
 import { BehaviorEventPublisherService } from '../src/services/behavior-event-publisher.service';
+import { PermissionsCacheService } from '../src/services/permissions-cache.service';
 
 /**
  * `POST /api/events` — RabbitMQ is not running while this suite executes, so
@@ -38,6 +39,13 @@ describe('Behavior events (e2e)', () => {
     })
       .overrideProvider(BehaviorEventPublisherService)
       .useValue(publisher)
+      // The guard checks token revocation; user-service is not running here.
+      .overrideProvider(PermissionsCacheService)
+      .useValue({
+        getAuthState: jest
+          .fn()
+          .mockResolvedValue({ permissions: [], status: 'ACTIVE', tokensValidAfter: null }),
+      })
       .compile();
 
     // Sign the token the way user-service does: HMAC key = Base64-decoded JWT_SECRET.

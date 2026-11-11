@@ -79,28 +79,6 @@ export function TryOnPage({ slug }: TryOnPageProps) {
   const [smoothing, setSmoothing] = useState<SmoothingMode>("oneEuro");
   const [filterParams, setFilterParams] = useState<OneEuroParams>(DEFAULT_FILTER_PARAMS);
 
-  const { status, errorMessage, stats, isBenchmarking, startBenchmark } = useFaceTracking({
-    videoRef,
-    canvasRef,
-    overlayImageUrl: thumbnail?.imageUrl ?? null,
-    // Camera-first (Q: "Thử Kính" nav tab): the camera starts right away even with no frame
-    // picked yet — useFaceTracking already no-ops the draw step whenever overlayImageUrl is
-    // null, so this just shows a plain live tracking preview until a frame is chosen.
-    enabled: true,
-    smoothing,
-    filterParams,
-    widthFactor: widthFactorFor(product?.frameWidthMm),
-    debug,
-  });
-
-  function updateFilterParam(key: "minCutoff" | "beta", value: string) {
-    const parsed = parseFilterParam(key, value);
-    if (parsed === null) return;
-    setFilterParams((prev) => ({ ...prev, [key]: parsed }));
-  }
-  // Plan 05 (AC6): one TRY_ON once the face has been tracked for 3 s in total with this frame.
-  useTrackTryOn(product?.id ?? null, status === "tracking");
-
   // Once the camera view has rendered once, it must never be replaced by a full-page
   // loading/error state again — that would unmount the <video>/<canvas> the running camera
   // stream is attached to, orphaning it (the freshly re-mounted <video> has no srcObject, so it
@@ -117,6 +95,30 @@ export function TryOnPage({ slug }: TryOnPageProps) {
   if (cameraReady && !hasShownCamera) {
     setHasShownCamera(true);
   }
+
+  const { status, errorMessage, stats, isBenchmarking, startBenchmark } = useFaceTracking({
+    videoRef,
+    canvasRef,
+    overlayImageUrl: thumbnail?.imageUrl ?? null,
+    // Camera-first (Q: "Thử Kính" nav tab): the camera starts right away even with no frame
+    // picked yet — useFaceTracking already no-ops the draw step whenever overlayImageUrl is
+    // null, so this just shows a plain live tracking preview until a frame is chosen. It waits
+    // for `hasShownCamera`, i.e. until the <video> below is mounted (the loading / error states
+    // above replace it) — otherwise the stream would start with nothing to attach to (AC62).
+    enabled: hasShownCamera,
+    smoothing,
+    filterParams,
+    widthFactor: widthFactorFor(product?.frameWidthMm),
+    debug,
+  });
+
+  function updateFilterParam(key: "minCutoff" | "beta", value: string) {
+    const parsed = parseFilterParam(key, value);
+    if (parsed === null) return;
+    setFilterParams((prev) => ({ ...prev, [key]: parsed }));
+  }
+  // Plan 05 (AC6): one TRY_ON once the face has been tracked for 3 s in total with this frame.
+  useTrackTryOn(product?.id ?? null, status === "tracking");
 
   if (!hasShownCamera) {
     // Only a chosen product (activeSlug set, e.g. arrived via a product's "Thử kính AR"

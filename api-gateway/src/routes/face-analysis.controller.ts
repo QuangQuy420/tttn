@@ -10,12 +10,12 @@ import {
   Req,
   UploadedFile,
   UseGuards,
-  UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
 import { AuthenticatedUser, JwtGuard } from '../auth/jwt.guard';
 import { RateLimitTier } from '../auth/rate-limit';
+import { RequiredFilePipe, SingleFileUpload } from '../common/file-upload';
+import { UuidPipe } from '../common/uuid.pipe';
 import { FaceAnalysisProxyService } from '../services/face-analysis-proxy.service';
 
 /**
@@ -29,9 +29,9 @@ export class FaceAnalysisController {
   @Post('analyze')
   @RateLimitTier('faceAnalyze')
   @UseGuards(JwtGuard)
-  @UseInterceptors(FileInterceptor('file'))
+  @SingleFileUpload(10)
   analyze(
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile(RequiredFilePipe) file: Express.Multer.File,
     @Req() request: Request & { user: AuthenticatedUser },
   ): Promise<unknown> {
     return this.faceAnalysisProxyService.analyzeFace(file, request.user.userId);
@@ -50,7 +50,7 @@ export class FaceAnalysisController {
   @UseGuards(JwtGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
   deleteHistoryItem(
-    @Param('id') id: string,
+    @Param('id', UuidPipe) id: string,
     @Req() request: Request & { user: AuthenticatedUser },
   ): Promise<unknown> {
     return this.faceAnalysisProxyService.deleteHistoryItem(id, request.user.userId);

@@ -33,6 +33,11 @@ import { numericTransformer } from '../transformers/numeric.transformer';
 @Index(['status'])
 @Index(['genderTarget'])
 @Index(['materialType'])
+// Partial so a soft-deleted product's slug can be reused (sku stays globally unique).
+@Index('UQ_ps_products_slug_active', ['slug'], {
+  unique: true,
+  where: '"deleted_at" IS NULL',
+})
 export class Product {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -59,7 +64,7 @@ export class Product {
   @Column({ type: 'varchar', length: 255 })
   name: string;
 
-  @Column({ type: 'varchar', length: 255, unique: true })
+  @Column({ type: 'varchar', length: 255 })
   slug: string;
 
   @Column({ type: 'text', nullable: true })

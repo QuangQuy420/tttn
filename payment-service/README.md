@@ -24,6 +24,12 @@ message-driven:
 - Is idempotent: a redelivered `payment.create.requested` for an order id that already has a
   stored payment does not re-decide the outcome or write a second row — it just re-publishes
   the already-stored reply.
+- Mock refund: consumes `payment.refund.requested` (order-service, when a paid order is
+  cancelled), moves the payment PAID → REFUNDED and publishes `payment.refunded` (with
+  `paymentId`). A second request for a REFUNDED payment only re-publishes; a FAILED or missing
+  payment is logged and acked (nothing to refund).
+- Replies go out on a confirm channel as persistent messages; a reply the broker does not
+  confirm makes the request nack-with-requeue instead of being acked.
 
 If a real gateway (VNPay/Stripe/etc.) is ever added, `PaymentsService.processPayment`'s
 decision step is the seam to swap out — it's already isolated behind `IPaymentRepository`/
@@ -49,7 +55,8 @@ src/
 
 ## Data
 - Postgres database `payment_db`, table `payments`. See [`.env.example`](.env.example).
-- Migrations are TypeORM-CLI-generated, never hand-written:
+- Migrations are TypeORM-CLI-generated (the one exception is the hand-written enum value
+  addition in `RefundStatusAndWidenAmount`, which `migration:generate` handles poorly):
   ```bash
   npm run migration:generate -- src/db/migrations/<Name>
   npm run migration:run
@@ -57,7 +64,8 @@ src/
   ```
 
 ## Integration
-- Consumes `payment.create.requested`, publishes `payment.completed`/`payment.failed`, both on
+- Consumes `payment.create.requested` / `payment.refund.requested`, publishes
+  `payment.completed`/`payment.failed`/`payment.refunded`, all on
   the `order-saga-events` topic exchange — see `infra/contracts/order-checkout-saga.md` for
   the exact payload shapes and delivery guarantees.
 - `GET /payments/:orderId` is internal/debug only, not routed through `api-gateway` — no

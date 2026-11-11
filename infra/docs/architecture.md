@@ -54,7 +54,12 @@ correctness — ADR 0005).
   RabbitMQ. `payment-service` is not routed (internal only).
 - **Auth** — verifies the JWT at the edge (shared `JWT_SECRET`) and forwards the caller's id as
   `X-User-Id` to the internal services; admin routes also check the caller's current permissions
-  (`PermissionsGuard`), read from the Redis cache or user-service on a miss.
+  (`PermissionsGuard`), read from the Redis cache or user-service on a miss. Every JWT route also
+  rejects a revoked token (issued before the user's last password change / reset, or a user that
+  is not `ACTIVE`), using the user's `status` / `tokensValidAfter` cached with the permissions
+  (≤ 60 s). If user-service cannot answer (1.5 s timeout, 5xx, or a wrong `INTERNAL_API_KEY`)
+  the JWT check fails open and `PermissionsGuard` fails closed. Id path params must be UUIDs
+  (slug / saga-log date: a fixed pattern) and are URL-encoded before they are forwarded.
 - **Rate limit** — `@nestjs/throttler`, one in-memory throttler, 60 s window, per user (valid
   JWT) or per IP, per route: 5 for register / login / forgot-password / reset-password, 10 for
   face analysis, 60 for `POST /api/events`, 100 for everything else; `/health` is never limited.
@@ -98,6 +103,7 @@ browser → api-gateway → recommendation-service    (FinalScore = α·Preferen
                          → Redis catalog cache / product-service, face-processing-service
 browser → api-gateway → order-service             (cart in Redis → checkout)
                          order-service ⇄ RabbitMQ order-saga-events ⇄ product-service (stock), payment-service (payment)
+browser → api-gateway → order-service             (cancel a paid order → refund + restock over order-saga-events)
 ```
 
 ## Cross-cutting decisions

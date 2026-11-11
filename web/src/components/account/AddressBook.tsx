@@ -1,11 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import { ApiError, createMyAddress, deleteMyAddress, updateMyAddress } from "@/lib/api";
+import { useEffect, useState } from "react";
+import {
+  ApiError,
+  createMyAddress,
+  deleteMyAddress,
+  getFieldErrors,
+  updateMyAddress,
+} from "@/lib/api";
 import { getAccessToken } from "@/lib/auth/session";
 import type { Address } from "@/types/user";
 
-const PHONE_PATTERN = /^(0|\+84)[0-9]{9,10}$/;
+// Same rules as user-service's AddressRequest (AC65).
+const PHONE_PATTERN = /^0\d{9}$/;
 
 interface AddressFormValues {
   receiverName: string;
@@ -30,18 +37,23 @@ interface AddressFormErrors {
 function validateAddressForm(values: AddressFormValues): AddressFormErrors {
   const errors: AddressFormErrors = {};
 
-  if (!values.receiverName.trim()) {
+  const receiverName = values.receiverName.trim();
+  if (!receiverName) {
     errors.receiverName = "Tên người nhận không được để trống.";
+  } else if (receiverName.length < 2 || receiverName.length > 100) {
+    errors.receiverName = "Tên người nhận phải từ 2 đến 100 ký tự.";
   }
 
   if (!values.receiverPhone.trim()) {
     errors.receiverPhone = "Số điện thoại không được để trống.";
   } else if (!PHONE_PATTERN.test(values.receiverPhone.trim())) {
-    errors.receiverPhone = "Số điện thoại không hợp lệ.";
+    errors.receiverPhone = "Số điện thoại phải gồm 10 chữ số và bắt đầu bằng 0.";
   }
 
   if (!values.address.trim()) {
     errors.address = "Địa chỉ không được để trống.";
+  } else if (values.address.trim().length > 255) {
+    errors.address = "Địa chỉ không được vượt quá 255 ký tự.";
   }
 
   return errors;
@@ -121,6 +133,9 @@ interface AddressBookProps {
   mode: "picker" | "manage";
   selectedAddressId?: string | null;
   onSelectAddress?: (address: Address) => void;
+  // Told whenever an add / edit form opens or closes, so CheckoutPage can block "Đặt hàng"
+  // while an unsaved address is on screen (AC60).
+  onEditingChange?: (isEditing: boolean) => void;
 }
 
 // Add/edit/delete UI for a user's saved shipping addresses (user-service's /addresses). Shared
@@ -134,6 +149,7 @@ export function AddressBook({
   mode,
   selectedAddressId = null,
   onSelectAddress,
+  onEditingChange,
 }: AddressBookProps) {
   const isPicker = mode === "picker";
 
@@ -202,6 +218,14 @@ export function AddressBook({
       onSelectAddress?.(response.data);
       closeAddressForm();
     } catch (err) {
+      // Server validation errors for a known field go next to that field (AC65).
+      const fieldErrors = getFieldErrors(err);
+      const serverErrors: AddressFormErrors = {
+        receiverName: fieldErrors.receiverName,
+        receiverPhone: fieldErrors.receiverPhone,
+        address: fieldErrors.address,
+      };
+      setAddressFormErrors(serverErrors);
       setAddressFormError(err instanceof ApiError ? err.message : "Không thể lưu địa chỉ.");
     } finally {
       setIsSavingAddressForm(false);
@@ -232,12 +256,17 @@ export function AddressBook({
     }
   }
 
+  const isAddressFormOpen = isAddingAddress || editingAddressId !== null;
+  const showAddForm = isAddingAddress || addresses.length === 0;
+  const isEditing = !isLoading && (isAddressFormOpen || showAddForm);
+
+  useEffect(() => {
+    onEditingChange?.(isEditing);
+  }, [isEditing, onEditingChange]);
+
   if (isLoading) {
     return <p className="address-picker__loading">Đang tải địa chỉ...</p>;
   }
-
-  const isAddressFormOpen = isAddingAddress || editingAddressId !== null;
-  const showAddForm = isAddingAddress || addresses.length === 0;
 
   return (
     <div className="address-picker">

@@ -38,10 +38,12 @@ describe('PaymentsService', () => {
       findByOrderId: jest.fn().mockResolvedValue(null),
       createPaid: jest.fn(),
       createFailed: jest.fn(),
+      markRefunded: jest.fn().mockResolvedValue(true),
     };
     sagaPublisher = {
       publishPaymentCompleted: jest.fn().mockResolvedValue(undefined),
       publishPaymentFailed: jest.fn().mockResolvedValue(undefined),
+      publishPaymentRefunded: jest.fn().mockResolvedValue(undefined),
     };
     // No `PAYMENT_MIN_CARD_AMOUNT` override — PaymentsService's constructor falls back to
     // its own DEFAULT_MIN_CARD_AMOUNT (1,000,000), which these tests assert against.
@@ -201,5 +203,57 @@ describe('PaymentsService', () => {
       failureReason,
     );
     expect(sagaPublisher.publishPaymentCompleted).not.toHaveBeenCalled();
+  });
+  describe('refundPayment', () => {
+    it('refunds a PAID payment: flips it to REFUNDED and publishes payment.refunded (AC32)', async () => {
+      paymentRepository.findByOrderId.mockResolvedValue(
+        buildPayment({
+          id: 'payment-6',
+          orderId: 'order-6',
+          status: PaymentStatus.PAID,
+        }),
+      );
+
+      await service.refundPayment('order-6', 'Đơn hàng đã bị huỷ');
+
+      expect(paymentRepository.markRefunded).toHaveBeenCalledWith('order-6');
+      expect(sagaPublisher.publishPaymentRefunded).toHaveBeenCalledTimes(1);
+      expect(sagaPublisher.publishPaymentRefunded).toHaveBeenCalledWith(
+        'order-6',
+        'payment-6',
+      );
+      expect(sagaPublisher.publishPaymentCompleted).not.toHaveBeenCalled();
+      expect(sagaPublisher.publishPaymentFailed).not.toHaveBeenCalled();
+    });
+
+    it('a second refund request for an already-REFUNDED payment only re-publishes payment.refunded (AC32)', async () => {
+      paymentRepository.findByOrderId.mockResolvedValue(
+        buildPayment({
+          id: 'payment-7',
+          orderId: 'order-7',
+          status: PaymentStatus.REFUNDED,
+        }),
+      );
+
+      await service.refundPayment('order-7');
+
+      expect(paymentRepository.markRefunded).not.toHaveBeenCalled();
+      expect(sagaPublisher.publishPaymentRefunded).toHaveBeenCalledTimes(1);
+      expect(sagaPublisher.publishPaymentRefunded).toHaveBeenCalledWith(
+        'order-7',
+        'payment-7',
+      );
+    });
+
+    it('publishes nothing when no payment is stored for the order (AC32)', async () => {
+      paymentRepository.findByOrderId.mockResolvedValue(null);
+
+      await service.refundPayment('order-missing');
+
+      expect(paymentRepository.markRefunded).not.toHaveBeenCalled();
+      expect(sagaPublisher.publishPaymentRefunded).not.toHaveBeenCalled();
+      expect(sagaPublisher.publishPaymentCompleted).not.toHaveBeenCalled();
+      expect(sagaPublisher.publishPaymentFailed).not.toHaveBeenCalled();
+    });
   });
 });

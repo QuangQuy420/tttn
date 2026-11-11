@@ -46,11 +46,14 @@ it was in when the message was published (see "Delivery guarantees" below).
 | `payment.create.requested` | order-service | payment-service | Ask payment-service to create/process a payment for this order. |
 | `payment.completed` | payment-service | order-service, product-service | Payment succeeded; order-service confirms the order while product-service commits the stock reservation. |
 | `payment.failed` | payment-service | order-service | Payment failed, was declined, or errored. |
-| `stock.release.requested` | order-service | product-service | Compensating step: give back stock already reserved (payment failed, or the order was cancelled while `AWAITING_PAYMENT`). |
+| `stock.release.requested` | order-service | product-service | Compensating step: give back stock already reserved (payment failed, or the order was cancelled — by the customer or an admin — while `PENDING`/`AWAITING_PAYMENT`). |
+| `payment.refund.requested` | order-service | payment-service | Refund a paid order: a `CONFIRMED` order was cancelled, or `payment.completed` arrived after the order was cancelled. |
+| `payment.refunded` | payment-service | order-service | The payment was refunded (mock — no money moves). |
+| `stock.restock.requested` | order-service | product-service | Put the stock of a cancelled paid order back on sale (sent together with `payment.refund.requested`). |
 
-`payment-service` is the only consumer of `payment.create.requested` and the only publisher of
-`payment.completed`/`payment.failed` — it has no other role in this saga (it never touches stock
-messages). Because `order-saga-events` is a topic exchange, its `payment.completed` publication
+`payment-service` is the only consumer of `payment.create.requested`/`payment.refund.requested`
+and the only publisher of `payment.completed`/`payment.failed`/`payment.refunded` — it has no
+other role in this saga (it never touches stock messages). Because `order-saga-events` is a topic exchange, its `payment.completed` publication
 is fanned out to the separate order-service and product-service queues.
 
 ## Payload per routing key
@@ -125,7 +128,13 @@ is fanned out to the separate order-service and product-service queues.
   `PaymentCreationResponse.paymentId`/`.transactionCode`). Product-service only requires
   `orderId`; it gets the affected variants and quantities from its own stock-reservation rows,
   rather than accepting line items from this event. Payment status itself is implied by the
-  routing key (`payment.completed` ⇒ `PaymentStatus.PAID`) — not repeated in the body.
+  routing key (`payment.completed` ⇒ `PaymentStatus.PAID`, `payment.refunded` ⇒
+  `PaymentStatus.REFUNDED`) — not repeated in the body.
+- **Late payment:** `payment.completed` for an order that is already `CANCELLED` (cancelled while
+  the payment was in flight) stores `paymentId`/`transactionCode`, sets `paymentStatus=PAID` and
+  enqueues `payment.refund.requested` + `stock.restock.requested` (product-service may already
+  have committed the stock on this same event). Only the delivery that flips the payment to `PAID`
+  enqueues them; a redelivery on a `PAID`/`REFUNDED` order changes nothing.
 
 ### `payment.failed` (payment-service → order-service)
 ```json
@@ -151,16 +160,59 @@ is fanned out to the separate order-service and product-service queues.
   already holds locally so product-service's consumer does not need to re-derive it. This is
   fire-and-forget: product-service publishes nothing back for this routing key.
 
+### `payment.refund.requested` (order-service → payment-service)
+```json
+{
+  "orderId": "3e2f9c2a-1234-4a5b-8c6d-000000000001",
+  "occurredAt": "2026-07-28T11:02:10",
+  "reason": "Thanh toán đến sau khi đơn hàng đã bị hủy"
+}
+```
+- Sent when a `CONFIRMED` order is cancelled (customer or admin: the order becomes `CANCELLED`,
+  `paymentStatus` stays `PAID` until the reply), or on a late payment (see `payment.completed`).
+- `reason`: human-readable, **in Vietnamese**; payment-service only logs it.
+- payment-service: `PAID` → `REFUNDED`, then publishes `payment.refunded`. An already `REFUNDED`
+  payment just re-publishes `payment.refunded`; a `FAILED` or missing payment has nothing to
+  refund — logged and acked, no reply.
+
+### `payment.refunded` (payment-service → order-service)
+```json
+{
+  "orderId": "3e2f9c2a-1234-4a5b-8c6d-000000000001",
+  "occurredAt": "2026-07-28T04:02:12.345Z",
+  "paymentId": "c4d5e6f7-0000-0000-0000-000000000042"
+}
+```
+- `occurredAt` here is UTC ISO-8601 with a trailing `Z` (`Date.toISOString()`), like every
+  message payment-service publishes (`payment.completed` / `payment.failed` too).
+- order-service sets `paymentStatus` `PAID` → `REFUNDED` (saga log `PAYMENT_REFUNDED`). A
+  duplicate (already `REFUNDED`) or a payment that is not `PAID` is logged and ignored.
+
+### `stock.restock.requested` (order-service → product-service)
+```json
+{
+  "orderId": "3e2f9c2a-1234-4a5b-8c6d-000000000001",
+  "occurredAt": "2026-07-28T11:02:10"
+}
+```
+- No `items`: like `payment.completed`, product-service works from its own reservation rows of
+  the order. In one transaction `COMMITTED` rows → `RESTOCKED` (`quantity` added back to the
+  variant, also for a variant soft-deleted since) and rows still `RESERVED` (the cancel raced
+  ahead of the commit) → `RELEASED`. No such rows → no-op, so duplicates are safe. A later
+  `payment.completed` then finds no `RESERVED` rows and commits nothing. Fire-and-forget: no reply.
+
 ## Delivery guarantees consumers must assume
 
 - **At-least-once, possibly duplicated.** RabbitMQ can redeliver a message (e.g. after a consumer
   crash before ack). Every consumer must be idempotent: check the order's/reservation's *current*
   status before acting, not just react to "a message of this type arrived." A repeat
-  `stock.reserve.requested` for an order that already has a `RESERVED` row is a no-op reply, not a
-  double reservation. For a `RESERVED` reservation, either `payment.completed` commits it
-  (`RESERVED` → `COMMITTED`) or `stock.release.requested` releases it (`RESERVED` → `RELEASED`);
-  only one transition may win. A duplicate `payment.completed`, or a late/duplicate
-  `stock.release.requested` after `COMMITTED`, is a safe no-op.
+  `stock.reserve.requested` for an order that already has a `RESERVED` row re-sends
+  `stock.reserved`, not a double reservation; one whose rows are already `COMMITTED`, `RELEASED`
+  or `RESTOCKED` is logged and ignored (no new reservation). For a `RESERVED` reservation, either
+  `payment.completed` commits it (`RESERVED` → `COMMITTED`) or `stock.release.requested` releases
+  it (`RESERVED` → `RELEASED`); only one transition may win. A duplicate `payment.completed`, or a
+  late/duplicate `stock.release.requested` after `COMMITTED`, is a safe no-op — a `COMMITTED`
+  reservation only comes back through `stock.restock.requested` (`COMMITTED` → `RESTOCKED`).
 - **Possibly out of order relative to a user action.** A customer can cancel an order the instant
   after `stock.reserve.requested` is sent, before the `stock.reserved`/`stock.reserve.rejected`
   reply arrives. A late `stock.reserved` for an order already `CANCELLED` must trigger
@@ -170,8 +222,14 @@ is fanned out to the separate order-service and product-service queues.
   `product-service/src/repositories/product-event-publisher.repository.ts`'s connect-with-retry /
   reconnect style. On order-service's side the retry is the transactional outbox below: a publish
   that fails stays in the outbox and is retried with backoff, it never fails the business call.
+  product-service and payment-service publish their replies as persistent messages on a confirm
+  channel and ack a request only after the broker confirmed the reply; a reply that cannot be
+  published nacks the request with requeue (redelivered — note the quorum `delivery-limit` 10).
+  Both consumers wait 3 s before any nack-with-requeue, so a short outage does not burn the
+  delivery limit in milliseconds.
 - **order-service produces every saga event through a transactional outbox.**
-  `stock.reserve.requested`, `payment.create.requested` and `stock.release.requested` are first
+  `stock.reserve.requested`, `payment.create.requested`, `stock.release.requested`,
+  `payment.refund.requested` and `stock.restock.requested` are first
   inserted into order-service's `outbox_events` table **in the same DB transaction** as the order
   change that produced them, then a background relay (`OutboxRelay`, polls every ~1s, batches of
   50, `FOR UPDATE SKIP LOCKED`) publishes them with publisher confirms. So:
@@ -180,6 +238,9 @@ is fanned out to the separate order-service and product-service queues.
   - a row is marked `SENT` only after the broker acks it; a nack, confirm timeout, unroutable
     (returned) message or connection error retries with backoff 1s, 2s, 4s… capped at 60s, and
     after 20 attempts the row becomes `FAILED` and a WARN `OUTBOX_FAILED` saga log is written;
+  - **except** `payment.refund.requested` and `stock.restock.requested`: these rows are never
+    given up — at 20 attempts they stay `PENDING`, retried every 60s, and one WARN
+    `OUTBOX_FAILED` saga log is written (both consumers are idempotent, so this is safe);
   - **checkout no longer fails when RabbitMQ is down** — it returns 201 with the order `PENDING`,
     and the saga continues once the broker is back (eventual consistency). Events can reach
     consumers ~1s (one relay poll) after the order change, or later during an outage;
@@ -191,7 +252,8 @@ is fanned out to the separate order-service and product-service queues.
     for an order still stuck after its threshold, so duplicates with different `messageId`s are
     possible — consumers must stay idempotent on `orderId` + current status as described above.
     Reconciliation skips orders that still have a `PENDING` outbox row, so a long broker outage
-    does not make it auto-cancel orders the outbox is still going to deliver.
+    does not make it auto-cancel orders the outbox is still going to deliver (pending
+    `payment.refund.requested`/`stock.restock.requested` rows are ignored for this check).
 
 ## Checkout idempotency (order-service HTTP API)
 
@@ -215,12 +277,13 @@ reuses it when the user retries the same content):
 ## Queues (for reference — each service owns/declares its own)
 
 - **product-service** declares one durable queue bound to `stock.reserve.requested`,
-  `stock.release.requested`, and `payment.completed`.
+  `stock.release.requested`, `payment.completed`, and `stock.restock.requested`.
 - **order-service** declares one durable queue bound to `stock.reserved`,
-  `stock.reserve.rejected`, `payment.completed`, and `payment.failed`.
-- **payment-service** declares one durable queue bound to `payment.create.requested`, and
-  publishes `payment.completed`/`payment.failed` back onto the `order-saga-events` exchange (not
-  a queue/exchange of its own) so the order-service and product-service bindings pick them up.
+  `stock.reserve.rejected`, `payment.completed`, `payment.failed`, and `payment.refunded`.
+- **payment-service** declares one durable queue bound to `payment.create.requested` and
+  `payment.refund.requested`, and publishes `payment.completed`/`payment.failed`/`payment.refunded`
+  back onto the `order-saga-events` exchange (not a queue/exchange of its own) so the
+  order-service and product-service bindings pick them up.
 
 Each service is responsible for declaring and binding its own queue — this contract only fixes
 the exchange name/type and the routing keys/payloads flowing through it, not each service's

@@ -22,13 +22,16 @@ public interface OrderSagaLogRepository extends JpaRepository<OrderSagaLog, UUID
             LocalDateTime to
     );
 
-    // FR16 ("list of days that have logs"): occurred_at is stored in VN time (JVM default,
-    // OrderServiceApplication:14) so a plain ::date cast already buckets by the right calendar
-    // day — no separate timezone conversion needed (NFR6).
+    // FR16 ("list of days that have logs"): occurredAt is LocalDateTime.now() in the JVM zone
+    // (Asia/Ho_Chi_Minh, OrderServiceApplication), but Hibernate runs with jdbc.time_zone: UTC,
+    // so the TIMESTAMP column holds the UTC wall time. A plain ::date would bucket by the UTC day
+    // (a 02:00 VN log would land on the previous day); convert back to the VN day so this list
+    // agrees with OrderSagaLogService.logsBetween, whose VN-day bounds go through the same
+    // Hibernate conversion. Derived from the code, not yet verified on a live row.
     @Query(
-            value = "SELECT DISTINCT occurred_at::date "
+            value = "SELECT DISTINCT (occurred_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Ho_Chi_Minh')::date "
                     + "FROM order_saga_logs "
-                    + "ORDER BY occurred_at::date DESC",
+                    + "ORDER BY (occurred_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Ho_Chi_Minh')::date DESC",
             nativeQuery = true
     )
     List<LocalDate> findDistinctLogDates();

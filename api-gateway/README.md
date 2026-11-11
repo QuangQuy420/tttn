@@ -17,16 +17,22 @@ permissions, applies rate-limiting and gives every request an `X-Request-Id`.
 
 | Route | Downstream service | Status |
 |---|---|---|
-| `/api/products/*`, `/api/categories/*`, `/api/brands/*` | `product-service` | **Implemented** — public reads are proxied via `HttpService`; writes require JWT and the matching permission (cached ≤ 60 s) (`product:manage` or `catalog:manage`) |
-| `/api/wishlist/*`, `/api/products/:id/reviews/*`, `/api/admin/reviews/*` | `product-service` | **Implemented** — review list / summary are public; the user's own wishlist / review need JWT; admin review moderation also needs the matching permission |
-| `/api/auth/*` | `user-service` | **Implemented** — public `register`, `login`, `forgot-password`, `reset-password` (strict rate limit) |
-| `/api/users/*`, `/api/roles/*`, `/api/permissions` | `user-service` | **Implemented** — `/api/users/me*` and `change-password` forward `Authorization` (user-service verifies it); admin routes need JWT + the matching permission; role changes clear the permissions cache |
+| `/api/products/*`, `/api/categories/*`, `/api/brands/*` | `product-service` | **Implemented** — public reads are proxied via `HttpService`; the product list and detail (by id / slug) use an optional JWT: `includeAllStatuses` (and `status`, on the list only) is forwarded only when the caller has `product:manage`, stripped otherwise; writes require JWT and the matching permission (cached ≤ 60 s) (`product:manage` or `catalog:manage`); image upload max 5 MB |
+| `/api/wishlist/*`, `/api/products/:id/reviews/*`, `/api/admin/reviews/*` | `product-service` | **Implemented** — review list / summary are public with an optional JWT (`includeAllStatuses` forwarded only for `product:manage`); the user's own wishlist / review need JWT; admin review moderation also needs the matching permission |
+| `/api/auth/*` | `user-service` | **Implemented** — public `register` (201), `login` / `forgot-password` / `reset-password` (200); all four have the strict rate limit |
+| `/api/users/*`, `/api/roles/*`, `/api/permissions` | `user-service` | **Implemented** — `/api/users/me*` (incl. addresses; create-address returns 200) and `change-password` need JWT at the gateway and forward `Authorization`; admin routes need JWT + the matching permission; role changes and a password change clear the permissions cache |
 | `/api/cart/*`, `/api/orders/*`, `/api/admin/orders/*`, `/api/admin/saga-logs/*`, `/api/admin/saga-settings` | `order-service` | **Implemented** — JWT; admin routes need the matching permission |
-| `/api/face-analysis/*` | `face-processing-service` | **Implemented** — JWT; `POST /api/face-analysis/analyze` (multipart, own rate limit), history list / delete |
+| `/api/face-analysis/*` | `face-processing-service` | **Implemented** — JWT; `POST /api/face-analysis/analyze` (multipart, max 10 MB, own rate limit), history list / delete |
 | `/api/events` | RabbitMQ `behavior-events` | **Implemented** — `POST`, optional JWT; VIEW / TRY_ON from the browser, published only for a logged-in user (own rate limit) |
 | `/api/recommendations/*` | `recommendation-service` | **Implemented** — `POST /api/recommendations` is public (forwards `X-User-Id` only with a valid JWT); `GET /api/recommendations/for-you` requires JWT and forwards `X-User-Id` |
 | `/api/admin/ai/*`, `/api/admin/analytics/*` | `face-processing-service`, `recommendation-service` (`/admin/*`) | **Implemented** — read-only, GET only; JWT + `order:manage`; sends `X-Internal-Key`. See [Admin AI & analytics](#admin-ai--analytics) |
 
+> **Edge checks on every route:** id path params must be UUIDs (else **400**, Vietnamese
+> message) and are URL-encoded before they are put into a downstream URL. A product `slug`
+> must match `^[a-z0-9]+(-[a-z0-9]+)*$` (case-insensitive) and the saga-log `:date`
+> `YYYY-MM-DD`, else **400**. Uploads without a `file` part → **400**; over the limit →
+> **413** `PAYLOAD_TOO_LARGE`.
+>
 > Public catalog reads remain unauthenticated. Product writes require `product:manage`; Brand
 > and Category writes require `catalog:manage`. The gateway verifies JWTs at the edge and checks
 > the caller's current permissions before forwarding a write. Permissions are cached in Redis
@@ -76,8 +82,23 @@ Inside Docker all guests (no JWT) share one IP bucket per route — accepted for
 
 ## Permissions cache (Redis)
 - `PermissionsGuard` reads `perm:{userId}` (user id lower-cased) from Redis; on a miss it calls `user-service`
-  (`GET /internal/v1/users/{id}/permissions`) and stores the list for
-  `PERMISSIONS_CACHE_TTL_SECONDS` (60).
+  (`GET /internal/v1/users/{id}/permissions` → `{permissions, status, tokensValidAfter}`) and
+  stores it for `PERMISSIONS_CACHE_TTL_SECONDS` (60). The write is skipped when an
+  invalidation happened during the fetch (generation counters `permgen:{userId}` /
+  `permgen:all`, each kept 1 day after its last bump), so a revoked permission is not written
+  back.
+- **Token revocation** — `JwtGuard` (and `OptionalJwtGuard`) read the same entry and reject the
+  token (401; optional routes treat the caller as a guest) when the user is not `ACTIVE` or the
+  token's `iat` is before `tokensValidAfter` (epoch seconds, set by a password change / reset).
+  `PUT /api/users/change-password` clears the caller's entry, so the old token stops working at
+  once; other changes are seen within 60 s.
+- **When user-service cannot answer** — the internal call has its own 1.5 s timeout. On a
+  cache miss, a 5xx / timeout / no response (WARN log) or a 401 / 403 from user-service (wrong
+  `INTERNAL_API_KEY`, ERROR log) makes the JWT check fail open: the token is checked by
+  signature and expiry only. A 404 (user gone) → 401. `PermissionsGuard` fails closed: the
+  request gets the upstream error (503 / 504, or the 403 of a wrong key). After a 5xx or no
+  response the gateway skips user-service for 10 s (per gateway instance): a cache miss then
+  fails at once — the JWT check fails open, permission-guarded routes fail closed (503).
 - After a **successful** role change through the gateway the cache is cleared:
   `POST /api/users/:id/roles` and `DELETE /api/users/:id/roles/:roleId` → that user's key;
   `PUT /api/roles/:id` and `DELETE /api/roles/:id` → every `perm:*` key. A role change made

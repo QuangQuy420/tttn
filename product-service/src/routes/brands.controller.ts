@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -28,7 +29,7 @@ export class BrandsController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string): Promise<BrandResponseDto> {
+  findOne(@Param('id', ParseUUIDPipe) id: string): Promise<BrandResponseDto> {
     return this.brandsService.findOne(id);
   }
 
@@ -39,7 +40,7 @@ export class BrandsController {
 
   @Patch(':id')
   update(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateBrandDto,
   ): Promise<BrandResponseDto> {
     return this.brandsService.update(id, dto);
@@ -47,7 +48,7 @@ export class BrandsController {
 
   @Delete(':id')
   @HttpCode(204)
-  async remove(@Param('id') id: string): Promise<void> {
+  async remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     await this.brandsService.remove(id);
   }
 }

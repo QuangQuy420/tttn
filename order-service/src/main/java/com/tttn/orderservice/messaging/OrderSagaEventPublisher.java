@@ -5,7 +5,9 @@ import com.tttn.orderservice.entity.OutboxEvent;
 import com.tttn.orderservice.enums.SagaChaosMode;
 import com.tttn.orderservice.messaging.event.OrderSagaItem;
 import com.tttn.orderservice.messaging.event.PaymentCreateRequestedEvent;
+import com.tttn.orderservice.messaging.event.PaymentRefundRequestedEvent;
 import com.tttn.orderservice.messaging.event.StockItemsEvent;
+import com.tttn.orderservice.messaging.event.StockRestockRequestedEvent;
 import com.tttn.orderservice.service.OutboxService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -123,6 +125,38 @@ public class OrderSagaEventPublisher {
         );
 
         return true;
+    }
+
+    // Refund flow: OutboxRelay never gives these rows up (see OutboxRelay#markFailedAttempt);
+    // payment-service and product-service handle them idempotently.
+    public void publishPaymentRefundRequested(
+            UUID orderId,
+            String reason
+    ) {
+        PaymentRefundRequestedEvent event = new PaymentRefundRequestedEvent(
+                orderId,
+                LocalDateTime.now(),
+                reason
+        );
+
+        enqueue(
+                orderId,
+                OrderSagaRoutingKeys.PAYMENT_REFUND_REQUESTED,
+                event
+        );
+    }
+
+    public void publishStockRestockRequested(UUID orderId) {
+        StockRestockRequestedEvent event = new StockRestockRequestedEvent(
+                orderId,
+                LocalDateTime.now()
+        );
+
+        enqueue(
+                orderId,
+                OrderSagaRoutingKeys.STOCK_RESTOCK_REQUESTED,
+                event
+        );
     }
 
     private void enqueue(

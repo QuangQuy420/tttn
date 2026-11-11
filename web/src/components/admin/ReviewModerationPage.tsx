@@ -30,6 +30,8 @@ export function ReviewModerationPage() {
   const [error, setError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // Bumped to reload the current page after a status change (AC68).
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,7 +68,7 @@ export function ReviewModerationPage() {
     return () => {
       cancelled = true;
     };
-  }, [status, page]);
+  }, [status, page, reloadKey]);
 
   function handleStatusChange(value: string) {
     setStatus(value ? (value as ReviewStatus) : undefined);
@@ -86,11 +88,12 @@ export function ReviewModerationPage() {
     try {
       const updated = await setReviewStatus(token, review.id, nextStatus);
       setReviews((current) =>
-        current
-          .map((item) => (item.id === review.id ? { ...item, status: updated.status } : item))
-          // Under a status filter, a row that no longer matches drops out of the list.
-          .filter((item) => !status || item.status === status),
+        current.map((item) => (item.id === review.id ? { ...item, status: updated.status } : item)),
       );
+      // Reload from the server so, under a status filter, the changed row drops out and the
+      // page refills from the next rows; the last row of a later page goes back one page (AC68).
+      if (status && reviews.length === 1 && page > 1) setPage(page - 1);
+      else setReloadKey((key) => key + 1);
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : "Không thể cập nhật trạng thái.");
     } finally {
