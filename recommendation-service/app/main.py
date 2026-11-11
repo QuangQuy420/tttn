@@ -20,6 +20,7 @@ from app.repositories.behavior_event_consumer import BehaviorEventConsumer
 from app.repositories.catalog_cache import get_catalog_cache
 from app.repositories.interaction_repository import interaction_repository_scope
 from app.repositories.product_event_consumer import ProductEventConsumer
+from app.routers.admin import router as admin_router
 from app.routers.internal import router as internal_router
 from app.routers.recommend import router as recommend_router
 from app.schemas.common import error_body
@@ -126,6 +127,7 @@ app.add_middleware(RequestIdMiddleware)
 
 app.include_router(recommend_router)
 app.include_router(internal_router)
+app.include_router(admin_router)
 
 
 @app.exception_handler(StarletteHTTPException)

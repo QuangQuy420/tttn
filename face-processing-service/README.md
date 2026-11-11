@@ -10,6 +10,10 @@ uploaded photo and classifies the **face shape** with measurements.
 - Validates the image (format, exactly one face) and handles "no face" errors.
 - Stores the uploaded image in **S3 (MinIO locally)** — private bucket, presigned URL,
   with a lifecycle/delete policy.
+- Admin read-only routes (header `X-Internal-Key`, via api-gateway): `GET /admin/model-info`
+  (served classifier + model card metrics) and `GET /admin/analytics/face-shapes?from=&to=`
+  (analyses per face shape, `Asia/Ho_Chi_Minh` days). Contract:
+  [`infra/contracts/face-processing-service.md`](../infra/contracts/face-processing-service.md).
 
 ## Structure (router → service → repository → db, with DI / SOLID)
 ```

@@ -94,3 +94,48 @@ One specific analysis of one user. Consumer: `recommendation-service`
 **404** `NOT_FOUND` — no analysis with this id, **or** it belongs to another user (the two cases
 are not told apart, so a caller cannot probe other users' analyses).
 `recommendation-service` treats a 404 as "no analysis" (β = 0).
+
+## Admin endpoints (`/admin/*`)
+
+Read-only admin views (`.planning/2026-09-29-15-admin-ai-analytics.md`, plan 15). Gateway:
+`/api/admin/ai/face-shape-model`, `/api/admin/analytics/face-shapes` (JWT + `order:manage`,
+see `api-gateway/README.md`). Header `X-Internal-Key` on every route — **403** same as
+`latest-analysis`.
+
+### `GET /admin/model-info`
+
+The served classifier (`FACE_SHAPE_CLASSIFIER`), from the `model_card.json` loaded at boot:
+
+```jsonc
+{ "method": "ml",                                  // "ml" | "rule"
+  "modelVersion": "v2-full-real-20261005-svm",     // "rule-v0" when method = rule
+  "algorithm": "SVM (RBF)",
+  "classes": ["DIAMOND", "HEART", "OBLONG", "OVAL", "ROUND", "SQUARE"],
+  "metrics": { "accuracy": 0.5407,                 // card metrics.test_accuracy (full float, rounded here)
+               "macroF1": 0.4851,                  // card metrics.test_macro_f1
+               "perClass": { "OVAL": { "precision": 0.3235, "recall": 0.3259, "f1": 0.3247, "support": 135 } /* … all classes */ } },
+  "createdAt": "2026-10-05T04:01:08+00:00" }       // card created_at
+```
+
+`method = "rule"` → every field except `method` / `modelVersion` is `null`. A key missing from
+the card → `null`.
+
+### `GET /admin/analytics/face-shapes?from=&to=`
+
+Number of analyses (`face_analyses.created_at`) per face shape.
+
+| | |
+|---|---|
+| Query `from`, `to` | `YYYY-MM-DD`, both inclusive, calendar days in **`Asia/Ho_Chi_Minh`**. Default `to` = today there, `from` = `to` − 29 days. Malformed → 400 `VALIDATION_FAILED` |
+
+```jsonc
+{ "from": "2026-10-13", "to": "2026-11-11", "total": 52,
+  "items": [ { "faceShape": "OVAL", "count": 20 } /* … */ ] }
+```
+
+- Always 6 `items`, in `FaceShape` enum order (`ROUND`, `SQUARE`, `OVAL`, `HEART`, `DIAMOND`,
+  `OBLONG`), zero-filled; `total` = sum of the counts.
+- No `source` filter.
+- **400** `BAD_REQUEST` — `from > to` → `"Ngày bắt đầu phải trước hoặc bằng ngày kết thúc"`;
+  range longer than 90 days → `"Khoảng thời gian tối đa là 90 ngày"`; an extreme date whose
+  window cannot be computed (e.g. `to=9999-12-31`, `from=0001-01-01`) → `"Khoảng thời gian không hợp lệ"`.

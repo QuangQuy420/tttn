@@ -79,6 +79,15 @@ def test_ml_classifier_still_loads_previous_model_version_for_rollback() -> None
     assert sum(result.probabilities.values()) == pytest.approx(1.0, abs=1e-3)
 
 
+def test_classifiers_keep_model_card_for_admin_model_info() -> None:
+    ml = load_classifier(_settings(FACE_SHAPE_CLASSIFIER="ml"))
+    rule = load_classifier(_settings(FACE_SHAPE_CLASSIFIER="rule"))
+
+    assert ml.model_card["version"] == MODEL_VERSION
+    assert "test_accuracy" in ml.model_card["metrics"]
+    assert rule.model_card is None
+
+
 def test_ml_classifier_with_missing_model_version_fails_to_load() -> None:
     with pytest.raises(ModelLoadError):
         load_classifier(_settings(FACE_SHAPE_CLASSIFIER="ml", FACE_SHAPE_MODEL_VERSION="no-such-model"))

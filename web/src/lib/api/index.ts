@@ -99,5 +99,14 @@ export {
   getSagaLogsForDay,
 } from "./admin-saga-logs";
 
+export {
+  getDailyEventCounts,
+  getFaceShapeDistribution,
+  getFaceShapeModelInfo,
+  getFunnel,
+  getPreferenceModelInfo,
+  getTopProducts,
+} from "./admin-analytics";
+
 export { getSagaSettings, updateSagaSettings } from "./admin-settings";
 export type { SagaSettings, UpdateSagaSettingsRequest } from "./admin-settings";

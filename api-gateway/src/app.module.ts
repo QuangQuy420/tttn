@@ -23,6 +23,7 @@ import { RolesModule } from './routes/roles.module';
 import { RecommendationsModule } from './routes/recommendations.module';
 import { EngagementModule } from './routes/engagement.module';
 import { EventsModule } from './routes/events.module';
+import { AdminAnalyticsModule } from './routes/admin-analytics.module';
 
 @Module({
   imports: [
@@ -68,6 +69,7 @@ import { EventsModule } from './routes/events.module';
             RecommendationsModule,
             EngagementModule,
             EventsModule,
+            AdminAnalyticsModule,
   ],
   controllers: [HealthController],
   providers: [

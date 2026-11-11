@@ -16,6 +16,8 @@ const NAV_ITEMS = [
   { label: "Khách hàng", href: "/admin/users" },
   { label: "Vai trò", href: "/admin/roles" },
   { label: "Cài đặt", href: "/admin/settings" },
+  { label: "Model AI", href: "/admin/ai-models" },
+  { label: "Hành vi người dùng", href: "/admin/analytics" },
 ];
 
 const CATALOG_NAV_ITEMS = [
