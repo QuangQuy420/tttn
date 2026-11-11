@@ -10,6 +10,8 @@ events and the face analysis, and passes the effective weights (`effective_weigh
 - Cold start (`profile.has_history == 0`) or legacy mode (no model) → preference =
   `pop_norm`, the rank-normalized decayed popularity over the full catalog.
 - FaceFit is added after inference, never a model input (roadmap C5).
+- With a model, the preferences are rescaled over the candidate list by
+  `PREFERENCE_NORM` (`app.ml.hybrid.normalize_preference`) before FinalScore.
 """
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
@@ -21,6 +23,7 @@ import numpy as np
 from app.core.model_registry import PreferenceModel
 from app.ml import features as F
 from app.ml.face_fit import face_fit
+from app.ml.hybrid import final_score, normalize_preference, rank_normalize
 from app.ml.preference import predict_preference
 from app.schemas.recommend import FaceShape
 
@@ -83,20 +86,7 @@ def popularity_scores(
     values = np.array([popularity[pid] for pid in ids], dtype=np.float64)
     if n == 0 or not np.any(values > 0):
         return popularity, {pid: 0.0 for pid in ids}
-    if n == 1:
-        return popularity, {ids[0]: 1.0}
-
-    order = np.argsort(values, kind="stable")
-    sorted_values = values[order]
-    ranks = np.empty(n, dtype=np.float64)
-    start = 0
-    while start < n:
-        end = start
-        while end + 1 < n and sorted_values[end + 1] == sorted_values[start]:
-            end += 1
-        ranks[order[start : end + 1]] = (start + end) / 2.0
-        start = end + 1
-    norm = ranks / (n - 1)
+    norm = rank_normalize(values)
     return popularity, {pid: float(norm[i]) for i, pid in enumerate(ids)}
 
 
@@ -133,9 +123,14 @@ def rank(
     face: FaceInput | None,
     alpha: float,
     beta: float,
+    preference_norm: str = "none",
 ) -> list[ScoredProduct]:
     """Score `candidate_ids` (all keys of `catalog`) and sort by `final` desc, ties by
-    `pop_norm` desc, then by candidate order. `alpha`/`beta` are the effective weights."""
+    `pop_norm` desc, then by candidate order. `alpha`/`beta` are the effective weights.
+    `preference_norm` (`app.ml.hybrid.PREFERENCE_NORMS`) rescales the model preferences
+    over the candidates; `ScoredProduct.preference` holds the rescaled value, so
+    `final = alpha * preference + beta * face_fit` always holds. Cold start / legacy use
+    `pop_norm` as is (already rank-normalized)."""
     if not candidate_ids:
         return []
 
@@ -159,7 +154,9 @@ def rank(
             )[0]
             for product, cross in zip(products, crosses)
         ]
-        preferences = predict_preference(booster, card["calibration"], np.stack(rows)).tolist()
+        preferences = normalize_preference(
+            predict_preference(booster, card["calibration"], np.stack(rows)), preference_norm
+        ).tolist()
     else:
         preferences = [pop_norm[pid] for pid in candidate_ids]
 
@@ -172,7 +169,7 @@ def rank(
                 product_id=pid,
                 preference=float(preference),
                 face_fit=fit,
-                final=alpha * float(preference) + beta * fit,
+                final=final_score(float(preference), fit, alpha, beta),
                 pop_norm=pop_norm[pid],
                 reasons=_reasons(face, fit, cross, profile, popularity[pid], pop_norm[pid]),
             )

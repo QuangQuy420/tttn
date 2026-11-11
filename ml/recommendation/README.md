@@ -98,6 +98,43 @@ required by `export`), `SOURCE` (`simulated|real|mixed`, written to the model ca
 - **Reproducible:** the same `TRAIN_SEED` gives the same `reports/preference_results.csv` (within
   0.001; the optional ALS row excluded).
 
+## Hybrid experiment (plan 12, PreferenceScore + FaceFit)
+
+Plan `.planning/2026-09-29-12-facefit-hybrid-experiment.md`. Does recommendation + FaceFit beat
+recommendation alone, for which users, and which `alpha` / `beta` / `PREFERENCE_NORM` should the
+service use? Needs the simulated dataset (`data/sim/`), the exported model
+`recommendation-service/models/preference/v1-sim-20261110-xgbrank/` and the AI-1 test
+probabilities `ml/face-shape/reports/runs/v2-full-real-20261005/test_probabilities_svm.csv`
+(`make test-probabilities` in `ml/face-shape`). Nothing is trained.
+
+```bash
+make experiment-hybrid    # -> reports/hybrid/{results_val.csv,results_test.csv,results.json,SUMMARY.md,figures/*.png}
+```
+
+| make target | module | output |
+|---|---|---|
+| `experiment-hybrid` | `recsys.experiment_hybrid` (+ `recsys.face_noise`) | `reports/hybrid/` (committed; `SUMMARY.md` is generated, never hand-edited) |
+
+Make variables: `DATASET_DIR`, `SIM_DIR` (personas), `PREF_MODEL_DIR`, `FACE_PROBS`, `HYBRID_DIR`
+(default `reports/hybrid`), `TRAIN_SEED` (noise draws + bootstrap, default 42),
+`SERVICE_NORM` / `SERVICE_ALPHA` (`--service-norm` / `--service-alpha`, default `rank` / 0.6: the
+service default chosen by product decision, reported in the "Mặc định của service" section and the
+`service_default` block of `results.json` next to the val-selected config; must be on the alpha grid).
+
+- **Scores:** `FinalScore = alpha * pref + (1 - alpha) * FaceFit` with the service code
+  (`app.ml.hybrid.final_score`, `app.ml.face_fit.face_fit`). `pref` raw (`norm = none`) or
+  rank-normalized per candidate list (`norm = rank`). alpha 0.0..1.0 step 0.1, plus 0.90..1.00
+  step 0.01, 0.995, 0.999 for `none`; `facefit_filter` (FaceFit >= 0.5 first) and `popularity` rows.
+- **Face scenarios:** `true` (persona shape), `noisy_soft` / `noisy_hard` (probabilities / argmax of
+  a real AI-1 test image with the same true shape, 20 seeded draws per user, shared by every
+  configuration and split).
+- **Metrics / segments:** plan-10 P/R/HR/NDCG @5/@10 with 95% bootstrap CI, mean FaceFit@10 (true
+  shape), frame-shape diversity@10, coverage@10; all users, gamma low/mid/high, true face shape.
+- **Selection:** val only (sampled groups, `noisy_soft`, all users, NDCG@10; ties -> larger alpha,
+  then `none`); test is reported once with the full alpha curves, plus a paired bootstrap of the
+  per-user test NDCG@10 vs `pref_only` per scenario.
+- **Reproducible:** the same `TRAIN_SEED` gives the same `results_*.csv`.
+
 ## Catalog
 
 `--catalog-source auto` (default) reads `GET http://localhost:8080/api/products` through the gateway

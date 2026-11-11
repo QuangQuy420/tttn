@@ -125,7 +125,17 @@ class RecommendationService:
         )
         # Features + predict for ~100 candidates measured ~9 ms → off the event loop.
         ranked = await run_in_threadpool(
-            rank, catalog, candidate_ids, events, stats, datetime.now(UTC), self._model, face, alpha, beta
+            rank,
+            catalog,
+            candidate_ids,
+            events,
+            stats,
+            datetime.now(UTC),
+            self._model,
+            face,
+            alpha,
+            beta,
+            self._settings.PREFERENCE_NORM,
         )
 
         start = (request.page - 1) * request.limit
@@ -165,7 +175,17 @@ class RecommendationService:
         candidate_ids = [pid for pid in catalog if pid not in purchased]
         # Features + predict for ~100 candidates measured ~9 ms → off the event loop.
         ranked = await run_in_threadpool(
-            rank, catalog, candidate_ids, events, stats, datetime.now(UTC), self._model, face, alpha, beta
+            rank,
+            catalog,
+            candidate_ids,
+            events,
+            stats,
+            datetime.now(UTC),
+            self._model,
+            face,
+            alpha,
+            beta,
+            self._settings.PREFERENCE_NORM,
         )
         top = diversify(
             ranked,

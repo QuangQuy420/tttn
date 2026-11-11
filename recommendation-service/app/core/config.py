@@ -6,6 +6,7 @@ module-level singleton, so tests can override it. Mirrors
 `face-processing-service/app/core/config.py`'s pattern.
 """
 from functools import lru_cache
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -39,10 +40,16 @@ class Settings(BaseSettings):
     # `infra/.env` `INTERNAL_API_KEY`.
     INTERNAL_API_KEY: str
 
-    # Hybrid ranking: `final = RANK_ALPHA * preference + RANK_BETA * faceFit`. The response
-    # reports the effective weights (β=0 without a face analysis, α=0 in legacy mode).
+    # Hybrid ranking: `final = RANK_ALPHA * preference + RANK_BETA * faceFit`, where
+    # `preference` is the model score on the `PREFERENCE_NORM` scale (see app/ml/hybrid.py).
+    # The response reports the effective weights (β=0 without a face analysis, α=0 in
+    # legacy mode).
     RANK_ALPHA: float = 0.6
     RANK_BETA: float = 0.4
+    # `none` = calibrated preference as is; `rank` = rank over the candidate list in [0, 1].
+    # Defaults `rank`, 0.6 / 0.4 are a product choice (keep face shape relevant), not the
+    # val-selected config (`none`, 0.995 / 0.005) — see ml/recommendation/reports/hybrid/SUMMARY.md.
+    PREFERENCE_NORM: Literal["none", "rank"] = "rank"
     # Folder under `models/preference/` to load at startup (see app/core/model_registry.py).
     # Empty = legacy mode: no model is loaded, preference = popularity, α=0.
     PREFERENCE_MODEL_VERSION: str = ""

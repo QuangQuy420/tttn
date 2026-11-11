@@ -12,6 +12,8 @@
 # full-real-synth}/, trains runs v3 (curated real), v4 (+ synthetic) and v5 (all old-train real + synthetic) into
 # data/runs/<run>/models/ + reports/runs/<run>/ and writes reports/comparisons/20261019-curated-vs-current/compare.md;
 # data/datasets/full-real/ and the v1/v2 reports stay untouched.
+# Plan 2026-09-29-12 (AI 1): `make test-probabilities RUN_NAME=<run> [ALGO=svm]` writes reports/runs/<RUN_NAME>/
+# test_probabilities_<algo>.csv with the frozen model (read-only second test pass, no metric changes).
 
 # Uses the local venv when it exists, so `make` works without activating it.
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python)
@@ -30,6 +32,8 @@ SAMPLE_RUN := data/runs/sample
 # Empty = use config.yaml (training.export_dir / training.cv_folds).
 EXPORT_DIR ?=
 CV_FOLDS ?=
+# Calibrated model of `make test-probabilities` (svm, rf or xgb).
+ALGO ?= svm
 
 # Same model as face-processing-service/Dockerfile (train/serve parity) - keep both in sync.
 MODEL_URL := https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task
@@ -50,7 +54,7 @@ NEED_RUN_NAME = $(if $(RUN_NAME),,$(error Set RUN_NAME=v<N>-<data>-<YYYYMMDD> - 
 NEED_MODELS = $(if $(MODELS),,$(error Set RUN_NAME=v<N>-<data>-<YYYYMMDD> (models go to data/runs/<RUN_NAME>/models/) or MODELS=<dir>))
 
 .PHONY: model download manifest review dedup identity landmarks features split card all sample \
-	train calibrate evaluate ablation export curated curated-synth curated-data curated-train curated-compare
+	train calibrate evaluate test-probabilities ablation export curated curated-synth curated-data curated-train curated-compare
 
 model:
 	@mkdir -p .cache
@@ -101,9 +105,14 @@ train:
 calibrate:
 	$(NEED_REPORTS)$(NEED_MODELS)$(RUN).training.calibrate $(TRAIN_ARGS) --models-dir $(MODELS) $(CV_ARG)
 
-# The only step that reads the test split: one pass per final method.
+# The only step that scores the test split: one pass per final method. `test-probabilities` is a read-only
+# second pass with the frozen model: it writes only test_probabilities_<algo>.csv and changes no metric
+# (it fails unless its argmax confusion equals the saved metrics_<algo>.json).
 evaluate:
 	$(NEED_REPORTS)$(NEED_MODELS)$(RUN).evaluation.evaluate $(TRAIN_ARGS) --models-dir $(MODELS)
+
+test-probabilities:
+	$(NEED_REPORTS)$(NEED_MODELS)$(RUN).evaluation.test_probabilities $(TRAIN_ARGS) --models-dir $(MODELS) --algo $(ALGO)
 
 ablation:
 	$(NEED_REPORTS)$(RUN).evaluation.ablation $(TRAIN_ARGS) $(CV_ARG)

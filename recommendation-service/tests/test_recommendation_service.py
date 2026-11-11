@@ -42,6 +42,9 @@ P_ROUND = "00000000-0000-0000-0000-00000000000d"
 _SETTINGS = Settings(
     RANK_ALPHA=0.6,
     RANK_BETA=0.4,
+    # Pinned to the legacy scale so the asserts below keep testing the calibrated
+    # preferences (plan 12); `rank` mode has its own test.
+    PREFERENCE_NORM="none",
     PREFERENCE_MODEL_VERSION="",
     CATALOG_TTL_SECONDS=300,
     MAX_PER_FRAME_SHAPE=3,
@@ -59,6 +62,13 @@ class _ZeroBooster:
 
     def inplace_predict(self, X: np.ndarray, predict_type: str = "value") -> np.ndarray:
         return np.zeros(X.shape[0])
+
+
+class _RowIndexBooster:
+    """`xgboost.Booster`-like: margin = row index (candidate order) → distinct preferences."""
+
+    def inplace_predict(self, X: np.ndarray, predict_type: str = "value") -> np.ndarray:
+        return np.arange(X.shape[0], dtype=np.float64)
 
 
 def _product(pid: str, frame_shape: str, face_shapes: list[FaceShape] | None = None) -> CatalogProductDto:
@@ -155,12 +165,13 @@ def _service(
     face_client: FakeFaceAnalysisClient | None = None,
     model=None,
     impressions: ImpressionRecorder | None = None,
+    settings: Settings = _SETTINGS,
 ) -> RecommendationService:
     return RecommendationService(
         FakeProductClient(_CATALOG),
         interactions or FakeInteractionRepository(),
         face_client or FakeFaceAnalysisClient(),
-        _SETTINGS,
+        settings,
         model,
         TtlCache(),
         (impressions or ImpressionRecorder()).scope,
@@ -270,3 +281,35 @@ def test_for_you_raises_behavior_store_unavailable_when_the_db_fails() -> None:
 
     with pytest.raises(BehaviorStoreUnavailableError):
         asyncio.run(service.for_you(USER, limit=10, face_analysis_id=None))
+
+
+def test_settings_default_to_rank_norm_with_alpha_0_6_beta_0_4_AC13(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in ("PREFERENCE_NORM", "RANK_ALPHA", "RANK_BETA"):
+        monkeypatch.delenv(name, raising=False)
+
+    settings = Settings(_env_file=None)
+
+    assert (settings.PREFERENCE_NORM, settings.RANK_ALPHA, settings.RANK_BETA) == ("rank", 0.6, 0.4)
+
+
+def test_for_you_passes_the_rank_preference_norm_to_the_ranking_AC12() -> None:
+    probs = {FaceShape.ROUND: 0.7, FaceShape.OVAL: 0.3}
+    face_client = FakeFaceAnalysisClient(
+        FaceAnalysisSummary(analysisId=str(ANALYSIS), faceShape=FaceShape.ROUND, probabilities=probs)
+    )
+    service = _service(
+        interactions=FakeInteractionRepository(_purchase_and_view_rows()),
+        face_client=face_client,
+        model=(_RowIndexBooster(), _CARD),
+        settings=_SETTINGS.model_copy(update={"PREFERENCE_NORM": "rank"}),
+    )
+
+    response = asyncio.run(service.for_you(USER, limit=10, face_analysis_id=ANALYSIS))
+
+    # Candidates (catalog order minus the purchase) get margins 0, 1, 2 → ranks 0, 0.5, 1.
+    items = {item.id: item for item in response.data.items}
+    assert {pid: item.preferenceScore for pid, item in items.items()} == pytest.approx(
+        {P_SQUARE: 0.0, P_CAT_EYE: 0.5, P_RECT: 1.0}
+    )
+    for item in items.values():
+        assert item.finalScore == pytest.approx(0.6 * item.preferenceScore + 0.4 * item.faceFitScore)

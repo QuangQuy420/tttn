@@ -73,8 +73,10 @@ Notes:
 Protocol: identity-aware split from `processed/splits.csv` (no person is in two splits). Tuning and
 ablation use only train+val with `StratifiedGroupKFold` by `person_id` (`training.cv_folds`, seed
 `training.seed`), scoring macro-F1. The final models are refit on train and calibrated (sigmoid) on
-val. The test split is read only by `make evaluate`, once per final method. The best model is the one
-with the highest CV macro-F1, never chosen by test numbers.
+val. The test split is scored only by `make evaluate`, once per final method. The one exception is
+`make test-probabilities` (plan 2026-09-29-12): a read-only second pass with the frozen model that saves the
+probability vectors and changes no metric (it fails unless its argmax confusion equals the saved
+`metrics_<algo>.json`). The best model is the one with the highest CV macro-F1, never chosen by test numbers.
 
 Calibration fix (plan 2026-10-05, `config.yaml` `training`):
 - `calibration_weight: balanced` fits the sigmoid on val with balanced sample weights (n / (k * n_c)
@@ -95,6 +97,7 @@ Calibration fix (plan 2026-10-05, `config.yaml` `training`):
 | `calibration.json` | `make train` / `make calibrate` | `sample_weight` of the calibration; Brier score (mean one-vs-rest) on val before/after sigmoid calibration (SVM has no "before": `probability=False`); per algorithm `cv_macro_f1_calibrated` (+ `_std`) = grouped CV macro-F1 of fit + calibrate on train+val, and `cv_diamond_predicted` = DIAMOND predictions over the held-out folds |
 | `calibration_<algo>.png` | `make train` (calibrate) | reliability diagram (top-label confidence vs accuracy) on val |
 | `metrics_<method>.json` | `make evaluate` | test accuracy, macro/weighted F1, per-class precision/recall/F1/support, confusion matrix, CV macro-F1 and test Brier (trained models) |
+| `test_probabilities_<algo>.csv` | `make test-probabilities` (`ALGO=svm` default) | calibrated test probabilities of the frozen model: one row per test image, columns `true_label, p_<CLASS>...` (`config.yaml` `classes` order, no image/person id); written only for `v2-full-real-20261005` (SVM, the deployed model) as input of the ml/recommendation hybrid experiment |
 | `classification_report_<method>.txt` | `make evaluate` | sklearn `classification_report` on test |
 | `confusion_<method>.png` | `make evaluate` | test confusion matrix: counts + row-normalized (recall), labels in `config.yaml` `classes` order |
 | `summary.md` | `make evaluate` | cross-method table (E1 main table, uncalibrated + calibrated CV macro-F1), per-class F1, best model, DIAMOND small-sample note, v1 -> v2 table (only with `--v1-dir`, i.e. the v2 run), Rule v1 prototypes |
