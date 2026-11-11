@@ -3,7 +3,8 @@ FROM python:3.11-slim
 
 # curl: lets Compose's healthcheck curl GET /health (python:3.11-slim ships neither curl nor
 # wget by default — same as face-processing-service's Dockerfile).
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
+# libgomp1: OpenMP runtime the xgboost wheel needs to load the preference model.
+RUN apt-get update && apt-get install -y --no-install-recommends curl libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

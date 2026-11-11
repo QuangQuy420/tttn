@@ -20,7 +20,7 @@ applies rate-limiting.
 | `/api/auth/*` | `user-service` | Reserved — not implemented, service doesn't exist yet |
 | `/api/orders/*` | `order-service` | Reserved — not implemented, service doesn't exist yet |
 | `/api/face/*` | `face-processing-service` | Reserved — not implemented, no route wired yet |
-| `/api/recommendations/*` | `recommendation-service` | Reserved — not implemented, no route wired yet |
+| `/api/recommendations/*` | `recommendation-service` | **Implemented** — `POST /api/recommendations` is public (forwards `X-User-Id` only with a valid JWT); `GET /api/recommendations/for-you` requires JWT and forwards `X-User-Id` |
 
 > Public catalog reads remain unauthenticated. Product writes require `product:manage`; Brand
 > and Category writes require `catalog:manage`. The gateway verifies JWTs at the edge and checks

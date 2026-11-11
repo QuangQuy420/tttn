@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ApiError, getRecommendations } from "@/lib/api";
+import { getAccessToken } from "@/lib/auth/session";
 import type { PageMeta } from "@/types/api";
 import type { FaceShapeTag } from "@/types/product";
 import type { RecommendedProduct } from "@/types/recommendation";
@@ -41,7 +42,12 @@ export function useRecommendations(): UseRecommendationsResult {
     setItems([]);
     setMeta(null);
     try {
-      const response = await getRecommendations(faceShape, { page });
+      // Optional token: logged-in users get a personalised ranking, logged-out still works.
+      const response = await getRecommendations(
+        faceShape,
+        { page },
+        getAccessToken() ?? undefined,
+      );
       if (requestId !== latestRequestId.current) return;
       setItems(response.data);
       setMeta(response.meta);

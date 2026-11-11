@@ -215,6 +215,8 @@ services:
         condition: service_healthy
       product-service:
         condition: service_started
+      face-processing-service:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 10s

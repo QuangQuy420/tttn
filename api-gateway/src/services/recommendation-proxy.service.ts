@@ -15,9 +15,8 @@ import { AppConfig } from '../config/configuration';
  * Holds no business logic of its own — it's a thin, typed HTTP client (per
  * README: gateway owns no data, only proxies).
  *
- * Stateless proxy: no auth guard here, matching `GET /products`'
- * unauthenticated precedent (Q2) — faceShape in, ranked products out, no
- * per-user data involved.
+ * The caller's identity (when known) is forwarded as `X-User-Id`:
+ * required for `for-you`, optional for `recommend` (guests stay anonymous).
  */
 @Injectable()
 export class RecommendationProxyService {
@@ -31,12 +30,38 @@ export class RecommendationProxyService {
     this.baseUrl = this.configService.get<AppConfig>('app')!.recommendationServiceUrl;
   }
 
-  async recommend(body: Record<string, unknown>): Promise<unknown> {
+  async recommend(
+    body: Record<string, unknown>,
+    userId?: string,
+  ): Promise<unknown> {
     const path = '/recommend';
 
     try {
       const response = await firstValueFrom(
-        this.httpService.post(`${this.baseUrl}${path}`, body),
+        this.httpService.post(
+          `${this.baseUrl}${path}`,
+          body,
+          userId ? { headers: { 'X-User-Id': userId } } : undefined,
+        ),
+      );
+      return response.data;
+    } catch (error) {
+      throw this.toGatewayError(error as AxiosError, path);
+    }
+  }
+
+  async forYou(
+    userId: string,
+    query: Record<string, unknown>,
+  ): Promise<unknown> {
+    const path = '/recommendations/for-you';
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(`${this.baseUrl}${path}`, {
+          headers: { 'X-User-Id': userId },
+          params: query,
+        }),
       );
       return response.data;
     } catch (error) {

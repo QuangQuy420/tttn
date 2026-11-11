@@ -184,3 +184,34 @@ def test_latest_analysis_for_user_without_analyses_is_not_found(client: TestClie
 
     assert response.status_code == 404
     assert response.json()["message"] == "Người dùng chưa có kết quả phân tích khuôn mặt."
+
+
+def test_user_analysis_returns_owned_analysis_with_probabilities_ac7(
+    client: TestClient, rows: list[SimpleNamespace]
+) -> None:
+    response = client.get(
+        f"/internal/analyses/{rows[1].id}", params={"userId": str(USER_ID)}, headers=_INTERNAL_KEY
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["analysisId"] == str(rows[1].id)
+    assert data["userId"] == str(USER_ID)
+    assert data["faceShape"] == "OVAL"
+    assert data["modelVersion"] == "v2-full-real-20261005-svm"
+    assert data["probabilities"]["OVAL"] == 0.7
+
+
+def test_user_analysis_owned_by_another_user_is_not_found(
+    client: TestClient, rows: list[SimpleNamespace]
+) -> None:
+    response = client.get(
+        f"/internal/analyses/{rows[0].id}",
+        params={"userId": str(uuid.uuid4())},
+        headers=_INTERNAL_KEY,
+    )
+
+    assert response.status_code == 404
+    body = response.json()
+    assert body["error"]["code"] == "NOT_FOUND"
+    assert body["message"] == "Không tìm thấy kết quả phân tích khuôn mặt."

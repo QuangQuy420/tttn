@@ -14,6 +14,7 @@ from fastapi import Depends
 from starlette.concurrency import run_in_threadpool
 
 from app.core.config import Settings, get_settings
+from app.db.models import FaceAnalysis
 
 from app.repositories.face_analysis_repository import (
     IFaceAnalysisRepository,
@@ -132,6 +133,20 @@ class FaceAnalysisService:
         row = await self._face_analysis_repo.get_latest_by_user(user_id)
         if row is None:
             return None
+        return self._to_latest_response(row)
+
+    async def get_for_user(
+        self, analysis_id: uuid.UUID, user_id: uuid.UUID
+    ) -> LatestAnalysisResponse | None:
+        """Return analysis `analysis_id` (for other services), or `None` if it doesn't
+        exist OR belongs to a different user (no signal to the caller which is true)."""
+        row = await self._face_analysis_repo.get_by_id(analysis_id)
+        if row is None or row.user_id != user_id:
+            return None
+        return self._to_latest_response(row)
+
+    @staticmethod
+    def _to_latest_response(row: FaceAnalysis) -> LatestAnalysisResponse:
         return LatestAnalysisResponse(
             analysisId=row.id,
             userId=row.user_id,

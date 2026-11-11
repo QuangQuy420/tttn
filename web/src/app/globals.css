@@ -462,6 +462,73 @@ main {
   margin-top: auto;
 }
 
+.for-you {
+  margin-bottom: 2.5rem;
+}
+
+.for-you__title {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0 0 1rem;
+  color: var(--color-text);
+}
+
+.recommendation-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  list-style: none;
+  margin: 0;
+  padding: 0.6rem 1rem 0;
+}
+
+.recommendation-reasons__chip {
+  font-size: 0.75rem;
+  color: var(--color-accent-dark);
+  background: rgba(201, 123, 74, 0.12);
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+}
+
+.recommendation-scores {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.6rem 1rem 0;
+}
+
+.recommendation-score {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.recommendation-score__label {
+  flex: 0 0 4.5rem;
+}
+
+.recommendation-score__track {
+  flex: 1;
+  height: 6px;
+  background: #f0f0f0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.recommendation-score__fill {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+}
+
+.recommendation-score__value {
+  flex: 0 0 2.5rem;
+  text-align: right;
+}
+
 .product-detail__back-link {
   display: inline-flex;
   align-items: center;

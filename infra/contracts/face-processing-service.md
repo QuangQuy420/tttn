@@ -73,3 +73,24 @@ Newest analysis of one user. Consumer: `recommendation-service` (plan 11, FaceFi
 { "success": false, "message": "Người dùng chưa có kết quả phân tích khuôn mặt.",
   "error": { "code": "NOT_FOUND", "details": null } }
 ```
+
+## `GET /internal/analyses/{analysisId}?userId=<uuid>`
+
+One specific analysis of one user. Consumer: `recommendation-service`
+(`GET /recommendations/for-you?faceAnalysisId=`, FaceFitScore). Added in
+`.planning/2026-09-29-11-hybrid-recommendation-serving.md` (plan 11).
+
+| | |
+|---|---|
+| Header | `X-Internal-Key: <INTERNAL_API_KEY>` (same as `latest-analysis`) |
+| Path | `analysisId` — uuid (invalid → 400 `VALIDATION_FAILED`) |
+| Query | `userId` — uuid, required: the user who must own the analysis (missing / invalid → 400 `VALIDATION_FAILED`) |
+
+**200** — same `data` shape as `latest-analysis` above (`analysisId`, `userId`, `faceShape`,
+`probabilities|null`, `method|null`, `modelVersion|null`, `createdAt`).
+
+**403** — same as `latest-analysis`.
+
+**404** `NOT_FOUND` — no analysis with this id, **or** it belongs to another user (the two cases
+are not told apart, so a caller cannot probe other users' analyses).
+`recommendation-service` treats a 404 as "no analysis" (β = 0).

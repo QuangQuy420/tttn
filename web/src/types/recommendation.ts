@@ -28,5 +28,24 @@ export interface RecommendedProduct {
   brand: Brand;
   images: ProductImage[];
   faceShapes: FaceShapeTag[];
+  // Ranking score on a 0–1 scale — equals `finalScore` (was 0–10 before the hybrid ranker).
   score: number;
+  // Hybrid ranker components, each 0–1: finalScore = α·preferenceScore + β·faceFitScore.
+  preferenceScore: number;
+  faceFitScore: number;
+  finalScore: number;
+  // Vietnamese "why recommended" reasons, at most 2.
+  reasons: string[];
+}
+
+// `data` of api-gateway's GET /api/recommendations/for-you (single envelope, no `meta`).
+// faceShape/faceAnalysisId are null when the user has no face analysis (then beta is 0);
+// modelVersion is null when the preference model is not loaded (legacy mode).
+export interface ForYouResponse {
+  items: RecommendedProduct[];
+  faceShape: FaceShapeTag | null;
+  faceAnalysisId: string | null;
+  modelVersion: string | null;
+  alpha: number;
+  beta: number;
 }

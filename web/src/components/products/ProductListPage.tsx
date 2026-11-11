@@ -12,6 +12,7 @@ import { useCategories } from "@/hooks/useCategories";
 import { usePageParam } from "@/hooks/usePageParam";
 import { useProducts } from "@/hooks/useProducts";
 import type { FrameShape, GenderTarget, MaterialType, ProductSort } from "@/types/product";
+import { ForYouSection } from "./ForYouSection";
 import { HeroCarousel } from "./HeroCarousel";
 import { ProductFilters } from "./ProductFilters";
 import { ProductGrid } from "./ProductGrid";
@@ -178,6 +179,8 @@ export function ProductListPage() {
           <HeroCarousel />
         </div>
       </section>
+
+      <ForYouSection />
 
       <section aria-labelledby="catalog-heading">
         <div className="search-field">

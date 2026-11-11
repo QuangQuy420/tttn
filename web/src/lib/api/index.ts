@@ -19,7 +19,7 @@ export {
 
 export { createBrand, deleteBrand, getBrands, updateBrand } from "./brands";
 export { analyzeFace, deleteFaceAnalysisHistory, getFaceAnalysisHistory } from "./face";
-export { getRecommendations } from "./recommendations";
+export { getForYouRecommendations, getRecommendations } from "./recommendations";
 export { postEvents } from "./events";
 
 export {
