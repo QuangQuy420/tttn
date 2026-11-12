@@ -141,7 +141,9 @@ export default function AdminRolesPage() {
         setDeletingId(role.id);
         try {
             await deleteRole(token, role.id);
-            await run();
+            // Deleting the only row of a later page: go back one page (that change reloads) (AC67).
+            if (roles.length === 1 && page > 1) setPage(page - 1);
+            else await run();
         } catch (err) {
             setActionError(
                 err instanceof ApiError

@@ -118,6 +118,17 @@ def test_events_at_or_after_now_are_ignored_ac11() -> None:
     assert only_future.price_mean == 0 and only_future.price_std == 0
 
 
+def test_product_stats_future_dated_event_decays_at_most_one_AC55() -> None:
+    stats = ProductStats()
+    stats.add(Event(USER, "p1", "PURCHASE", NOW + timedelta(days=30)))
+
+    popularity, _, n_purchase, _ = stats.snapshot("p1", NOW)
+
+    # Age clamped at 0 → weight × exp(0), never more than the event's own weight.
+    assert popularity == pytest.approx(EVENT_WEIGHTS["PURCHASE"])
+    assert n_purchase == 1
+
+
 def test_cross_features_cosine_affinities_and_price_z_on_toy_catalog() -> None:
     profile = build_user_profile(_past_events(), CATALOG, NOW)
     mean = (100 * W_VIEW_P1 + 300 * W_LIKE_P2) / W_TOTAL

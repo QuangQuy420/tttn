@@ -3,6 +3,7 @@ import {
   IsArray,
   IsEnum,
   IsInt,
+  IsNotEmpty,
   IsNumber,
   IsOptional,
   IsPositive,
@@ -18,8 +19,12 @@ import { ProductStatus } from '../../db/enums/product-status.enum';
 import { FaceShape } from '../../db/enums/face-shape.enum';
 import { MaterialType } from '../../db/enums/material-type.enum';
 
+/** Upper bound of `ps_products.base_price` / `ps_product_variants.extra_price` (numeric(10,2)). */
+export const MAX_PRICE = 99_999_999.99;
+
 export class CreateProductDto {
   @IsString()
+  @IsNotEmpty({ message: 'Tên sản phẩm không được để trống' })
   @MaxLength(255)
   name: string;
 
@@ -71,6 +76,7 @@ export class CreateProductDto {
 
   @IsNumber()
   @IsPositive()
+  @Max(MAX_PRICE, { message: 'Giá gốc không được vượt quá 99.999.999,99' })
   basePrice: number;
 
   @IsOptional()

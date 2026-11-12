@@ -10,6 +10,18 @@ import { AxiosError } from 'axios';
 import { firstValueFrom } from 'rxjs';
 import { AppConfig } from '../config/configuration';
 
+/** Timeout of the internal permissions call (shorter than the shared one). */
+const PERMISSIONS_TIMEOUT_MS = 1500;
+
+/** Live auth data of one user, as returned by user-service's internal endpoint. */
+export interface UserAuthState {
+    permissions: string[];
+    /** `ACTIVE` | `INACTIVE` | `LOCKED`; `null` when user-service does not send it. */
+    status: string | null;
+    /** Epoch seconds; a JWT with `iat` before it is revoked. `null` = no cut-off. */
+    tokensValidAfter: number | null;
+}
+
 @Injectable()
 export class UsersProxyService {
     private readonly logger = new Logger(UsersProxyService.name);
@@ -71,11 +83,11 @@ export class UsersProxyService {
         body: Record<string, unknown>,
         authorization?: string,
     ): Promise<unknown> {
-        return this.forwardPut(`/api/v1/addresses/${id}`, body, authorization);
+        return this.forwardPut(`/api/v1/addresses/${encodeURIComponent(id)}`, body, authorization);
     }
 
     deleteAddress(id: string, authorization?: string): Promise<unknown> {
-        return this.forwardDelete(`/api/v1/addresses/${id}`, authorization);
+        return this.forwardDelete(`/api/v1/addresses/${encodeURIComponent(id)}`, authorization);
     }
 
     listRoles(
@@ -104,11 +116,11 @@ export class UsersProxyService {
         body: Record<string, unknown>,
         authorization?: string,
     ): Promise<unknown> {
-        return this.forwardPut(`/api/v1/roles/${id}`, body, authorization);
+        return this.forwardPut(`/api/v1/roles/${encodeURIComponent(id)}`, body, authorization);
     }
 
     deleteRole(id: string, authorization?: string): Promise<unknown> {
-        return this.forwardDelete(`/api/v1/roles/${id}`, authorization);
+        return this.forwardDelete(`/api/v1/roles/${encodeURIComponent(id)}`, authorization);
     }
 
     listPermissions(
@@ -124,7 +136,7 @@ export class UsersProxyService {
         authorization?: string,
     ): Promise<unknown> {
         return this.forwardPost(
-            `/api/v1/users/${userId}/roles`,
+            `/api/v1/users/${encodeURIComponent(userId)}/roles`,
             body,
             authorization,
         );
@@ -136,7 +148,7 @@ export class UsersProxyService {
         authorization?: string,
     ): Promise<unknown> {
         return this.forwardDelete(
-            `/api/v1/users/${userId}/roles/${roleId}`,
+            `/api/v1/users/${encodeURIComponent(userId)}/roles/${encodeURIComponent(roleId)}`,
             authorization,
         );
     }
@@ -144,22 +156,41 @@ export class UsersProxyService {
     /**
      * Internal, service-to-service call — not exposed to end users. Asks
      * user-service for the caller's *current* flattened permission code
-     * list (no JWT-embedded snapshot). Called through
+     * list (no JWT-embedded snapshot), account status and token cut-off
+     * (`tokensValidAfter`, epoch seconds). Called through
      * `PermissionsCacheService`, which caches the result for ≤ 60 s and
      * drops it on gateway role changes. Requires `X-Internal-Key` (T11's gate on
-     * user-service's `/internal/**` routes).
+     * user-service's `/internal/**` routes). An older user-service without
+     * `status` / `tokensValidAfter` yields `null` for both (= token valid).
+     * Uses its own short timeout: it sits in front of every JWT route, so a
+     * hung user-service must not hold each request for the full downstream
+     * timeout.
      */
-    async getPermissions(userId: string): Promise<string[]> {
-        const path = `/internal/v1/users/${userId}/permissions`;
+    async getPermissions(userId: string): Promise<UserAuthState> {
+        const path = `/internal/v1/users/${encodeURIComponent(userId)}/permissions`;
         try {
             const response = await firstValueFrom(
-                this.httpService.get<{ data: { permissions: string[] } }>(
+                this.httpService.get<{
+                    data: {
+                        permissions: string[];
+                        status?: string | null;
+                        tokensValidAfter?: number | null;
+                    };
+                }>(
                     `${this.baseUrl}${path}`,
-                    { headers: { 'X-Internal-Key': this.internalApiKey } },
+                    {
+                        headers: { 'X-Internal-Key': this.internalApiKey },
+                        timeout: PERMISSIONS_TIMEOUT_MS,
+                    },
                 ),
             );
 
-            return response.data.data.permissions;
+            const data = response.data.data;
+            return {
+                permissions: data.permissions,
+                status: data.status ?? null,
+                tokensValidAfter: data.tokensValidAfter ?? null,
+            };
         } catch (error) {
             throw this.toGatewayError(error as AxiosError, path);
         }

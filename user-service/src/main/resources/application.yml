@@ -25,8 +25,7 @@ spring:
 
 server:
   port: 8081
+# jwt.secret and internal.api-key have no default: they come only from the JWT_SECRET and
+# INTERNAL_API_KEY env vars (UserServiceApplication fails startup when either is missing).
 jwt:
-  secret: VGhpc0lzQVNlY3VyZUp3dFNlY3JldEtleUZvclRUVE4yMDI2MTIzNDU2Nzg5MDEyMzQ1
   expiration: 3600000
-internal:
-  api-key: tB/ZjjCaQB6lFG1j+8XABglVfc/FIqzdUBI7jl7OS/jk3XFKisbCQ/JYQ9OBpVdd

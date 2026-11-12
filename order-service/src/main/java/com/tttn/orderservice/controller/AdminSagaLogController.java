@@ -6,6 +6,7 @@ import com.tttn.orderservice.dto.response.OrderSagaLogResponse;
 import com.tttn.orderservice.dto.response.SagaLogDayResponse;
 import com.tttn.orderservice.service.OrderSagaLogService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -44,7 +45,8 @@ public class AdminSagaLogController {
 
     @GetMapping("/days/{date}")
     public ResponseEntity<ApiResponse<List<OrderLogSummaryResponse>>> getOrdersForDay(
-            @PathVariable String date,
+            // A malformed date fails conversion → MethodArgumentTypeMismatchException → 400.
+            @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(defaultValue = "1")
             int page,
             @RequestParam(defaultValue = "20")
@@ -53,7 +55,7 @@ public class AdminSagaLogController {
         return ResponseEntity.ok(
                 ApiResponse.page(
                         orderSagaLogService.getOrdersForDay(
-                                LocalDate.parse(date),
+                                date,
                                 page,
                                 limit
                         )

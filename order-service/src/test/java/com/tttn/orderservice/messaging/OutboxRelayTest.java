@@ -60,7 +60,8 @@ class OutboxRelayTest {
                 outboxEventRepository,
                 orderRepository,
                 orderSagaLogService,
-                rabbitTemplate
+                rabbitTemplate,
+                mock(org.springframework.transaction.PlatformTransactionManager.class)
         );
 
         ReflectionTestUtils.setField(outboxRelay, "batchSize", 50);
@@ -228,6 +229,33 @@ class OutboxRelayTest {
         // SagaReconciliationJob picks it up again instead of leaking the reserved stock.
         assertTrue(order.isStockReleasePending());
         verify(orderRepository).save(order);
+    }
+
+    @Test
+    @DisplayName("stock.release.requested hết lượt nhưng không ghi được stockReleasePending → vẫn PENDING, thử lại sau 60s")
+    void relay_WhenStockReleaseRowFailsAndOrderWriteThrows_ShouldStayPending() {
+        OutboxEvent row = pendingRow(MAX_ATTEMPTS - 1);
+        row.setRoutingKey(OrderSagaRoutingKeys.STOCK_RELEASE_REQUESTED);
+        Order order = Order.builder()
+                .id(row.getAggregateId())
+                .stockReleasePending(false)
+                .build();
+
+        when(outboxEventRepository.lockDueBatch(any(LocalDateTime.class), anyInt()))
+                .thenReturn(List.of(row));
+        when(orderRepository.findById(row.getAggregateId()))
+                .thenReturn(Optional.of(order));
+        when(orderRepository.save(order))
+                .thenThrow(new RuntimeException("DB down"));
+        confirmEverySend(false);
+
+        LocalDateTime before = LocalDateTime.now();
+        outboxRelay.relay();
+
+        // Giving the row up now would leave nothing to re-send the release (stock leak).
+        assertEquals(OutboxStatus.PENDING, row.getStatus());
+        assertEquals(MAX_ATTEMPTS, row.getAttempts());
+        assertBackoff(before, row, 60);
     }
 
     private void confirmEverySend(boolean ack) {

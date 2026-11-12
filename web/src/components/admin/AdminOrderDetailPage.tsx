@@ -8,7 +8,7 @@ import { ApiError, getAdminOrderDetail, updateOrderStatusAdmin } from "@/lib/api
 import { getAccessToken } from "@/lib/auth/session";
 import { getColorSwatch } from "@/lib/format/color";
 import { formatPriceVnd } from "@/lib/format/price";
-import { formatOrderStatusVi, ORDER_STATUSES } from "@/lib/labels";
+import { formatOrderStatusVi, formatPaymentStatusVi } from "@/lib/labels";
 import type { Order, OrderStatus } from "@/types/order";
 
 interface AdminOrderDetailPageProps {
@@ -20,15 +20,34 @@ interface AdminOrderDetailPageProps {
 // - a "Lý do hủy đơn" callout when the order's current status is CANCELLED, sourced from the
 //   most recent CANCELLED status-history entry's `note` (that's where
 //   OrderSagaEventListener.handlePaymentFailed writes the failure reason).
-// - a status-change control. The dropdown intentionally offers every OrderStatus rather than
-//   re-implementing order-service's transition graph client-side (plan Q1) — an invalid choice
-//   is rejected by the backend and its Vietnamese error is shown inline (AC8), not thrown.
+// - a status-change control offering only the statuses the admin may move this order to (AC70),
+//   mirroring order-service's OrderServiceImpl.validateStatusTransition. Any server rejection
+//   (e.g. 409 when the order changed meanwhile) is shown inline, not thrown.
+
+// Allowed admin targets per current status. PENDING → AWAITING_PAYMENT → CONFIRMED belong to the
+// checkout saga, so an admin can only cancel an order that is still in it; COMPLETED and
+// CANCELLED are final (no control is shown).
+const ADMIN_NEXT_STATUSES: Record<OrderStatus, OrderStatus[]> = {
+  PENDING: ["CANCELLED"],
+  AWAITING_PAYMENT: ["CANCELLED"],
+  CONFIRMED: ["PROCESSING", "CANCELLED"],
+  PROCESSING: ["SHIPPING"],
+  SHIPPING: ["DELIVERED"],
+  DELIVERED: ["COMPLETED"],
+  COMPLETED: [],
+  CANCELLED: [],
+};
+
+function firstNextStatus(status: OrderStatus): OrderStatus | null {
+  return ADMIN_NEXT_STATUSES[status][0] ?? null;
+}
+
 export function AdminOrderDetailPage({ id }: AdminOrderDetailPageProps) {
   const [order, setOrder] = useState<Order | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [nextStatus, setNextStatus] = useState<OrderStatus>("PENDING");
+  const [nextStatus, setNextStatus] = useState<OrderStatus | null>(null);
   const [statusNote, setStatusNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -46,7 +65,7 @@ export function AdminOrderDetailPage({ id }: AdminOrderDetailPageProps) {
     try {
       const result = await getAdminOrderDetail(token, id);
       setOrder(result);
-      setNextStatus(result.status);
+      setNextStatus(firstNextStatus(result.status));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Không thể tải thông tin đơn hàng.");
     } finally {
@@ -73,7 +92,7 @@ export function AdminOrderDetailPage({ id }: AdminOrderDetailPageProps) {
         const result = await getAdminOrderDetail(token, id);
         if (!cancelled) {
           setOrder(result);
-          setNextStatus(result.status);
+          setNextStatus(firstNextStatus(result.status));
         }
       } catch (err) {
         if (!cancelled) {
@@ -92,6 +111,7 @@ export function AdminOrderDetailPage({ id }: AdminOrderDetailPageProps) {
   }, [id]);
 
   async function handleStatusSubmit() {
+    if (!nextStatus) return;
     const token = getAccessToken();
     if (!token) {
       setStatusError("Bạn cần đăng nhập lại để thực hiện thao tác này.");
@@ -127,6 +147,8 @@ export function AdminOrderDetailPage({ id }: AdminOrderDetailPageProps) {
           .sort((a, b) => new Date(b.changedAt).getTime() - new Date(a.changedAt).getTime())[0]
       : undefined;
 
+  const nextStatusOptions = ADMIN_NEXT_STATUSES[order.status];
+
   return (
     <article aria-labelledby="admin-order-detail-heading" className="order-detail">
       <Link href="/admin/orders" className="product-detail__back-link">
@@ -138,6 +160,9 @@ export function AdminOrderDetailPage({ id }: AdminOrderDetailPageProps) {
 
       <h1 id="admin-order-detail-heading">Đơn hàng {order.orderCode}</h1>
       <p className="order-detail__status">Trạng thái: {formatOrderStatusVi(order.status)}</p>
+      <p className="order-detail__status">
+        Thanh toán: {formatPaymentStatusVi(order.paymentStatus)}
+      </p>
 
       {latestCancelEntry?.note && (
         <div className="order-detail__failure-note" role="alert">
@@ -178,51 +203,53 @@ export function AdminOrderDetailPage({ id }: AdminOrderDetailPageProps) {
         </p>
       </section>
 
-      <section aria-label="Cập nhật trạng thái đơn hàng" className="order-detail__section">
-        <h2>Cập nhật trạng thái</h2>
-        <div className="order-detail__actions">
-          <label htmlFor="admin-order-status-select">
-            Trạng thái mới
-            <select
-              id="admin-order-status-select"
-              value={nextStatus}
-              onChange={(event) => setNextStatus(event.target.value as OrderStatus)}
+      {nextStatusOptions.length > 0 && nextStatus && (
+        <section aria-label="Cập nhật trạng thái đơn hàng" className="order-detail__section">
+          <h2>Cập nhật trạng thái</h2>
+          <div className="order-detail__actions">
+            <label htmlFor="admin-order-status-select">
+              Trạng thái mới
+              <select
+                id="admin-order-status-select"
+                value={nextStatus}
+                onChange={(event) => setNextStatus(event.target.value as OrderStatus)}
+              >
+                {nextStatusOptions.map((value) => (
+                  <option key={value} value={value}>
+                    {formatOrderStatusVi(value)}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label htmlFor="admin-order-status-note">
+              Ghi chú (tuỳ chọn)
+              <input
+                id="admin-order-status-note"
+                type="text"
+                value={statusNote}
+                onChange={(event) => setStatusNote(event.target.value)}
+                placeholder="Ghi chú cho lần đổi trạng thái này"
+              />
+            </label>
+
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={handleStatusSubmit}
+              disabled={isSubmitting}
             >
-              {ORDER_STATUSES.map((value) => (
-                <option key={value} value={value}>
-                  {formatOrderStatusVi(value)}
-                </option>
-              ))}
-            </select>
-          </label>
+              {isSubmitting ? "Đang cập nhật..." : "Cập nhật trạng thái"}
+            </button>
 
-          <label htmlFor="admin-order-status-note">
-            Ghi chú (tuỳ chọn)
-            <input
-              id="admin-order-status-note"
-              type="text"
-              value={statusNote}
-              onChange={(event) => setStatusNote(event.target.value)}
-              placeholder="Ghi chú cho lần đổi trạng thái này"
-            />
-          </label>
-
-          <button
-            type="button"
-            className="btn btn--primary"
-            onClick={handleStatusSubmit}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? "Đang cập nhật..." : "Cập nhật trạng thái"}
-          </button>
-
-          {statusError && (
-            <p role="alert" className="error-state">
-              {statusError}
-            </p>
-          )}
-        </div>
-      </section>
+            {statusError && (
+              <p role="alert" className="error-state">
+                {statusError}
+              </p>
+            )}
+          </div>
+        </section>
+      )}
 
       <section aria-label="Lịch sử trạng thái" className="order-detail__section">
         <h2>Lịch sử trạng thái</h2>

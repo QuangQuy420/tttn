@@ -111,7 +111,9 @@ export function CatalogManagementPage<T extends Brand | Category>({
     setDeletingId(item.id);
     try {
       await config.remove(item.id, token);
-      await loadItems();
+      // Deleting the only row of a later page: go back one page (that change reloads) (AC67).
+      if (items.length === 1 && page > 1) setPage(page - 1);
+      else await loadItems();
     } catch (error) {
       setActionError(
         error instanceof ApiError

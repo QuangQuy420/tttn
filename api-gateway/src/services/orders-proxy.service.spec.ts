@@ -7,10 +7,10 @@ import { OrdersProxyService } from './orders-proxy.service';
 describe('OrdersProxyService', () => {
   const ORDER_SERVICE_URL = 'http://order-service:3003';
   let service: OrdersProxyService;
-  let httpService: { post: jest.Mock };
+  let httpService: { post: jest.Mock; get: jest.Mock };
 
   beforeEach(() => {
-    httpService = { post: jest.fn() };
+    httpService = { post: jest.fn(), get: jest.fn() };
     const configService = {
       get: jest.fn().mockReturnValue({ orderServiceUrl: ORDER_SERVICE_URL }),
     };
@@ -39,6 +39,21 @@ describe('OrdersProxyService', () => {
       expect(result).toEqual(body);
     });
   });
+  describe('getOrderDetail', () => {
+    it('encodes the order id so ../ cannot reach another upstream path (AC1)', async () => {
+      httpService.get.mockReturnValue(
+        of({ data: { success: true }, status: 200 } as AxiosResponse),
+      );
+
+      await service.getOrderDetail('user-1', '../../../admin/orders/summary');
+
+      expect(httpService.get).toHaveBeenCalledWith(
+        `${ORDER_SERVICE_URL}/api/v1/users/user-1/orders/..%2F..%2F..%2Fadmin%2Forders%2Fsummary`,
+        { params: undefined },
+      );
+    });
+  });
+
   describe('checkout', () => {
     const CHECKOUT_URL = `${ORDER_SERVICE_URL}/api/v1/users/user-1/checkout`;
     const body = { shippingAddress: 'HN', paymentMethod: 'COD' };

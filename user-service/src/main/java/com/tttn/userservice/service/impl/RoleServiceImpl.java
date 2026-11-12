@@ -14,6 +14,7 @@ import com.tttn.userservice.repository.UserRepository;
 import com.tttn.userservice.service.RoleService;
 import com.tttn.userservice.util.PageRequests;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -27,6 +28,12 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class RoleServiceImpl implements RoleService {
+
+    private static final String ADMIN_ROLE_NAME = "ADMIN";
+    private static final String CUSTOMER_ROLE_NAME = "CUSTOMER";
+    // ADMIN must keep these, or nobody can manage roles any more.
+    private static final Set<String> ADMIN_REQUIRED_PERMISSIONS =
+            Set.of("role:manage", "user:manage-roles");
 
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
@@ -56,7 +63,13 @@ public class RoleServiceImpl implements RoleService {
                 .permissions(permissions)
                 .build();
 
-        role = roleRepository.save(role);
+        // saveAndFlush so a concurrent create with the same name fails here (unique name) and
+        // maps to 409, instead of failing at commit outside this method.
+        try {
+            role = roleRepository.saveAndFlush(role);
+        } catch (DataIntegrityViolationException exception) {
+            throw new BusinessException(ErrorCode.ROLE_ALREADY_EXISTS);
+        }
 
         return toRoleResponse(role);
     }
@@ -73,7 +86,19 @@ public class RoleServiceImpl implements RoleService {
             throw new BusinessException(ErrorCode.ROLE_ALREADY_EXISTS);
         }
 
+        if (isSystemRole(role) && !name.equals(role.getName())) {
+            throw new BusinessException(ErrorCode.SYSTEM_ROLE_PROTECTED);
+        }
+
         Set<Permission> permissions = resolvePermissions(request.permissionIds());
+
+        if (ADMIN_ROLE_NAME.equals(role.getName())
+                && !permissions.stream()
+                        .map(Permission::getCode)
+                        .toList()
+                        .containsAll(ADMIN_REQUIRED_PERMISSIONS)) {
+            throw new BusinessException(ErrorCode.ADMIN_ROLE_PERMISSIONS_REQUIRED);
+        }
 
         role.setName(name);
         role.setDescription(normalizeNullable(request.description()));
@@ -89,6 +114,10 @@ public class RoleServiceImpl implements RoleService {
     public void deleteRole(UUID roleId) {
         Role role = findRole(roleId);
 
+        if (isSystemRole(role)) {
+            throw new BusinessException(ErrorCode.SYSTEM_ROLE_PROTECTED);
+        }
+
         if (userRepository.existsByRolesId(role.getId())) {
             throw new BusinessException(ErrorCode.ROLE_IN_USE);
         }
@@ -101,6 +130,12 @@ public class RoleServiceImpl implements RoleService {
     public Page<PermissionResponse> listPermissions(int page, int limit) {
         return permissionRepository.findAll(PageRequests.of(page, limit, Sort.by("code")))
                 .map(this::toPermissionResponse);
+    }
+
+    // CUSTOMER is looked up by name on register; ADMIN by name in the role guard rails.
+    private boolean isSystemRole(Role role) {
+        return ADMIN_ROLE_NAME.equals(role.getName())
+                || CUSTOMER_ROLE_NAME.equals(role.getName());
     }
 
     private Role findRole(UUID roleId) {

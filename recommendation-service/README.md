@@ -70,8 +70,9 @@ tests/            # unit tests
   `behavior-events.dlx` (fanout) → queue `behavior-events.dlq`.
 - Valid event → stored, ack. Same `eventId` again → not stored again, ack.
   Bad JSON / missing or invalid field → rejected to `behavior-events.dlq`.
-  Other errors (e.g. DB down) → requeued after 2 s; after `BEHAVIOR_QUEUE_DELIVERY_LIMIT`
-  deliveries the message is dead-lettered.
+  Other errors (e.g. DB down) → held unacked with a back-off doubled per delivery
+  (2 s → 60 s cap, ≈ 2 min over 6 deliveries; requeued early once `SELECT 1` works again),
+  then requeued; after `BEHAVIOR_QUEUE_DELIVERY_LIMIT` deliveries the message is dead-lettered.
 - Runs in the background: startup and `/health` never wait for RabbitMQ. It keeps
   retrying the first connect every 3 s and reconnects by itself after a broker restart.
 - Don't change the queue arguments after the queue exists (RabbitMQ refuses the
@@ -167,20 +168,25 @@ catalog cache; if Redis is unreachable the cache is skipped and every request re
 **Your real `.env` also needs `PREFERENCE_MODEL_VERSION`** (e.g.
 `v1-sim-20261110-xgbrank`). Without it the service runs in **legacy mode**: no model is
 loaded, preference = popularity and α = 0 (the response reports `alpha: 0`). If the folder
-is missing or its `feature_schema_version` differs from the code, the app does not start.
+is missing, its `feature_schema_version` differs from the code, or its card lacks
+`price_band_edges` / `calibration.{method,a,b,raw_score}`, the app does not start.
 `FACE_PROCESSING_SERVICE_URL`, `RANK_ALPHA` / `RANK_BETA` (0.6 / 0.4),
 `PREFERENCE_NORM` (`rank` = preference ranked over the candidates, in [0, 1]; `none` = calibrated
 score as is — the defaults are a product choice, see
 [`ml/recommendation/reports/hybrid/SUMMARY.md`](../ml/recommendation/reports/hybrid/SUMMARY.md)),
 `CATALOG_TTL_SECONDS` (300 — Redis catalog cache and in-process product stats),
+`STATS_WINDOW_DAYS` (180 — popularity replays only this many days of events),
 `MAX_PER_FRAME_SHAPE` / `MAX_PER_BRAND` have defaults.
 
 ## Notes
 - The catalog is cached in Redis (`rec:catalog:v1`, `CATALOG_TTL_SECONDS`) and cleared by
   `product-events`; concurrent misses load it once (per process), and any cache miss within
   2 s (`RECENT_CATALOG_FETCH_REUSE_SECONDS`) of this process's last catalog fetch reuses that
-  fetch (up to 2 s extra staleness after an invalidation). The global product stats (replay of all
-  interactions) stay cached in process for `CATALOG_TTL_SECONDS`, so new events change
+  fetch (up to 2 s extra staleness after an invalidation). A fetch that overlaps a product event
+  is not cached, and a failed fetch is re-raised to callers for 2 s
+  (`RECENT_CATALOG_FAILURE_REUSE_SECONDS`) instead of each one waiting for its own timeout.
+  The global product stats (popularity replayed from the last `STATS_WINDOW_DAYS` of
+  interactions; view / purchase counts and first event date over all time) stay cached in process for `CATALOG_TTL_SECONDS`, so new events change
   popularity after at most that long; a user's own history is read on every request.
 - `POST /recommend` still works when `recommendation_db` is down (no personalization,
   ranked by FaceFit); `for-you` answers 503 then.

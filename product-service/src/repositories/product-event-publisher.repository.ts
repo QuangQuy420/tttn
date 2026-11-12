@@ -22,12 +22,19 @@ const PRODUCT_EVENTS_EXCHANGE = 'product-events';
 // lose that race — retry a few times before giving up.
 const INITIAL_CONNECT_ATTEMPTS = 5;
 const RECONNECT_DELAY_MS = 3000;
+// Upper bound on events kept while the broker is unreachable (one entry per type+product).
+const MAX_PENDING_EVENTS = 1000;
 
 /**
  * Wraps `amqplib` against RabbitMQ to publish product lifecycle events (T8). Publish
  * failures are caught and logged, never thrown — a broker outage must never break the
  * admin's update/delete request (NFR4). Reconnects automatically (in the background, never
  * blocking a request) if the connection drops after startup.
+ *
+ * Messages are persistent JSON. An event that cannot be handed to a channel (no channel, or
+ * `publish` throws on a closing one) is kept in a bounded, de-duplicated in-memory set and
+ * re-sent right after the next successful connect, so consumers (cart sync) still catch up
+ * after a broker blip. The set is lost on a process restart (not a durable outbox).
  */
 @Injectable()
 export class RabbitMqProductEventPublisher
@@ -39,6 +46,8 @@ export class RabbitMqProductEventPublisher
   private channel: amqplib.Channel | undefined;
   private reconnectTimer: NodeJS.Timeout | undefined;
   private shuttingDown = false;
+  /** Key `${type}|${productId}` → event; insertion order = send order. */
+  private readonly pending = new Map<string, ProductEvent>();
 
   constructor(private readonly configService: ConfigService) {
     const url = this.configService.get<string>('RABBITMQ_URL');
@@ -91,20 +100,39 @@ export class RabbitMqProductEventPublisher
 
   private async connect(): Promise<void> {
     const connection = await amqplib.connect(this.url);
-    connection.on('error', (error) => this.handleDisconnect(error));
-    connection.on('close', () =>
-      this.handleDisconnect(new Error('connection closed')),
+    // Listeners act only while this connection is the current one (see handleDisconnect).
+    connection.on('error', (error: Error) =>
+      this.handleDisconnect(connection, error),
     );
-    const channel = await connection.createChannel();
-    await channel.assertExchange(PRODUCT_EVENTS_EXCHANGE, 'topic', {
-      durable: true,
-    });
-    this.connection = connection;
-    this.channel = channel;
+    connection.on('close', () =>
+      this.handleDisconnect(connection, new Error('connection closed')),
+    );
+    try {
+      const channel = await connection.createChannel();
+      // Without an 'error' listener a channel error is thrown as an unhandled 'error' event.
+      channel.on('error', (error: Error) =>
+        this.handleDisconnect(connection, error),
+      );
+      channel.on('close', () =>
+        this.handleDisconnect(connection, new Error('channel closed')),
+      );
+      await channel.assertExchange(PRODUCT_EVENTS_EXCHANGE, 'topic', {
+        durable: true,
+      });
+      this.connection = connection;
+      this.channel = channel;
+    } catch (error) {
+      connection.close().catch(() => undefined);
+      throw error;
+    }
+    this.flushPending();
   }
 
-  private handleDisconnect(error: Error): void {
-    if (this.shuttingDown) {
+  private handleDisconnect(
+    connection: amqplib.ChannelModel,
+    error: Error,
+  ): void {
+    if (this.shuttingDown || this.connection !== connection) {
       return;
     }
     this.channel = undefined;
@@ -112,6 +140,8 @@ export class RabbitMqProductEventPublisher
     this.logger.warn(
       `RabbitMQ connection lost (${error.message}) — will retry in the background`,
     );
+    // A channel-level failure leaves the connection open — close it so it does not leak.
+    connection.close().catch(() => undefined);
     this.scheduleReconnect();
   }
 
@@ -136,6 +166,13 @@ export class RabbitMqProductEventPublisher
 
   // eslint-disable-next-line @typescript-eslint/require-await
   async publish(event: ProductEvent): Promise<void> {
+    if (!this.trySend(event)) {
+      this.addPending(event);
+    }
+  }
+
+  /** Hands `event` to the current channel; `false` (logged) when that is not possible. */
+  private trySend(event: ProductEvent): boolean {
     try {
       if (!this.channel) {
         throw new Error('RabbitMQ channel is not available');
@@ -148,12 +185,47 @@ export class RabbitMqProductEventPublisher
         PRODUCT_EVENTS_EXCHANGE,
         event.type,
         Buffer.from(JSON.stringify(body)),
+        { persistent: true, contentType: 'application/json' },
       );
+      return true;
     } catch (error) {
       this.logger.error(
-        `Failed to publish "${event.type}" event for product ${event.productId}`,
+        `Failed to publish "${event.type}" event for product ${event.productId} — kept for re-send after reconnect`,
         error instanceof Error ? error.stack : String(error),
       );
+      return false;
+    }
+  }
+
+  private addPending(event: ProductEvent): void {
+    const key = `${event.type}|${event.productId}`;
+    // Re-insert so a repeated event moves to the end (sent after older ones).
+    this.pending.delete(key);
+    if (this.pending.size >= MAX_PENDING_EVENTS) {
+      const [oldestKey] = this.pending.keys();
+      if (oldestKey !== undefined) {
+        this.pending.delete(oldestKey);
+        this.logger.warn(
+          `Pending product events full (${MAX_PENDING_EVENTS}) — dropped the oldest (${oldestKey})`,
+        );
+      }
+    }
+    this.pending.set(key, event);
+  }
+
+  /** Re-sends events kept while the channel was down; stops at the first failure. */
+  private flushPending(): void {
+    if (this.pending.size === 0) {
+      return;
+    }
+    this.logger.log(
+      `Re-sending ${this.pending.size} product event(s) kept while RabbitMQ was unavailable`,
+    );
+    for (const [key, event] of [...this.pending.entries()]) {
+      if (!this.trySend(event)) {
+        return;
+      }
+      this.pending.delete(key);
     }
   }
 }

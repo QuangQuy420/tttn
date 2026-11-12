@@ -15,6 +15,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, UploadFile, status
 
+from app.core.config import Settings, get_settings
 from app.schemas.common import (
     DEFAULT_PAGE_LIMIT,
     MAX_PAGE_LIMIT,
@@ -26,6 +27,7 @@ from app.schemas.face import AnalyzeResponse
 from app.services.face_analysis_service import (
     FaceAnalysisService,
     HistoryItemNotFoundError,
+    ImageStorageUnavailableError,
     get_face_analysis_service,
 )
 from app.services.face_shape_service import (
@@ -34,12 +36,14 @@ from app.services.face_shape_service import (
     InvalidImageError,
     MultipleFacesDetectedError,
     NoFaceDetectedError,
+    check_image_pixels,
 )
 
 router = APIRouter()
 
 _ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 _MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB (NFR2)
+_TOO_LARGE_MESSAGE = "Ảnh quá lớn — dung lượng tối đa cho phép là 10MB."
 
 
 def _require_user_id(x_user_id: str | None) -> uuid.UUID:
@@ -70,6 +74,7 @@ async def analyze(
     file: UploadFile,
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
     service: FaceAnalysisService = Depends(get_face_analysis_service),
+    settings: Settings = Depends(get_settings),
 ) -> ApiResponse[AnalyzeResponse]:
     user_id = _require_user_id(x_user_id)
 
@@ -82,12 +87,23 @@ async def analyze(
             ),
         )
 
+    # FastAPI has already buffered the body; checking `file.size` first only saves one
+    # in-memory copy (the real early cut-off is the gateway body limit).
+    if file.size is not None and file.size > _MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=_TOO_LARGE_MESSAGE
+        )
     data = await file.read()
     if len(data) > _MAX_UPLOAD_BYTES:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Ảnh quá lớn — dung lượng tối đa cho phép là 10MB.",
+            status_code=status.HTTP_400_BAD_REQUEST, detail=_TOO_LARGE_MESSAGE
         )
+
+    try:
+        # Header-only width x height check, before the full decode in `analyze_face`.
+        check_image_pixels(data, settings.FACE_MAX_PIXELS)
+    except InvalidImageError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     try:
         result = await service.analyze_and_store(
@@ -103,6 +119,11 @@ async def analyze(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except FaceTooSmallError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except ImageStorageUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Không thể lưu ảnh lúc này — vui lòng thử lại sau.",
+        ) from exc
     return ok(result)
 
 

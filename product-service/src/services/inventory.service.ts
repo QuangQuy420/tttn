@@ -8,6 +8,7 @@ import {
 } from '../repositories/inventory.repository';
 import { IStockReservationRepository } from '../repositories/stock-reservation.repository';
 import { IOrderSagaEventPublisher } from '../repositories/order-saga-event-publisher.repository';
+import { StockReservationStatus } from '../db/enums/stock-reservation-status.enum';
 import {
   INVENTORY_REPOSITORY,
   STOCK_RESERVATION_REPOSITORY,
@@ -16,10 +17,13 @@ import {
 
 /**
  * Orchestrates the checkout saga's stock steps for `OrderSagaEventConsumer` (T-PS-3): reserve
- * on `stock.reserve.requested`, release on `stock.release.requested`, and commit on
- * `payment.completed`. Thin —
+ * on `stock.reserve.requested`, release on `stock.release.requested`, commit on
+ * `payment.completed`, and restock on `stock.restock.requested` (refund of a cancelled, paid
+ * order). Thin —
  * delegates locking/quantity math to `IInventoryRepository` and idempotency bookkeeping to
- * `IStockReservationRepository`, and replies via `IOrderSagaEventPublisher`.
+ * `IStockReservationRepository`, and replies via `IOrderSagaEventPublisher`. A reply that
+ * the broker did not confirm rejects, so the consumer nacks + requeues the request instead
+ * of acking it with the reply lost; redelivery is safe because every step is idempotent.
  */
 @Injectable()
 export class InventoryService {
@@ -40,7 +44,9 @@ export class InventoryService {
    * Handles `stock.reserve.requested` (AC1-AC3). Idempotent (NFR2): a duplicate request
    * for an order that already has a RESERVED row skips re-reserving and just re-publishes
    * `stock.reserved`, so a caller that missed the first reply can still progress without
-   * double-incrementing `reservedQuantity`. Unexpected (non-`InsufficientStockError`)
+   * double-incrementing `reservedQuantity`. An order whose rows already moved on
+   * (COMMITTED / RELEASED / RESTOCKED) is a logged no-op — it must never hold stock again.
+   * Unexpected (non-`InsufficientStockError`)
    * errors are left to propagate so `OrderSagaEventConsumer` can nack + requeue.
    *
    * The inventory increment and the RESERVED bookkeeping row are written in a single
@@ -50,13 +56,19 @@ export class InventoryService {
    * `reservedQuantity` for the same order.
    */
   async reserve(orderId: string, items: ReserveItem[]): Promise<void> {
-    const alreadyReserved =
-      await this.stockReservationRepository.hasReservedForOrder(orderId);
-    if (alreadyReserved) {
+    const statuses =
+      await this.stockReservationRepository.findStatusesForOrder(orderId);
+    if (statuses.includes(StockReservationStatus.RESERVED)) {
       this.logger.warn(
         `Duplicate stock.reserve.requested for order ${orderId} — already reserved, re-publishing stock.reserved`,
       );
       await this.sagaPublisher.publishStockReserved(orderId);
+      return;
+    }
+    if (statuses.length > 0) {
+      this.logger.warn(
+        `stock.reserve.requested for order ${orderId} whose reservation is already ${statuses.join('/')} — safe no-op`,
+      );
       return;
     }
 
@@ -146,6 +158,54 @@ export class InventoryService {
     if (!wasReserved) {
       this.logger.warn(
         `payment.completed for order ${orderId} with no RESERVED row — safe no-op`,
+      );
+    }
+  }
+
+  /**
+   * Handles `stock.restock.requested` (refund of a cancelled order that was already paid).
+   * In one transaction it locks the order's RESERVED and COMMITTED rows together: COMMITTED
+   * rows give their quantity back (`quantity += row.quantity`) and become RESTOCKED; rows
+   * still RESERVED (the cancel raced ahead of the commit) are released and become RELEASED.
+   * Quantities come from this service's own rows, like `commit()`. No such rows → no-op, so
+   * a redelivered request is safe; a `payment.completed` arriving afterwards finds no
+   * RESERVED rows and is already a logged no-op in `commit()`.
+   */
+  async restock(orderId: string): Promise<void> {
+    const changed = await this.dataSource.transaction(async (manager) => {
+      const reservations =
+        await this.stockReservationRepository.lockReservedOrCommittedForOrder(
+          orderId,
+          manager,
+        );
+      if (reservations.length === 0) {
+        return false;
+      }
+      const committed = reservations.filter(
+        (reservation) =>
+          reservation.status === StockReservationStatus.COMMITTED,
+      );
+      const reserved = reservations.filter(
+        (reservation) => reservation.status === StockReservationStatus.RESERVED,
+      );
+      const toItems = (rows: typeof reservations): ReserveItem[] =>
+        rows.map(({ variantId, quantity }) => ({ variantId, quantity }));
+
+      await this.inventoryRepository.restock(toItems(committed), manager);
+      await this.stockReservationRepository.markRestocked(committed, manager);
+      if (reserved.length > 0) {
+        await this.inventoryRepository.release(
+          orderId,
+          toItems(reserved),
+          manager,
+        );
+        await this.stockReservationRepository.markReleased(reserved, manager);
+      }
+      return true;
+    });
+    if (!changed) {
+      this.logger.warn(
+        `stock.restock.requested for order ${orderId} with no RESERVED/COMMITTED row — safe no-op`,
       );
     }
   }

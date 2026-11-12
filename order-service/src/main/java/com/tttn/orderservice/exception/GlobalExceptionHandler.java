@@ -2,6 +2,7 @@ package com.tttn.orderservice.exception;
 
 import com.tttn.orderservice.dto.response.ApiErrorResponse;
 import jakarta.validation.ConstraintViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
@@ -49,6 +50,21 @@ public class GlobalExceptionHandler {
         return buildResponse(
                 HttpStatus.CONFLICT,
                 exception.getMessage(),
+                "CONFLICT",
+                null
+        );
+    }
+
+    // Order.@Version conflict: another writer (saga reply, admin, reconciliation job) changed the
+    // order between this request's load and its commit. Needs its own handler — the catch-all
+    // below would turn it into a 500.
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ApiErrorResponse> handleOptimisticLockingFailure(
+            OptimisticLockingFailureException exception
+    ) {
+        return buildResponse(
+                HttpStatus.CONFLICT,
+                "Đơn hàng vừa được cập nhật, vui lòng thử lại",
                 "CONFLICT",
                 null
         );

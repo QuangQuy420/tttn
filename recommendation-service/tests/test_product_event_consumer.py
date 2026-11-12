@@ -15,9 +15,14 @@ _SETTINGS = Settings(PRODUCT_SERVICE_URL="http://product-service:3002")
 class _FakeCatalogCache:
     def __init__(self) -> None:
         self.invalidations = 0
+        self.calls: list[str] = []
+
+    def mark_invalidated(self) -> None:
+        self.calls.append("mark_invalidated")
 
     async def invalidate(self) -> None:
         self.invalidations += 1
+        self.calls.append("invalidate")
 
 
 class _FakeMessage:
@@ -45,6 +50,9 @@ def test_valid_product_event_invalidates_the_catalog_cache_and_acks_AC8() -> Non
     asyncio.run(consumer._handle_message(message))
 
     assert cache.invalidations == 1
+    # AC52: the in-process counter is bumped before the Redis DEL, so a fetch in flight
+    # does not cache its (possibly stale) result.
+    assert cache.calls == ["mark_invalidated", "invalidate"]
     assert message.acked is True
     assert message.rejected_with is None
 

@@ -116,6 +116,13 @@ public class Order {
     @Column(name = "stock_release_pending", nullable = false)
     private boolean stockReleasePending = false;
 
+    // Optimistic locking: every writer loads → checks → saves, so a concurrent write fails with
+    // ObjectOptimisticLockingFailureException instead of silently overwriting (HTTP → 409,
+    // saga listener → message redelivered, jobs → retried on the next run).
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
+
     @PrePersist
     protected void onCreate() {
         LocalDateTime now = LocalDateTime.now();

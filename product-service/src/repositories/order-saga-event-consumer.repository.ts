@@ -18,15 +18,17 @@ interface StockRequestedPayload {
   items: ReserveItem[];
 }
 
-interface PaymentCompletedPayload {
+/** `payment.completed` and `stock.restock.requested` — only `orderId` is read. */
+interface OrderOnlyPayload {
   orderId: string;
 }
 
-type SagaPayload = StockRequestedPayload | PaymentCompletedPayload;
+type SagaPayload = StockRequestedPayload | OrderOnlyPayload;
 
 const QUEUE_NAME = 'product-service.order-saga-events';
 const STOCK_RESERVE_REQUESTED = 'stock.reserve.requested';
 const STOCK_RELEASE_REQUESTED = 'stock.release.requested';
+const STOCK_RESTOCK_REQUESTED = 'stock.restock.requested';
 const PAYMENT_COMPLETED = 'payment.completed';
 // Same retry/backoff constants as RabbitMqProductEventPublisher — see that file for why.
 const INITIAL_CONNECT_ATTEMPTS = 5;
@@ -39,8 +41,8 @@ const DEFAULT_SAGA_QUEUE_DELIVERY_LIMIT = 10;
 
 /**
  * Consumes the checkout saga's stock steps (`stock.reserve.requested` /
- * `stock.release.requested` / `payment.completed`) off the `order-saga-events` topic exchange
- * (T-PS-3). Mirrors
+ * `stock.release.requested` / `payment.completed` / `stock.restock.requested`) off the
+ * `order-saga-events` topic exchange (T-PS-3). Mirrors
  * `RabbitMqProductEventPublisher`'s raw `amqplib` connect/retry/reconnect style. Manually
  * acks after the handler completes; nacks + requeues on unexpected (e.g. transient DB)
  * errors so a broker restart or brief DB blip doesn't drop a saga message (NFR3). Domain
@@ -55,6 +57,11 @@ const DEFAULT_SAGA_QUEUE_DELIVERY_LIMIT = 10;
  * that keeps getting nacked-and-requeued (see `connect()`). Everything from
  * `InventoryService.reserve()`/`release()` downward keeps the existing nack-with-requeue
  * behavior — those failures are expected to be transient or are already handled internally.
+ *
+ * A dropped broker connection or channel must never crash the process: `ack`/`nack` on a
+ * closed channel are logged (the broker redelivers the unacked message), the handler's
+ * promise is always caught, and channel `error`/`close` trigger the same background
+ * reconnect as the connection's.
  */
 @Injectable()
 export class OrderSagaEventConsumer implements OnModuleInit, OnModuleDestroy {
@@ -129,11 +136,31 @@ export class OrderSagaEventConsumer implements OnModuleInit, OnModuleDestroy {
 
   private async connect(): Promise<void> {
     const connection = await amqplib.connect(this.url);
-    connection.on('error', (error) => this.handleDisconnect(error));
-    connection.on('close', () =>
-      this.handleDisconnect(new Error('connection closed')),
+    // Listeners act only while this connection is the current one (see handleDisconnect),
+    // so a half-opened connection closed below never schedules a second reconnect.
+    connection.on('error', (error: Error) =>
+      this.handleDisconnect(connection, error),
     );
+    connection.on('close', () =>
+      this.handleDisconnect(connection, new Error('connection closed')),
+    );
+    try {
+      await this.setUpChannel(connection);
+    } catch (error) {
+      this.closeQuietly(connection);
+      throw error;
+    }
+  }
+
+  private async setUpChannel(connection: amqplib.ChannelModel): Promise<void> {
     const channel = await connection.createChannel();
+    // Without an 'error' listener a channel error is thrown as an unhandled 'error' event.
+    channel.on('error', (error: Error) =>
+      this.handleDisconnect(connection, error),
+    );
+    channel.on('close', () =>
+      this.handleDisconnect(connection, new Error('channel closed')),
+    );
     await channel.assertExchange(ORDER_SAGA_EVENTS_EXCHANGE, 'topic', {
       durable: true,
     });
@@ -166,10 +193,20 @@ export class OrderSagaEventConsumer implements OnModuleInit, OnModuleDestroy {
       ORDER_SAGA_EVENTS_EXCHANGE,
       PAYMENT_COMPLETED,
     );
+    await channel.bindQueue(
+      queue.queue,
+      ORDER_SAGA_EVENTS_EXCHANGE,
+      STOCK_RESTOCK_REQUESTED,
+    );
     await channel.prefetch(1);
     await channel.consume(queue.queue, (msg) => {
       if (msg) {
-        void this.handleMessage(channel, msg);
+        this.handleMessage(channel, msg).catch((error) =>
+          this.logger.error(
+            `Unhandled error while handling "${msg.fields.routingKey}" message`,
+            error instanceof Error ? error.stack : String(error),
+          ),
+        );
       }
     });
     this.connection = connection;
@@ -197,7 +234,7 @@ export class OrderSagaEventConsumer implements OnModuleInit, OnModuleDestroy {
           error instanceof Error ? error.message : String(error)
         }`,
       );
-      channel.nack(msg, false, false);
+      this.settle(channel, msg, 'nack', false);
       return;
     }
 
@@ -214,25 +251,59 @@ export class OrderSagaEventConsumer implements OnModuleInit, OnModuleDestroy {
         );
       } else if (routingKey === PAYMENT_COMPLETED) {
         await this.inventoryService.commit(payload.orderId);
+      } else if (routingKey === STOCK_RESTOCK_REQUESTED) {
+        await this.inventoryService.restock(payload.orderId);
       } else {
         this.logger.warn(
           `Ignoring message with unexpected routing key "${routingKey}"`,
         );
       }
-      channel.ack(msg);
+      this.settle(channel, msg, 'ack');
     } catch (error) {
       this.logger.error(
-        `Failed to handle "${routingKey}" message — nacking for redelivery`,
+        `Failed to handle "${routingKey}" message — nacking for redelivery in ${RECONNECT_DELAY_MS} ms`,
         error instanceof Error ? error.stack : String(error),
       );
-      channel.nack(msg, false, true);
+      // Under prefetch(1) a requeued message comes back within milliseconds; without a pause
+      // a short outage (e.g. the reply publisher reconnecting) would burn every quorum
+      // delivery and dead-letter a valid request.
+      await new Promise((resolve) =>
+        setTimeout(resolve, RECONNECT_DELAY_MS).unref(),
+      );
+      this.settle(channel, msg, 'nack', true);
+    }
+  }
+
+  /**
+   * `ack`/`nack` throw on a channel that closed while the message was being handled. The
+   * broker redelivers every unacked message of a closed channel, so logging is enough.
+   */
+  private settle(
+    channel: amqplib.Channel,
+    msg: amqplib.ConsumeMessage,
+    action: 'ack' | 'nack',
+    requeue = false,
+  ): void {
+    try {
+      if (action === 'ack') {
+        channel.ack(msg);
+      } else {
+        channel.nack(msg, false, requeue);
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Could not ${action} "${msg.fields.routingKey}" message — channel is gone, the broker will redeliver it: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
   }
 
   /**
    * Parses and shape-checks the message body. Throws (synchronously) on invalid JSON or a
    * missing/wrong-typed `orderId` (or `items` for stock messages) — the caller treats that as a permanent,
-   * non-retryable failure.
+   * non-retryable failure. Stock items must have a string `variantId` and a positive integer
+   * `quantity`; repeated `variantId`s are merged by summing their quantities.
    */
   private parsePayload(
     msg: amqplib.ConsumeMessage,
@@ -257,11 +328,49 @@ export class OrderSagaEventConsumer implements OnModuleInit, OnModuleDestroy {
           : 'message payload is missing required "orderId" field',
       );
     }
-    return candidate as SagaPayload;
+    if (!requiresItems) {
+      return { orderId: candidate.orderId };
+    }
+    return {
+      orderId: candidate.orderId,
+      items: this.mergeItems(candidate.items as unknown[]),
+    };
   }
 
-  private handleDisconnect(error: Error): void {
-    if (this.shuttingDown) {
+  private mergeItems(rawItems: unknown[]): ReserveItem[] {
+    const quantitiesByVariant = new Map<string, number>();
+    for (const raw of rawItems) {
+      const item = raw as Partial<ReserveItem> | null;
+      if (
+        typeof item !== 'object' ||
+        item === null ||
+        typeof item.variantId !== 'string' ||
+        typeof item.quantity !== 'number' ||
+        !Number.isInteger(item.quantity) ||
+        item.quantity <= 0
+      ) {
+        throw new Error(
+          'every item needs a string "variantId" and a positive integer "quantity"',
+        );
+      }
+      quantitiesByVariant.set(
+        item.variantId,
+        (quantitiesByVariant.get(item.variantId) ?? 0) + item.quantity,
+      );
+    }
+    return [...quantitiesByVariant.entries()].map(([variantId, quantity]) => ({
+      variantId,
+      quantity,
+    }));
+  }
+
+  private handleDisconnect(
+    connection: amqplib.ChannelModel,
+    error: Error,
+  ): void {
+    // Ignore events from a connection that is not (or no longer) the current one: a
+    // half-opened attempt that connect() already closed, or one replaced by a reconnect.
+    if (this.shuttingDown || this.connection !== connection) {
       return;
     }
     this.channel = undefined;
@@ -269,7 +378,13 @@ export class OrderSagaEventConsumer implements OnModuleInit, OnModuleDestroy {
     this.logger.warn(
       `RabbitMQ connection lost (${error.message}) — will retry in the background`,
     );
+    // A channel-level failure leaves the connection open — close it so it does not leak.
+    this.closeQuietly(connection);
     this.scheduleReconnect();
+  }
+
+  private closeQuietly(connection: amqplib.ChannelModel): void {
+    connection.close().catch(() => undefined);
   }
 
   private scheduleReconnect(): void {

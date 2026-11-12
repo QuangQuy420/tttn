@@ -25,6 +25,11 @@ export interface IPaymentRepository {
     paymentMethod: string,
     reason: string,
   ): Promise<Payment>;
+  /**
+   * Mock refund: flips the order's payment PAID → REFUNDED in one conditional UPDATE.
+   * Returns `false` when no PAID row matched (already refunded, FAILED, or missing).
+   */
+  markRefunded(orderId: string): Promise<boolean>;
 }
 
 @Injectable()
@@ -78,5 +83,13 @@ export class TypeOrmPaymentRepository implements IPaymentRepository {
       failureReason: reason,
     });
     return this.repo.save(payment);
+  }
+
+  async markRefunded(orderId: string): Promise<boolean> {
+    const result = await this.repo.update(
+      { orderId, status: PaymentStatus.PAID },
+      { status: PaymentStatus.REFUNDED },
+    );
+    return (result.affected ?? 0) > 0;
   }
 }

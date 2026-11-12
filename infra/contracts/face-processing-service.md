@@ -28,6 +28,14 @@ response envelope (see `README.md`). Added in `.planning/2026-09-29-08-face-shap
 ```
 
 - `method = rule` (`FACE_SHAPE_CLASSIFIER=rule`): `probabilities` is one-hot of the rule label.
+- Files over 10 MB → 400 `BAD_REQUEST`, message `"Ảnh quá lớn — dung lượng tối đa cho phép là 10MB."`
+  (the gateway already stops bodies over 10 MB with 413 `PAYLOAD_TOO_LARGE`).
+- Images with more than `FACE_MAX_PIXELS` pixels (width × height, default 25 000 000, read from
+  the image header before decoding) → 400 `BAD_REQUEST`, message
+  `"Ảnh quá lớn — kích thước tối đa cho phép là 25 triệu điểm ảnh."`
+- Image storage (MinIO / S3) unreachable or timing out → 503 `SERVICE_UNAVAILABLE`, message
+  `"Không thể lưu ảnh lúc này — vui lòng thử lại sau."` Stored object keys are `<uuid><ext>`
+  (the uploaded file name is not used).
 - Photos with `|yaw| > FACE_MAX_YAW_DEG` (default 25°) → 400 `BAD_REQUEST`, message
   `"Khuôn mặt đang quay nghiêng quá nhiều — vui lòng nhìn thẳng vào camera và chụp lại."`
 - Faces with cheekbone width < `FACE_MIN_CHEEK_PX` pixels (default 80, same as the training

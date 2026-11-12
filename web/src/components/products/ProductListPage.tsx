@@ -79,9 +79,20 @@ export function ProductListPage() {
   // effect. This is React's documented "adjust state during render" pattern, not a plain
   // setState-in-effect (which cascades an extra render for no benefit).
   const [syncedSearch, setSyncedSearch] = useState(search);
+  // Terms this input pushed to the URL ("" for none) that the URL has not reflected yet. When the
+  // URL catches up with one of our own pushes, the input keeps whatever the user typed meanwhile
+  // instead of being reset to the (now older) pushed term — fast typing never loses characters
+  // (AC61). Any other change (back / forward, a link) still overwrites the input.
+  const [pendingSearches, setPendingSearches] = useState<string[]>([]);
   if (search !== syncedSearch) {
     setSyncedSearch(search);
-    setSearchInput(search ?? "");
+    const pushedIndex = pendingSearches.indexOf(search ?? "");
+    if (pushedIndex === -1) {
+      setSearchInput(search ?? "");
+      setPendingSearches([]);
+    } else {
+      setPendingSearches(pendingSearches.slice(pushedIndex + 1));
+    }
   }
 
   function updateFilters(next: FilterUpdate) {
@@ -151,6 +162,7 @@ export function ProductListPage() {
   useEffect(() => {
     if (searchInput === (search ?? "")) return;
     const timer = setTimeout(() => {
+      setPendingSearches((current) => [...current, searchInput]);
       updateFiltersRef.current({ search: searchInput || undefined });
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);

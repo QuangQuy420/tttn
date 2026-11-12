@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.util.UrlPathHelper;
 
 import java.io.IOException;
 
@@ -23,6 +24,7 @@ public class InternalApiKeyFilter extends OncePerRequestFilter {
 
     private final String internalApiKey;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final UrlPathHelper urlPathHelper = new UrlPathHelper();
 
     public InternalApiKeyFilter(
             @Value("${internal.api-key}") String internalApiKey
@@ -36,7 +38,10 @@ public class InternalApiKeyFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
-        if (!request.getRequestURI().startsWith(INTERNAL_PATH_PREFIX)) {
+        // Match on the decoded path (what MVC routes on), so "/%69nternal/..." cannot bypass the check.
+        String path = urlPathHelper.getPathWithinApplication(request);
+
+        if (!path.startsWith(INTERNAL_PATH_PREFIX)) {
             filterChain.doFilter(request, response);
             return;
         }

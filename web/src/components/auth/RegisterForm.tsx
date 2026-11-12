@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { register } from "@/lib/api";
+import { getFieldErrors, register } from "@/lib/api";
 import { useAuthForm } from "@/hooks/useAuthForm";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -13,6 +13,7 @@ interface FieldErrors {
     email?: string;
     password?: string;
     confirmPassword?: string;
+    phone?: string;
 }
 
 function validate(
@@ -65,12 +66,32 @@ export function RegisterForm() {
     const [fieldErrors, setFieldErrors] =
         useState<FieldErrors>({});
 
+    // Server validation errors for a known field are shown next to that field (AC65); the
+    // general message still comes from useAuthForm.
+    async function registerWithFieldErrors(
+        payload: Parameters<typeof register>[0],
+    ) {
+        try {
+            return await register(payload);
+        } catch (err) {
+            const serverErrors = getFieldErrors(err);
+            setFieldErrors({
+                username: serverErrors.username,
+                fullName: serverErrors.fullName,
+                email: serverErrors.email,
+                password: serverErrors.password,
+                phone: serverErrors.phone,
+            });
+            throw err;
+        }
+    }
+
     const {
         isSubmitting,
         error,
         success,
         submit,
-    } = useAuthForm(register);
+    } = useAuthForm(registerWithFieldErrors);
 
     async function handleSubmit(
         event: FormEvent<HTMLFormElement>,
@@ -182,6 +203,12 @@ export function RegisterForm() {
                     }
                     autoComplete="tel"
                 />
+
+                {fieldErrors.phone && (
+                    <span className="field-error">
+            {fieldErrors.phone}
+          </span>
+                )}
             </label>
 
             <label htmlFor="register-password">

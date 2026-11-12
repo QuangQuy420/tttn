@@ -59,7 +59,7 @@ export class OrdersProxyService {
     variantId: string,
     body: Record<string, unknown>,
   ): Promise<unknown> {
-    const path = `/api/v1/carts/${userId}/items/${variantId}`;
+    const path = `/api/v1/carts/${userId}/items/${encodeURIComponent(variantId)}`;
     try {
       const response = await firstValueFrom(
         this.httpService.put(`${this.baseUrl}${path}`, body),
@@ -71,7 +71,7 @@ export class OrdersProxyService {
   }
 
   async removeCartItem(userId: string, variantId: string): Promise<unknown> {
-    const path = `/api/v1/carts/${userId}/items/${variantId}`;
+    const path = `/api/v1/carts/${userId}/items/${encodeURIComponent(variantId)}`;
     try {
       const response = await firstValueFrom(
         this.httpService.delete(`${this.baseUrl}${path}`),
@@ -149,7 +149,7 @@ export class OrdersProxyService {
   }
 
   async getOrderDetail(userId: string, orderId: string): Promise<unknown> {
-    return this.forwardGet(`/api/v1/users/${userId}/orders/${orderId}`);
+    return this.forwardGet(`/api/v1/users/${userId}/orders/${encodeURIComponent(orderId)}`);
   }
 
   async cancelOrder(
@@ -157,7 +157,7 @@ export class OrdersProxyService {
     orderId: string,
     body: Record<string, unknown>,
   ): Promise<unknown> {
-    const path = `/api/v1/users/${userId}/orders/${orderId}/cancel`;
+    const path = `/api/v1/users/${userId}/orders/${encodeURIComponent(orderId)}/cancel`;
     try {
       const response = await firstValueFrom(
         this.httpService.post(`${this.baseUrl}${path}`, body),
@@ -173,7 +173,7 @@ export class OrdersProxyService {
   }
 
   async getAdminOrderDetail(orderId: string): Promise<unknown> {
-    return this.forwardGet(`/api/v1/admin/orders/${orderId}`);
+    return this.forwardGet(`/api/v1/admin/orders/${encodeURIComponent(orderId)}`);
   }
 
   async getAdminOrdersSummary(): Promise<unknown> {
@@ -185,7 +185,7 @@ export class OrdersProxyService {
     changedByUserId: string,
     body: Record<string, unknown>,
   ): Promise<unknown> {
-    const path = `/api/v1/admin/orders/${orderId}/status`;
+    const path = `/api/v1/admin/orders/${encodeURIComponent(orderId)}/status`;
     try {
       const response = await firstValueFrom(
         this.httpService.patch(`${this.baseUrl}${path}`, body, {
@@ -206,7 +206,7 @@ export class OrdersProxyService {
     date: string,
     query: Record<string, unknown>,
   ): Promise<unknown> {
-    return this.forwardGet(`/api/v1/admin/saga-logs/days/${date}`, query);
+    return this.forwardGet(`/api/v1/admin/saga-logs/days/${encodeURIComponent(date)}`, query);
   }
 
   async getOrderSagaLogs(
@@ -214,7 +214,7 @@ export class OrdersProxyService {
     query: Record<string, unknown>,
   ): Promise<unknown> {
     return this.forwardGet(
-      `/api/v1/admin/saga-logs/orders/${orderId}`,
+      `/api/v1/admin/saga-logs/orders/${encodeURIComponent(orderId)}`,
       query,
     );
   }

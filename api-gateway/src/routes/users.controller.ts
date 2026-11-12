@@ -4,15 +4,20 @@ import {
     Delete,
     Get,
     Headers,
+    HttpCode,
+    HttpStatus,
     Param,
     Post,
     Put,
     Query,
+    Req,
     UseGuards,
 } from '@nestjs/common';
-import { JwtGuard } from '../auth/jwt.guard';
+import { Request } from 'express';
+import { AuthenticatedUser, JwtGuard } from '../auth/jwt.guard';
 import { RequirePermission } from '../auth/permissions.decorator';
 import { PermissionsGuard } from '../auth/permissions.guard';
+import { UuidPipe } from '../common/uuid.pipe';
 import { PermissionsCacheService } from '../services/permissions-cache.service';
 import { UsersProxyService } from '../services/users-proxy.service';
 
@@ -34,6 +39,7 @@ export class UsersController {
     }
 
     @Get('me')
+    @UseGuards(JwtGuard)
     getProfile(
         @Headers('authorization') authorization?: string,
     ): Promise<unknown> {
@@ -41,6 +47,7 @@ export class UsersController {
     }
 
     @Put('me')
+    @UseGuards(JwtGuard)
     updateProfile(
         @Body() body: Record<string, unknown>,
         @Headers('authorization') authorization?: string,
@@ -52,17 +59,24 @@ export class UsersController {
     }
 
     @Put('change-password')
-    changePassword(
+    @UseGuards(JwtGuard)
+    async changePassword(
         @Body() body: Record<string, unknown>,
+        @Req() request: Request & { user: AuthenticatedUser },
         @Headers('authorization') authorization?: string,
     ): Promise<unknown> {
-        return this.usersProxyService.changePassword(
+        const result = await this.usersProxyService.changePassword(
             body,
             authorization,
         );
+        // user-service moved `tokensValidAfter`: drop the cached auth state so
+        // the old token is rejected at once, not after the 60 s TTL.
+        await this.permissionsCacheService.invalidateUser(request.user.userId);
+        return result;
     }
 
     @Get('me/addresses')
+    @UseGuards(JwtGuard)
     listAddresses(
         @Query() query: Record<string, unknown>,
         @Headers('authorization') authorization?: string,
@@ -71,6 +85,8 @@ export class UsersController {
     }
 
     @Post('me/addresses')
+    @UseGuards(JwtGuard)
+    @HttpCode(HttpStatus.OK)
     createAddress(
         @Body() body: Record<string, unknown>,
         @Headers('authorization') authorization?: string,
@@ -79,8 +95,9 @@ export class UsersController {
     }
 
     @Put('me/addresses/:id')
+    @UseGuards(JwtGuard)
     updateAddress(
-        @Param('id') id: string,
+        @Param('id', UuidPipe) id: string,
         @Body() body: Record<string, unknown>,
         @Headers('authorization') authorization?: string,
     ): Promise<unknown> {
@@ -88,8 +105,9 @@ export class UsersController {
     }
 
     @Delete('me/addresses/:id')
+    @UseGuards(JwtGuard)
     deleteAddress(
-        @Param('id') id: string,
+        @Param('id', UuidPipe) id: string,
         @Headers('authorization') authorization?: string,
     ): Promise<unknown> {
         return this.usersProxyService.deleteAddress(id, authorization);
@@ -99,7 +117,7 @@ export class UsersController {
     @UseGuards(JwtGuard, PermissionsGuard)
     @RequirePermission('user:manage-roles')
     async assignRole(
-        @Param('id') id: string,
+        @Param('id', UuidPipe) id: string,
         @Body() body: Record<string, unknown>,
         @Headers('authorization') authorization?: string,
     ): Promise<unknown> {
@@ -117,8 +135,8 @@ export class UsersController {
     @UseGuards(JwtGuard, PermissionsGuard)
     @RequirePermission('user:manage-roles')
     async removeRole(
-        @Param('id') id: string,
-        @Param('roleId') roleId: string,
+        @Param('id', UuidPipe) id: string,
+        @Param('roleId', UuidPipe) roleId: string,
         @Headers('authorization') authorization?: string,
     ): Promise<unknown> {
         const result = await this.usersProxyService.removeRoleFromUser(

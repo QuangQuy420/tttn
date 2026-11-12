@@ -1,5 +1,6 @@
 package com.tttn.userservice.service.impl;
 
+import com.tttn.userservice.dto.response.PermissionListResponse;
 import com.tttn.userservice.entity.Permission;
 import com.tttn.userservice.entity.Role;
 import com.tttn.userservice.entity.User;
@@ -24,9 +25,33 @@ public class PermissionServiceImpl implements PermissionService {
     @Override
     @Transactional(readOnly = true)
     public List<String> getPermissions(UUID userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        return toPermissionCodes(findUser(userId));
+    }
 
+    @Override
+    @Transactional(readOnly = true)
+    public PermissionListResponse getAuthorizationState(UUID userId) {
+        User user = findUser(userId);
+
+        return new PermissionListResponse(
+                toPermissionCodes(user),
+                user.getStatus(),
+                user.tokensValidAfterEpochSecond()
+        );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean hasPermission(UUID userId, String permissionCode) {
+        return getPermissions(userId).contains(permissionCode);
+    }
+
+    private User findUser(UUID userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+    }
+
+    private List<String> toPermissionCodes(User user) {
         return user.getRoles()
                 .stream()
                 .map(Role::getPermissions)
@@ -34,11 +59,5 @@ public class PermissionServiceImpl implements PermissionService {
                 .map(Permission::getCode)
                 .distinct()
                 .toList();
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public boolean hasPermission(UUID userId, String permissionCode) {
-        return getPermissions(userId).contains(permissionCode);
     }
 }

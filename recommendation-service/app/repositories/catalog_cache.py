@@ -29,6 +29,14 @@ _REDIS_TIMEOUT_SECONDS = 0.5
 
 
 class ICatalogCache(Protocol):
+    invalidation_count: int
+    """Process-local count of `mark_invalidated` calls — `list_catalog` compares it before
+    and after a fetch so a result loaded across an invalidation is not cached."""
+
+    def mark_invalidated(self) -> None:
+        """Bump `invalidation_count`. Synchronous: the consumer calls it before awaiting
+        `invalidate`, so a fetch in flight sees it (one uvicorn worker = one process)."""
+
     async def get(self) -> list[CatalogProductDto] | None:
         """The cached catalog, or None on a miss or any cache error."""
 
@@ -42,7 +50,16 @@ class ICatalogCache(Protocol):
         """True when the cache backend answers (readiness check)."""
 
 
-class NoopCatalogCache:
+class _InvalidationCounter:
+    """Shared `invalidation_count` / `mark_invalidated` of the `ICatalogCache` classes."""
+
+    invalidation_count: int = 0
+
+    def mark_invalidated(self) -> None:
+        self.invalidation_count += 1
+
+
+class NoopCatalogCache(_InvalidationCounter):
     """`ICatalogCache` that always misses and never touches the network."""
 
     async def get(self) -> list[CatalogProductDto] | None:
@@ -58,7 +75,7 @@ class NoopCatalogCache:
         return True
 
 
-class RedisCatalogCache:
+class RedisCatalogCache(_InvalidationCounter):
     """Redis-backed `ICatalogCache`."""
 
     def __init__(self, settings: Settings) -> None:

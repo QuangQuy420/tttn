@@ -14,6 +14,7 @@ export interface IOrderSagaEventPublisher {
     transactionCode: string,
   ): Promise<void>;
   publishPaymentFailed(orderId: string, reason: string): Promise<void>;
+  publishPaymentRefunded(orderId: string, paymentId: string): Promise<void>;
 }
 
 export const ORDER_SAGA_EVENTS_EXCHANGE = 'order-saga-events';
@@ -32,13 +33,14 @@ const RECONNECT_DELAY_MS = 3000;
 
 /**
  * Publishes payment-service's replies on the checkout saga (`payment.completed` /
- * `payment.failed`) onto the `order-saga-events` topic exchange — see
+ * `payment.failed` / `payment.refunded`) onto the `order-saga-events` topic exchange — see
  * `infra/contracts/order-checkout-saga.md`. Mirrors
  * `product-service/src/repositories/order-saga-event-publisher.repository.ts`'s raw
- * `amqplib` connect/retry/reconnect style exactly. Publish failures are caught and logged,
- * never thrown (NFR1) — a broker outage must never crash the saga consumer that calls this;
- * unlike order-service's one special-cased first publish, nothing here is a "saga's first
- * message," so there is no throw-and-fail-loud case in this service.
+ * `amqplib` connect/retry/reconnect style. Uses a confirm channel and persistent messages:
+ * a publish resolves only once the broker has confirmed it, and rejects (after logging) when
+ * there is no channel, the broker nacks, or the channel closes first. The saga consumer then
+ * nacks-with-requeue the request instead of acking one whose reply was lost; every handler
+ * is idempotent, so the redelivery just re-publishes the stored outcome.
  */
 @Injectable()
 export class RabbitMqOrderSagaEventPublisher
@@ -47,7 +49,7 @@ export class RabbitMqOrderSagaEventPublisher
   private readonly logger = new Logger(RabbitMqOrderSagaEventPublisher.name);
   private readonly url: string;
   private connection: amqplib.ChannelModel | undefined;
-  private channel: amqplib.Channel | undefined;
+  private channel: amqplib.ConfirmChannel | undefined;
   private reconnectTimer: NodeJS.Timeout | undefined;
   private shuttingDown = false;
 
@@ -102,16 +104,42 @@ export class RabbitMqOrderSagaEventPublisher
 
   private async connect(): Promise<void> {
     const connection = await amqplib.connect(this.url);
-    connection.on('error', (error) => this.handleDisconnect(error));
-    connection.on('close', () =>
-      this.handleDisconnect(new Error('connection closed')),
-    );
-    const channel = await connection.createChannel();
-    await channel.assertExchange(ORDER_SAGA_EVENTS_EXCHANGE, 'topic', {
-      durable: true,
+    // Only the active connection may trigger a reconnect — events from a connection that
+    // failed setup (closed below) or was already replaced are ignored.
+    connection.on('error', (error) => {
+      if (this.connection === connection) {
+        this.handleDisconnect(error);
+      }
     });
-    this.connection = connection;
-    this.channel = channel;
+    connection.on('close', () => {
+      if (this.connection === connection) {
+        this.handleDisconnect(new Error('connection closed'));
+      }
+    });
+    try {
+      const channel = await connection.createConfirmChannel();
+      // A channel-level error closes only the channel; without a listener the 'error' event
+      // would crash the process. 'close' drops the whole connection and reconnects, so
+      // publishes fail fast instead of hitting a dead channel.
+      channel.on('error', (error: Error) =>
+        this.logger.warn(`RabbitMQ channel error: ${error.message}`),
+      );
+      channel.on('close', () => {
+        if (this.shuttingDown || this.channel !== channel) {
+          return;
+        }
+        this.handleDisconnect(new Error('channel closed'));
+        connection.close().catch(() => undefined);
+      });
+      await channel.assertExchange(ORDER_SAGA_EVENTS_EXCHANGE, 'topic', {
+        durable: true,
+      });
+      this.connection = connection;
+      this.channel = channel;
+    } catch (error) {
+      connection.close().catch(() => undefined);
+      throw error;
+    }
   }
 
   private handleDisconnect(error: Error): void {
@@ -166,26 +194,51 @@ export class RabbitMqOrderSagaEventPublisher
     });
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
+  async publishPaymentRefunded(
+    orderId: string,
+    paymentId: string,
+  ): Promise<void> {
+    await this.publish(orderId, 'payment.refunded', {
+      orderId,
+      occurredAt: new Date().toISOString(),
+      paymentId,
+    });
+  }
+
+  /** Resolves once the broker confirms the message; rejects (after logging) otherwise. */
   private async publish(
     orderId: string,
     routingKey: string,
     body: Record<string, unknown>,
   ): Promise<void> {
     try {
-      if (!this.channel) {
-        throw new Error('RabbitMQ channel is not available');
-      }
-      this.channel.publish(
-        ORDER_SAGA_EVENTS_EXCHANGE,
-        routingKey,
-        Buffer.from(JSON.stringify(body)),
-      );
+      await new Promise<void>((resolve, reject) => {
+        if (!this.channel) {
+          reject(new Error('RabbitMQ channel is not available'));
+          return;
+        }
+        // Throws synchronously if the channel closed after the check above.
+        this.channel.publish(
+          ORDER_SAGA_EVENTS_EXCHANGE,
+          routingKey,
+          Buffer.from(JSON.stringify(body)),
+          { persistent: true },
+          // amqplib calls back with null on ack, an Error on nack / channel close.
+          (error: Error | null) => {
+            if (error) {
+              reject(error);
+            } else {
+              resolve();
+            }
+          },
+        );
+      });
     } catch (error) {
       this.logger.error(
         `Failed to publish "${routingKey}" event for order ${orderId}`,
         error instanceof Error ? error.stack : String(error),
       );
+      throw error;
     }
   }
 }

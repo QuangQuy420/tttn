@@ -38,6 +38,11 @@ only slower); permissions TTL ≤ 60 s; catalog TTL ≤ 300 s; one gateway insta
    `PUT /api/roles/:id` and `DELETE /api/roles/:id` delete every `perm:*` key (`SCAN` + `DEL`,
    never `KEYS`), since any user may hold the role. An upstream error is passed through and
    invalidates nothing.
+   (2026-11-11: the entry now also holds the user's `status` / `tokensValidAfter` for token
+   revocation on every JWT route, and a write is skipped when an invalidation happened during the
+   fetch — generation counters `permgen:{userId}` / `permgen:all`, expiring 1 day after the
+   last bump. The internal call has a 1.5 s timeout; after a 5xx / no response user-service is
+   skipped for 10 s, during which the JWT check fails open and `PermissionsGuard` fails closed.)
 2. **Cache-aside for the catalog in recommendation-service, invalidated by events.**
    `RedisCatalogCache` (`recommendation-service/app/repositories/catalog_cache.py`) keeps the whole
    catalog under one key `rec:catalog:v1` (JSON) with `EX CATALOG_TTL_SECONDS` (default 300).
@@ -51,6 +56,8 @@ only slower); permissions TTL ≤ 60 s; catalog TTL ≤ 300 s; one gateway insta
    **deletes the key**, then acks; the next recommendation reloads the catalog. It does not
    patch the cached entry: the event carries only `productId`, and a full reload is simple and
    always correct.
+   (2026-11-11: a fetch that overlaps an invalidation is returned to its caller but not cached or
+   reused, and a failed fetch is re-raised to callers for 2 s instead of each one timing out.)
 3. **Failure mode = bypass.** Redis errors never reach the caller.
    - Gateway (`ioredis`): no offline queue, one retry, 1 s connect timeout, 0.5 s command timeout
      (a Redis that stops answering fails the command fast); every error is logged
@@ -111,6 +118,10 @@ only slower); permissions TTL ≤ 60 s; catalog TTL ≤ 300 s; one gateway insta
     miss read the old permissions and writes them back after the invalidation `DEL`; and when
     the `DEL` failed during a short Redis outage. In these cases a **revoked permission can still
     work for up to 60 s**.
+- (2026-11-11) The stale write-back cases above — a catalog fetch started before the
+  invalidation, and a guard miss writing old permissions after the `DEL` — are now prevented;
+  lost `product-events` are re-sent after a broker reconnect (lost only on a product-service
+  restart).
 - **Losing Redis costs latency, not correctness.** Both caches fall back to the owning service.
   Redis in compose has no volume (so its data is lost when the container is recreated) and no
   password (local only), which is fine for a cache.

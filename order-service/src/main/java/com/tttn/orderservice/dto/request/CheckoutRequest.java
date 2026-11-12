@@ -31,6 +31,7 @@ public record CheckoutRequest(
         String note,
 
         @NotBlank(message = "Phương thức thanh toán không được để trống")
+        @Size(max = 30, message = "Phương thức thanh toán tối đa 30 ký tự")
         String paymentMethod,
 
         @NotEmpty(message = "Vui lòng chọn ít nhất 1 sản phẩm để thanh toán")

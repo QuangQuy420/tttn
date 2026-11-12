@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -31,4 +32,12 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
     );
 
     boolean existsByAggregateIdAndStatus(UUID aggregateId, OutboxStatus status);
+
+    // SagaReconciliationJob: ignores rows that may stay PENDING for a long time on purpose
+    // (refund / restock are never given up), so they do not block the order's other steps.
+    boolean existsByAggregateIdAndStatusAndRoutingKeyNotIn(
+            UUID aggregateId,
+            OutboxStatus status,
+            Collection<String> routingKeys
+    );
 }

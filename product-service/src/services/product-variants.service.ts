@@ -1,24 +1,33 @@
 import {
-  BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
+import { QueryFailedError } from 'typeorm';
 import { IProductRepository } from '../repositories/product.repository';
 import { IProductVariantRepository } from '../repositories/product-variant.repository';
 import { IInventoryRepository } from '../repositories/inventory.repository';
 import { IProductEventPublisher } from '../repositories/product-event-publisher.repository';
+import { IStockReservationRepository } from '../repositories/stock-reservation.repository';
 import {
   PRODUCT_REPOSITORY,
   PRODUCT_VARIANT_REPOSITORY,
   INVENTORY_REPOSITORY,
   PRODUCT_EVENT_PUBLISHER,
+  STOCK_RESERVATION_REPOSITORY,
 } from '../repositories/tokens';
 import { CreateVariantDto } from '../routes/dto/create-variant.dto';
 import { UpdateVariantDto } from '../routes/dto/update-variant.dto';
 import { ProductVariantResponseDto } from '../routes/dto/product-response.dto';
 import { ProductVariant } from '../db/entities/product-variant.entity';
+
+const COLOR_SIZE_UNIQUE_INDEX =
+  'UQ_ps_product_variants_product_color_size_active';
+
+const VARIANT_IN_USE_MESSAGE =
+  'Không thể xoá phiên bản vì đang có đơn hàng giữ hàng. Vui lòng thử lại sau khi đơn được xử lý.';
 
 /**
  * Owns `ps_product_variants`, including the variant's stock quantities. A variant without a
@@ -36,6 +45,8 @@ export class ProductVariantsService {
     private readonly inventoryRepository: IInventoryRepository,
     @Inject(PRODUCT_EVENT_PUBLISHER)
     private readonly eventPublisher: IProductEventPublisher,
+    @Inject(STOCK_RESERVATION_REPOSITORY)
+    private readonly stockReservationRepository: IStockReservationRepository,
   ) {}
 
   async create(
@@ -51,16 +62,22 @@ export class ProductVariantsService {
     await this.assertNoDuplicateColorSize(productId, dto.color, dto.size);
 
     const skuVariant = await this.generateUniqueSkuVariant(product.sku);
-    const variant = await this.variantRepository.create({
-      productId,
-      color: dto.color,
-      colorHex: dto.colorHex,
-      size: dto.size,
-      extraPrice: dto.extraPrice ?? 0,
-      skuVariant,
-      quantity: dto.stock ?? 0,
-      reservedQuantity: 0,
-    });
+    let variant: ProductVariant;
+    try {
+      variant = await this.variantRepository.create({
+        productId,
+        color: dto.color,
+        colorHex: dto.colorHex,
+        size: dto.size,
+        extraPrice: dto.extraPrice ?? 0,
+        skuVariant,
+        quantity: dto.stock ?? 0,
+        reservedQuantity: 0,
+      });
+    } catch (error) {
+      // A concurrent create won the race past the pre-check.
+      throw this.toDuplicateConflict(error, dto.color, dto.size);
+    }
 
     await this.eventPublisher.publish({ type: 'product.updated', productId });
 
@@ -89,13 +106,22 @@ export class ProductVariantsService {
     if (dto.size !== undefined) updateData.size = dto.size;
     if (dto.extraPrice !== undefined) updateData.extraPrice = dto.extraPrice;
 
-    const updated =
-      Object.keys(updateData).length > 0
-        ? await this.variantRepository.update(variantId, updateData)
-        : variant;
+    let updated = variant;
+    if (Object.keys(updateData).length > 0) {
+      try {
+        updated = await this.variantRepository.update(variantId, updateData);
+      } catch (error) {
+        throw this.toDuplicateConflict(
+          error,
+          dto.color ?? variant.color,
+          dto.size ?? variant.size,
+        );
+      }
+    }
 
+    // `stock` is the new *available* stock; the repository keeps held reservations on top.
     if (dto.stock !== undefined) {
-      await this.inventoryRepository.setQuantity(variantId, dto.stock);
+      await this.inventoryRepository.setAvailable(variantId, dto.stock);
     }
 
     await this.eventPublisher.publish({ type: 'product.updated', productId });
@@ -109,6 +135,12 @@ export class ProductVariantsService {
 
   async remove(productId: string, variantId: string): Promise<void> {
     await this.findOwnedVariant(productId, variantId);
+    // A held reservation would later fail to commit against a soft-deleted variant.
+    if (
+      await this.stockReservationRepository.hasReservedForVariant(variantId)
+    ) {
+      throw new ConflictException(VARIANT_IN_USE_MESSAGE);
+    }
     await this.variantRepository.softDelete(variantId);
 
     await this.eventPublisher.publish({ type: 'product.updated', productId });
@@ -142,10 +174,35 @@ export class ProductVariantsService {
         candidate.size === size,
     );
     if (collision) {
-      throw new BadRequestException(
-        `Sản phẩm đã có phiên bản màu "${color}", kích thước "${size}"`,
-      );
+      throw new ConflictException(this.duplicateColorSizeMessage(color, size));
     }
+  }
+
+  private duplicateColorSizeMessage(color: string, size: string): string {
+    return `Sản phẩm đã có phiên bản màu "${color}", kích thước "${size}"`;
+  }
+
+  /**
+   * 23505 → 409: the color/size index gets its specific message, any other unique index
+   * (e.g. `sku_variant`) a generic one; any other error is returned unchanged.
+   */
+  private toDuplicateConflict(
+    error: unknown,
+    color: string,
+    size: string,
+  ): unknown {
+    if (!(error instanceof QueryFailedError)) return error;
+    const driverError = error.driverError as {
+      code?: string;
+      constraint?: string;
+    };
+    if (driverError.code !== '23505') return error;
+    if (driverError.constraint === COLOR_SIZE_UNIQUE_INDEX) {
+      return new ConflictException(this.duplicateColorSizeMessage(color, size));
+    }
+    return new ConflictException(
+      'Phiên bản bị trùng với dữ liệu vừa được tạo cùng lúc, vui lòng thử lại.',
+    );
   }
 
   /** Mirrors ProductsService.generateUniqueSku — short random code, prefixed by the parent product's sku. */

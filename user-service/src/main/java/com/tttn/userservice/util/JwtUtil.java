@@ -48,8 +48,10 @@ public class JwtUtil {
         }
     }
     public UUID extractUserId(String token) {
-        Claims claims = extractClaims(token);
+        return extractUserId(extractClaims(token));
+    }
 
+    public UUID extractUserId(Claims claims) {
         String userId = claims.get("userId", String.class);
 
         if (userId == null || userId.isBlank()) {
@@ -58,6 +60,14 @@ public class JwtUtil {
 
         return UUID.fromString(userId);
     }
+
+    // JWT iat is whole epoch seconds; null when the token carries no iat.
+    public Long extractIssuedAtEpochSecond(Claims claims) {
+        Date issuedAt = claims.getIssuedAt();
+
+        return issuedAt == null ? null : issuedAt.toInstant().getEpochSecond();
+    }
+
     public Claims extractClaims(String token) {
         return Jwts.parser()
                 .verifyWith(getSigningKey())

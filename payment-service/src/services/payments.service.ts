@@ -14,11 +14,15 @@ const DEFAULT_MIN_CARD_AMOUNT = 1_000_000;
 
 /**
  * Orchestrates the checkout saga's payment step for `OrderSagaEventConsumer`:
- * `payment.create.requested` in, `payment.completed`/`payment.failed` out. Mock provider —
+ * `payment.create.requested` in, `payment.completed`/`payment.failed` out, plus the cancel
+ * flow's mock refund: `payment.refund.requested` in, `payment.refunded` out. Mock provider —
  * there's no real bank/card gateway in this project (see plan's Risks & dependencies), so
  * the outcome is decided by a fixed rule (FR1) rather than an external call. Thin —
  * delegates persistence to `IPaymentRepository` and idempotency bookkeeping is just "does a
  * row already exist for this order id", and replies via `IOrderSagaEventPublisher`.
+ *
+ * A failed reply publish rejects out of these methods (the row stays stored), so the consumer
+ * nacks-with-requeue and the redelivered request re-publishes the stored outcome.
  */
 @Injectable()
 export class PaymentsService {
@@ -109,18 +113,66 @@ export class PaymentsService {
     );
   }
 
+  /**
+   * Handles `payment.refund.requested` (mock refund — no money moves). PAID → REFUNDED, then
+   * publishes `payment.refunded`. Idempotent: an already-REFUNDED payment just re-publishes;
+   * a FAILED or missing payment has nothing to refund and is only logged.
+   */
+  async refundPayment(orderId: string, reason?: string): Promise<void> {
+    const existing = await this.paymentRepository.findByOrderId(orderId);
+    if (!existing) {
+      this.logger.warn(
+        `payment.refund.requested for order ${orderId} but no payment is stored — nothing to refund`,
+      );
+      return;
+    }
+    if (existing.status === PaymentStatus.FAILED) {
+      this.logger.warn(
+        `payment.refund.requested for order ${orderId} but its payment FAILED — nothing to refund`,
+      );
+      return;
+    }
+    if (existing.status === PaymentStatus.PAID) {
+      // Conditional PAID → REFUNDED; `false` means a concurrent delivery already flipped it,
+      // which is still REFUNDED, so publishing below is correct either way.
+      const flipped = await this.paymentRepository.markRefunded(orderId);
+      if (flipped) {
+        this.logger.log(
+          `Refunded payment ${existing.id} for order ${orderId} (mock)${reason ? `: ${reason}` : ''}`,
+        );
+      } else {
+        this.logger.warn(
+          `Payment ${existing.id} for order ${orderId} was already refunded by a concurrent delivery — re-publishing payment.refunded`,
+        );
+      }
+    } else {
+      this.logger.warn(
+        `Duplicate payment.refund.requested for order ${orderId} — already refunded, re-publishing payment.refunded`,
+      );
+    }
+    await this.sagaPublisher.publishPaymentRefunded(orderId, existing.id);
+  }
+
   /** `GET /payments/:orderId` (FR4). Returns `null` if no payment has been processed yet. */
   async getByOrderId(orderId: string): Promise<Payment | null> {
     return this.paymentRepository.findByOrderId(orderId);
   }
 
-  /** Re-publishes a previously stored outcome (FR3) — never re-decides it. */
+  /**
+   * Re-publishes a previously stored outcome (FR3) — never re-decides it. A REFUNDED payment
+   * re-publishes `payment.refunded` (never a fake `payment.failed`).
+   */
   private async republish(payment: Payment): Promise<void> {
     if (payment.status === PaymentStatus.PAID) {
       await this.sagaPublisher.publishPaymentCompleted(
         payment.orderId,
         payment.id,
         payment.transactionCode ?? '',
+      );
+    } else if (payment.status === PaymentStatus.REFUNDED) {
+      await this.sagaPublisher.publishPaymentRefunded(
+        payment.orderId,
+        payment.id,
       );
     } else {
       await this.sagaPublisher.publishPaymentFailed(

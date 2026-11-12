@@ -18,7 +18,8 @@ import {
 import { CreateReviewDto } from '../routes/dto/create-review.dto';
 import { UpdateReviewDto } from '../routes/dto/update-review.dto';
 import { ListReviewsQueryDto } from '../routes/dto/list-reviews-query.dto';
-import { PaginationQueryDto } from '../routes/dto/pagination-query.dto';
+import { ListProductReviewsQueryDto } from '../routes/dto/include-all-statuses-query.dto';
+import { ProductVisibilityOptions } from './products.service';
 import {
   AdminReviewResponseDto,
   ReviewResponseDto,
@@ -32,10 +33,14 @@ import { Paginated, paginated } from '../common/api-response';
 const ALREADY_REVIEWED_MESSAGE = 'Bạn đã đánh giá sản phẩm này';
 const NOT_PURCHASED_MESSAGE = 'Bạn cần mua sản phẩm này trước khi đánh giá';
 const NO_OWN_REVIEW_MESSAGE = 'Bạn chưa đánh giá sản phẩm này';
+const HIDDEN_REVIEW_MESSAGE =
+  'Đánh giá của bạn đã bị ẩn bởi quản trị viên nên không thể sửa hoặc xoá';
 
 /**
  * Product reviews by verified buyers (AC4–AC9). Every write runs in one transaction with
- * `recomputeProductRating`, so `ps_products.avg_rating`/`review_count` never lag (AC8).
+ * `recomputeProductRating`, so `ps_products.avg_rating`/`review_count` never lag (AC8). Each
+ * such transaction first locks the product row, so two concurrent review writes recompute
+ * one after the other and the second sees the first's row.
  */
 @Injectable()
 export class ReviewsService {
@@ -50,19 +55,19 @@ export class ReviewsService {
     private readonly dataSource: DataSource,
   ) {}
 
-  async summary(productId: string): Promise<ReviewSummaryResponseDto> {
-    const product =
-      await this.productRepository.findByIdWithBrandAndCategory(productId);
-    if (!product) {
-      throw new NotFoundException(`Không tìm thấy sản phẩm ${productId}`);
-    }
+  async summary(
+    productId: string,
+    options: ProductVisibilityOptions = {},
+  ): Promise<ReviewSummaryResponseDto> {
+    await this.assertProductVisible(productId, options);
     return this.reviewRepository.summary(productId);
   }
 
   async listForProduct(
     productId: string,
-    { page, limit }: PaginationQueryDto,
+    { page, limit, includeAllStatuses }: ListProductReviewsQueryDto,
   ): Promise<Paginated<ReviewResponseDto>> {
+    await this.assertProductVisible(productId, { includeAllStatuses });
     const { items, total } = await this.reviewRepository.findPublishedPage(
       productId,
       page,
@@ -118,6 +123,7 @@ export class ReviewsService {
 
     try {
       const review = await this.dataSource.transaction(async (manager) => {
+        await this.reviewRepository.lockProduct(productId, manager);
         const created = await this.reviewRepository.create(
           {
             productId,
@@ -157,6 +163,7 @@ export class ReviewsService {
 
     if (Object.keys(updateData).length > 0) {
       await this.dataSource.transaction(async (manager) => {
+        await this.reviewRepository.lockProduct(productId, manager);
         await this.reviewRepository.update(review.id, updateData, manager);
         await this.reviewRepository.recomputeProductRating(productId, manager);
       });
@@ -168,6 +175,7 @@ export class ReviewsService {
   async deleteMine(userId: string, productId: string): Promise<void> {
     const review = await this.findOwnOrThrow(userId, productId);
     await this.dataSource.transaction(async (manager) => {
+      await this.reviewRepository.lockProduct(productId, manager);
       await this.reviewRepository.delete(review.id, manager);
       await this.reviewRepository.recomputeProductRating(productId, manager);
     });
@@ -201,6 +209,7 @@ export class ReviewsService {
     const review = await this.findByIdOrThrow(id);
     if (review.status !== status) {
       await this.dataSource.transaction(async (manager) => {
+        await this.reviewRepository.lockProduct(review.productId, manager);
         await this.reviewRepository.update(id, { status }, manager);
         await this.reviewRepository.recomputeProductRating(
           review.productId,
@@ -222,7 +231,26 @@ export class ReviewsService {
     if (!review) {
       throw new NotFoundException(NO_OWN_REVIEW_MESSAGE);
     }
+    // The owner must not edit away (or delete) a review an admin hid.
+    if (review.status === ReviewStatus.HIDDEN) {
+      throw new ForbiddenException(HIDDEN_REVIEW_MESSAGE);
+    }
     return review;
+  }
+
+  /** 404 for a missing product, or a non-PUBLISHED one unless `includeAllStatuses`. */
+  private async assertProductVisible(
+    productId: string,
+    { includeAllStatuses = false }: ProductVisibilityOptions,
+  ): Promise<void> {
+    const product =
+      await this.productRepository.findByIdWithBrandAndCategory(productId);
+    if (
+      !product ||
+      (!includeAllStatuses && product.status !== ProductStatus.PUBLISHED)
+    ) {
+      throw new NotFoundException(`Không tìm thấy sản phẩm ${productId}`);
+    }
   }
 
   private async findByIdOrThrow(id: string): Promise<Review> {

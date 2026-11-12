@@ -19,7 +19,8 @@ public class UserServiceApplication {
     // JWT_EXPIRES_IN convention (see user-service/.env.example, infra/docker-compose.yml), but
     // application.yml's datasource/port/jwt keys are hardcoded for local (non-Docker) dev. Map
     // the env vars onto the Spring properties they actually bind to, only when present, so
-    // local dev without these vars set is unaffected.
+    // local dev without these vars set is unaffected. JWT_SECRET and INTERNAL_API_KEY are the
+    // exception: they have no committed fallback, so startup fails when either is missing.
     private static void applyEnvOverrides() {
         String databaseUrl = System.getenv("DATABASE_URL");
         if (databaseUrl != null && !databaseUrl.isBlank()) {
@@ -37,15 +38,8 @@ public class UserServiceApplication {
             System.setProperty("server.port", port);
         }
 
-        String jwtSecret = System.getenv("JWT_SECRET");
-        if (jwtSecret != null && !jwtSecret.isBlank()) {
-            System.setProperty("jwt.secret", jwtSecret);
-        }
-
-        String internalApiKey = System.getenv("INTERNAL_API_KEY");
-        if (internalApiKey != null && !internalApiKey.isBlank()) {
-            System.setProperty("internal.api-key", internalApiKey);
-        }
+        System.setProperty("jwt.secret", requireEnv("JWT_SECRET"));
+        System.setProperty("internal.api-key", requireEnv("INTERNAL_API_KEY"));
 
         String jwtExpiresIn = System.getenv("JWT_EXPIRES_IN");
         if (jwtExpiresIn != null && !jwtExpiresIn.isBlank()) {
@@ -53,13 +47,22 @@ public class UserServiceApplication {
         }
     }
 
+    private static String requireEnv(String name) {
+        String value = System.getenv(name);
+        if (value == null || value.isBlank()) {
+            throw new IllegalStateException(name + " must be set (no default is committed)");
+        }
+        return value;
+    }
+
     // Accepts the same shorthand as the jsonwebtoken npm package's `expiresIn` (e.g. "1d",
     // "12h", "30m"), which is what JWT_EXPIRES_IN's value in .env.example already looks like.
-    // A bare number is treated as milliseconds, matching application.yml's jwt.expiration default.
+    // A bare number is treated as seconds, like jsonwebtoken's `expiresIn`. Returns
+    // milliseconds, the unit of jwt.expiration.
     private static long parseDurationMillis(String value) {
         String trimmed = value.trim();
         if (trimmed.matches("\\d+")) {
-            return Long.parseLong(trimmed);
+            return Long.parseLong(trimmed) * 1_000L;
         }
 
         Matcher matcher = Pattern.compile("^(\\d+)(ms|s|m|h|d)$").matcher(trimmed);

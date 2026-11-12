@@ -68,6 +68,15 @@ public class OrderServiceImpl implements OrderService {
     // Idempotency keys are replayable for 24h (AC4).
     private static final long IDEMPOTENCY_KEY_TTL_HOURS = 24;
 
+    // Customer and admin cancel. From PROCESSING on, an order can no longer be cancelled.
+    private static final Set<OrderStatus> CANCELLABLE_STATUSES = EnumSet.of(
+            OrderStatus.PENDING,
+            OrderStatus.AWAITING_PAYMENT,
+            OrderStatus.CONFIRMED
+    );
+
+    private static final String DEFAULT_REFUND_REASON = "Đơn hàng đã bị hủy";
+
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final CartService cartService;
@@ -385,14 +394,16 @@ public class OrderServiceImpl implements OrderService {
                         )
                 );
 
-        Set<OrderStatus> cancellableStatuses =
-                EnumSet.of(
-                        OrderStatus.PENDING,
-                        OrderStatus.AWAITING_PAYMENT,
-                        OrderStatus.CONFIRMED
-                );
+        return cancelLoadedOrder(order, userId, request.reason());
+    }
 
-        if (!cancellableStatuses.contains(order.getStatus())) {
+    // Shared by the customer cancel and the admin status change to CANCELLED.
+    private OrderResponse cancelLoadedOrder(
+            Order order,
+            UUID changedBy,
+            String reason
+    ) {
+        if (!CANCELLABLE_STATUSES.contains(order.getStatus())) {
             throw new BadRequestException(
                     "Không thể hủy đơn ở trạng thái "
                             + order.getStatus()
@@ -400,28 +411,31 @@ public class OrderServiceImpl implements OrderService {
         }
 
         OrderStatus previousStatus = order.getStatus();
-        boolean wasAwaitingPayment =
-                previousStatus == OrderStatus.AWAITING_PAYMENT;
 
         // PENDING is included too, not just AWAITING_PAYMENT: product-service may have already
         // reserved stock and replied 'stock.reserved' before order-service could process that
         // reply (e.g. the reply got lost/dead-lettered) — order.status would still read PENDING
         // even though a real reservation exists downstream. Releasing here is always safe even
         // when nothing was actually reserved (product-service's release is a no-op in that case,
-        // see InventoryService.release's idempotency note) — CONFIRMED is deliberately excluded,
-        // matching the plan's "no refund logic" scope for cancelling an already-paid order.
+        // see InventoryService.release's idempotency note). CONFIRMED is paid and its stock is
+        // committed: it gets a refund + restock instead of a release.
         boolean shouldReleaseStock =
-                wasAwaitingPayment || previousStatus == OrderStatus.PENDING;
+                previousStatus == OrderStatus.AWAITING_PAYMENT
+                        || previousStatus == OrderStatus.PENDING;
 
         order.setStatus(OrderStatus.CANCELLED);
 
         order.addStatusHistory(
                 OrderStatusHistory.builder()
                         .status(OrderStatus.CANCELLED)
-                        .changedBy(userId)
-                        .note(request.reason())
+                        .changedBy(changedBy)
+                        .note(reason)
                         .build()
         );
+
+        if (previousStatus == OrderStatus.CONFIRMED) {
+            requestRefundAndRestock(order, reason);
+        }
 
         if (shouldReleaseStock) {
             order.setStockReleasePending(true);
@@ -455,6 +469,41 @@ public class OrderServiceImpl implements OrderService {
         );
     }
 
+    // Paid order cancelled: paymentStatus stays PAID until payment-service replies
+    // 'payment.refunded'. Both events go through the outbox in this transaction.
+    private void requestRefundAndRestock(Order order, String reason) {
+        orderSagaEventPublisher.publishPaymentRefundRequested(
+                order.getId(),
+                reason != null && !reason.isBlank()
+                        ? reason
+                        : DEFAULT_REFUND_REASON
+        );
+
+        orderSagaLogService.log(
+                order,
+                SagaLogStage.PAYMENT_REFUND_REQUESTED,
+                SagaLogLevel.INFO,
+                "Đã gửi yêu cầu hoàn tiền",
+                SagaLogService.ORDER_SERVICE,
+                SagaLogService.PAYMENT_SERVICE,
+                null,
+                null
+        );
+
+        orderSagaEventPublisher.publishStockRestockRequested(order.getId());
+
+        orderSagaLogService.log(
+                order,
+                SagaLogStage.STOCK_RESTOCK_REQUESTED,
+                SagaLogLevel.INFO,
+                "Đã gửi yêu cầu hoàn kho",
+                SagaLogService.ORDER_SERVICE,
+                SagaLogService.PRODUCT_SERVICE,
+                null,
+                null
+        );
+    }
+
     @Override
     @Transactional
     public OrderResponse updateOrderStatus(
@@ -473,6 +522,12 @@ public class OrderServiceImpl implements OrderService {
                 order.getStatus(),
                 request.status()
         );
+
+        // Admin cancel follows the customer cancel path: release stock, or refund + restock
+        // for a paid (CONFIRMED) order.
+        if (request.status() == OrderStatus.CANCELLED) {
+            return cancelLoadedOrder(order, changedBy, request.note());
+        }
 
         order.setStatus(request.status());
 
@@ -566,14 +621,11 @@ public class OrderServiceImpl implements OrderService {
             OrderStatus current,
             OrderStatus target
     ) {
+        // PENDING → AWAITING_PAYMENT → CONFIRMED belong to the checkout saga (stock and payment
+        // replies); an admin may only cancel an order that is still in the saga.
         boolean valid = switch (current) {
-            case PENDING ->
-                    target == OrderStatus.AWAITING_PAYMENT
-                            || target == OrderStatus.CANCELLED;
-
-            case AWAITING_PAYMENT ->
-                    target == OrderStatus.CONFIRMED
-                            || target == OrderStatus.CANCELLED;
+            case PENDING, AWAITING_PAYMENT ->
+                    target == OrderStatus.CANCELLED;
 
             case CONFIRMED ->
                     target == OrderStatus.PROCESSING

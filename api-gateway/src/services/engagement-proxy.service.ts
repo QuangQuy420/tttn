@@ -64,9 +64,14 @@ export class EngagementProxyService {
     );
   }
 
-  async getReviewSummary(productId: string): Promise<unknown> {
+  async getReviewSummary(
+    productId: string,
+    query?: Params,
+  ): Promise<unknown> {
     return this.get(
       `/products/${encodeURIComponent(productId)}/reviews/summary`,
+      undefined,
+      query,
     );
   }
 

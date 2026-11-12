@@ -5,20 +5,26 @@ the error envelope on a 404 (AC2); plan 08: the new history fields, the head-pos
 No real DB or MinIO — `get_face_analysis_service` is overridden with a real
 `FaceAnalysisService` built on in-memory fakes.
 """
+import asyncio
 import datetime as dt
+import io
 import os
+import re
 import uuid
 from collections.abc import Iterator
 from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from app.db.models import FaceShape
 from app.main import app
+from app.schemas.face import FaceMeasurements, FaceQuality
+from app.services import face_analysis_service
 from app.services.face_analysis_service import FaceAnalysisService, get_face_analysis_service
-from app.services.face_classifier import RuleBasedClassifier
-from app.services.face_shape_service import FacePoseError
+from app.services.face_classifier import ClassificationResult, RuleBasedClassifier
+from app.services.face_shape_service import FaceAnalysisOutcome, FacePoseError
 
 USER_ID = uuid.uuid4()
 
@@ -72,11 +78,25 @@ class FakeFaceAnalysisRepository:
 
 
 class FakeImageStorage:
+    def __init__(self) -> None:
+        self.uploaded: list[str] = []
+        self.deleted: list[str] = []
+
+    def upload(self, key: str, data: bytes, content_type: str) -> None:
+        self.uploaded.append(key)
+
     def get_presigned_url(self, key: str) -> str:
         return f"http://minio/{key}"
 
     def delete(self, key: str) -> None:
-        pass
+        self.deleted.append(key)
+
+
+def _image_bytes(width: int, height: int, fmt: str = "JPEG", mode: str = "RGB") -> bytes:
+    """A real (tiny or header-large) image so the router's pixel check can read its header."""
+    buffer = io.BytesIO()
+    Image.new(mode, (width, height)).save(buffer, format=fmt)
+    return buffer.getvalue()
 
 
 @pytest.fixture
@@ -142,7 +162,7 @@ def test_analyze_turned_face_returns_bad_request_with_vietnamese_hint() -> None:
     try:
         response = TestClient(app).post(
             "/analyze",
-            files={"file": ("face.jpg", b"fake-bytes", "image/jpeg")},
+            files={"file": ("face.jpg", _image_bytes(8, 8), "image/jpeg")},
             headers={"X-User-Id": str(USER_ID)},
         )
     finally:
@@ -152,6 +172,98 @@ def test_analyze_turned_face_returns_bad_request_with_vietnamese_hint() -> None:
     body = response.json()
     assert body["error"]["code"] == "BAD_REQUEST"
     assert "nhìn thẳng vào camera" in body["message"]
+
+
+class _MustNotBeCalledService:
+    async def analyze_and_store(self, **kwargs):
+        raise AssertionError("analyze_and_store must not run for an over-limit image")
+
+
+def test_analyze_image_over_pixel_limit_returns_bad_request_ac48() -> None:
+    # 6000 x 5000 = 30 MP > the 25 MP default; a 1-bit PNG keeps the upload tiny.
+    big_png = _image_bytes(6000, 5000, fmt="PNG", mode="1")
+    app.dependency_overrides[get_face_analysis_service] = lambda: _MustNotBeCalledService()
+    try:
+        response = TestClient(app).post(
+            "/analyze",
+            files={"file": ("big.png", big_png, "image/png")},
+            headers={"X-User-Id": str(USER_ID)},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["error"]["code"] == "BAD_REQUEST"
+    assert body["message"] == "Ảnh quá lớn — kích thước tối đa cho phép là 25 triệu điểm ảnh."
+
+
+def _fake_outcome(*args, **kwargs) -> FaceAnalysisOutcome:
+    return FaceAnalysisOutcome(
+        measurements=FaceMeasurements(**_MEASUREMENTS),
+        result=ClassificationResult(
+            face_shape=FaceShape.OVAL,
+            confidence=0.8,
+            probabilities={FaceShape.OVAL: 0.8, FaceShape.ROUND: 0.2},
+            method="ml",
+            model_version="v2-full-real-20261005-svm",
+        ),
+        quality=FaceQuality(yaw=1.0, pitch=2.0, roll=0.5),
+    )
+
+
+class _CreatingRepo(FakeFaceAnalysisRepository):
+    async def create(self, **kwargs):
+        row = _row(kwargs["user_id"])
+        row.s3_key = kwargs["s3_key"]
+        self.rows.insert(0, row)
+        return row
+
+
+class _FailingCreateRepo(FakeFaceAnalysisRepository):
+    async def create(self, **kwargs):
+        raise RuntimeError("db down")
+
+
+def test_analyze_stores_photo_under_key_without_user_filename_ac51(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(face_analysis_service, "analyze_face", _fake_outcome)
+    storage = FakeImageStorage()
+    service = FaceAnalysisService(storage, _CreatingRepo([]), RuleBasedClassifier(), 25.0)
+    app.dependency_overrides[get_face_analysis_service] = lambda: service
+    try:
+        response = TestClient(app).post(
+            "/analyze",
+            files={"file": ("anh-rieng-cua-toi.jpg", _image_bytes(8, 8), "image/jpeg")},
+            headers={"X-User-Id": str(USER_ID)},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["data"]["faceShape"] == "OVAL"
+    [key] = storage.uploaded
+    assert "anh-rieng-cua-toi" not in key
+    assert re.fullmatch(r"[0-9a-f-]{36}\.jpg", key)
+
+
+def test_analyze_db_failure_after_upload_deletes_photo_ac50(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(face_analysis_service, "analyze_face", _fake_outcome)
+    storage = FakeImageStorage()
+    service = FaceAnalysisService(storage, _FailingCreateRepo([]), RuleBasedClassifier(), 25.0)
+
+    with pytest.raises(RuntimeError, match="db down"):
+        asyncio.run(
+            service.analyze_and_store(
+                user_id=USER_ID, data=b"img", filename="face.jpg", content_type="image/jpeg"
+            )
+        )
+
+    assert len(storage.uploaded) == 1
+    assert storage.deleted == storage.uploaded
 
 
 _INTERNAL_KEY = {"X-Internal-Key": os.environ["INTERNAL_API_KEY"]}

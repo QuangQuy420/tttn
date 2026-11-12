@@ -18,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -50,13 +51,16 @@ class UserServiceListUsersTest {
     private UserServiceImpl userService;
 
     @Test
-    void listUsers_mapsOneBasedPageAndReturnsDataWithMeta() {
+    void listUsers_mapsOneBasedPageSortedNewestFirstAndReturnsDataWithMeta_AC17() {
         User user = User.builder()
                 .email("a@example.com")
                 .username("alice")
                 .status(UserStatus.ACTIVE)
                 .build();
-        PageRequest expectedRequest = PageRequest.of(1, 1);
+        // Stable order across pages: createdAt desc, id as tie-break (AC17).
+        PageRequest expectedRequest = PageRequest.of(
+                1, 1, Sort.by(Sort.Direction.DESC, "createdAt", "id")
+        );
         when(userRepository.findAll(any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(user), expectedRequest, 3));
 

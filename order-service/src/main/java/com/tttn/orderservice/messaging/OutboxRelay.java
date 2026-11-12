@@ -17,9 +17,13 @@ import org.springframework.amqp.core.ReturnedMessage;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
@@ -39,7 +43,12 @@ import java.util.concurrent.TimeoutException;
  *   <li>ack and not returned → {@code SENT};</li>
  *   <li>nack, timeout, returned (unroutable) or send error → {@code attempts + 1} and retry after
  *   {@code min(2^(attempts-1), 60)} seconds (1s, 2s, 4s…);</li>
- *   <li>{@code attempts >= max-attempts} → {@code FAILED} + a WARN saga log on the order.</li>
+ *   <li>{@code attempts >= max-attempts} → {@code FAILED} + a WARN saga log on the order —
+ *   except {@code payment.refund.requested} / {@code stock.restock.requested}
+ *   ({@link OrderSagaRoutingKeys#RETRIED_UNTIL_SENT}), which stay {@code PENDING} at the 60s
+ *   backoff cap and get the WARN saga log once, when the max is first reached. A
+ *   {@code stock.release.requested} row also stays {@code PENDING} (retried) until its order's
+ *   {@code stockReleasePending} re-arm has committed.</li>
  * </ul>
  * The AMQP {@code messageId} is the outbox row id, so consumers can drop duplicates. Delivery is
  * at-least-once: a message acked by the broker whose row update then fails to commit is sent
@@ -52,11 +61,13 @@ public class OutboxRelay {
 
     private static final long MAX_BACKOFF_SECONDS = 60;
     private static final int MAX_ERROR_LENGTH = 1000;
+    private static final int ORDER_WRITE_ATTEMPTS = 3;
 
     private final OutboxEventRepository outboxEventRepository;
     private final OrderRepository orderRepository;
     private final OrderSagaLogService orderSagaLogService;
     private final RabbitTemplate rabbitTemplate;
+    private final PlatformTransactionManager transactionManager;
 
     @Value("${app.outbox.batch-size:50}")
     private int batchSize;
@@ -180,9 +191,10 @@ public class OutboxRelay {
         event.setAttempts(attempts);
         event.setLastError(lastError);
 
-        if (attempts >= maxAttempts) {
-            event.setStatus(OutboxStatus.FAILED);
+        boolean retriedUntilSent =
+                OrderSagaRoutingKeys.RETRIED_UNTIL_SENT.contains(event.getRoutingKey());
 
+        if (attempts >= maxAttempts && !retriedUntilSent) {
             log.error(
                     "OutboxRelay: sự kiện outbox {} ({}, aggregate {}) thất bại sau {} lần thử: {}",
                     event.getId(),
@@ -192,8 +204,36 @@ public class OutboxRelay {
                     lastError
             );
 
-            logSagaFailure(event);
-            return;
+            boolean orderUpdated =
+                    logSagaFailure(event, "Gửi sự kiện thất bại sau nhiều lần thử");
+
+            // A release row is given up only once stockReleasePending is re-armed on the order;
+            // otherwise nothing would re-send the release and the reserved stock would leak.
+            // Until then the row stays PENDING at the backoff cap below and is retried.
+            if (orderUpdated
+                    || !OrderSagaRoutingKeys.STOCK_RELEASE_REQUESTED.equals(event.getRoutingKey())) {
+                event.setStatus(OutboxStatus.FAILED);
+                return;
+            }
+        }
+
+        // Refund / restock are never given up: the row stays PENDING at the backoff cap below,
+        // and the saga log gets one WARN when the max is first reached.
+        if (retriedUntilSent && attempts == maxAttempts) {
+            log.error(
+                    "OutboxRelay: sự kiện outbox {} ({}, aggregate {}) vẫn chưa gửi được sau {} lần thử, "
+                            + "tiếp tục thử lại: {}",
+                    event.getId(),
+                    event.getRoutingKey(),
+                    event.getAggregateId(),
+                    attempts,
+                    lastError
+            );
+
+            logSagaFailure(
+                    event,
+                    "Gửi sự kiện thất bại sau nhiều lần thử, hệ thống vẫn tiếp tục thử lại"
+            );
         }
 
         // 2^(attempts-1) seconds after the increment: 1s, 2s, 4s… capped at 60s.
@@ -204,32 +244,83 @@ public class OutboxRelay {
         event.setNextAttemptAt(LocalDateTime.now().plusSeconds(backoffSeconds));
     }
 
-    private void logSagaFailure(OutboxEvent event) {
-        if (!OutboxEvent.AGGREGATE_ORDER.equals(event.getAggregateType())) {
-            return;
+    // Saga rows (aggregate ORDER) and PURCHASE behavior rows (aggregate BEHAVIOR_EVENT, whose
+    // aggregate_id is also the order id) both get a WARN saga log on the order.
+    //
+    // The order write runs in its own transaction (REQUIRES_NEW): an optimistic-lock conflict on
+    // the order (Order.@Version) is caught here and retried, and never rolls back the relay
+    // batch's status updates in the outer transaction.
+    //
+    // Returns true when the order write committed (or there is nothing to write: other aggregate
+    // types, order gone), false when it failed (repeated conflicts or any other error).
+    private boolean logSagaFailure(OutboxEvent event, String message) {
+        boolean orderAggregate =
+                OutboxEvent.AGGREGATE_ORDER.equals(event.getAggregateType());
+
+        if (!orderAggregate
+                && !BehaviorEventRoutingKeys.AGGREGATE_BEHAVIOR.equals(event.getAggregateType())) {
+            return true;
         }
 
-        orderRepository.findById(event.getAggregateId())
-                .ifPresent(order -> {
-                    // Callers cleared stockReleasePending once the release was enqueued; set it
-                    // back so SagaReconciliationJob re-enqueues the release instead of leaking
-                    // the reserved stock.
-                    if (OrderSagaRoutingKeys.STOCK_RELEASE_REQUESTED.equals(event.getRoutingKey())) {
-                        order.setStockReleasePending(true);
-                        orderRepository.save(order);
-                    }
+        for (int attempt = 1; attempt <= ORDER_WRITE_ATTEMPTS; attempt++) {
+            try {
+                inNewTransaction(() -> orderRepository.findById(event.getAggregateId())
+                        .ifPresent(order -> {
+                            // Callers cleared stockReleasePending once the release was enqueued;
+                            // set it back so SagaReconciliationJob re-enqueues the release
+                            // instead of leaking the reserved stock.
+                            if (orderAggregate
+                                    && OrderSagaRoutingKeys.STOCK_RELEASE_REQUESTED
+                                    .equals(event.getRoutingKey())) {
+                                order.setStockReleasePending(true);
+                                orderRepository.save(order);
+                            }
 
-                    orderSagaLogService.log(
-                            order,
-                            SagaLogStage.OUTBOX_FAILED,
-                            SagaLogLevel.WARN,
-                            "Gửi sự kiện thất bại sau nhiều lần thử",
-                            SagaLogService.ORDER_SERVICE,
-                            null,
-                            event.getLastError(),
-                            event.getAttempts()
-                    );
-                });
+                            orderSagaLogService.log(
+                                    order,
+                                    SagaLogStage.OUTBOX_FAILED,
+                                    SagaLogLevel.WARN,
+                                    message + " (" + event.getRoutingKey() + ")",
+                                    SagaLogService.ORDER_SERVICE,
+                                    null,
+                                    event.getLastError(),
+                                    event.getAttempts()
+                            );
+                        })
+                );
+                return true;
+            } catch (OptimisticLockingFailureException exception) {
+                log.warn(
+                        "OutboxRelay: đơn hàng {} vừa được cập nhật đồng thời, thử lại lần {}: {}",
+                        event.getAggregateId(),
+                        attempt,
+                        exception.getMessage()
+                );
+            } catch (RuntimeException exception) {
+                log.error(
+                        "OutboxRelay: không thể ghi lỗi gửi sự kiện {} vào đơn hàng {}: {}",
+                        event.getId(),
+                        event.getAggregateId(),
+                        exception.getMessage(),
+                        exception
+                );
+                return false;
+            }
+        }
+
+        log.error(
+                "OutboxRelay: bỏ qua ghi lỗi gửi sự kiện {} vào đơn hàng {} sau {} lần xung đột",
+                event.getId(),
+                event.getAggregateId(),
+                ORDER_WRITE_ATTEMPTS
+        );
+        return false;
+    }
+
+    private void inNewTransaction(Runnable work) {
+        TransactionTemplate template = new TransactionTemplate(transactionManager);
+        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        template.executeWithoutResult(status -> work.run());
     }
 
     private Message toMessage(OutboxEvent event) {

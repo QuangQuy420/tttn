@@ -6,7 +6,7 @@ import type {
   ProductSort,
 } from "@/types/product";
 import type { CartUnavailableReason } from "@/types/cart";
-import type { OrderStatus } from "@/types/order";
+import type { OrderStatus, PaymentStatus } from "@/types/order";
 import type { SagaLogLevel, SagaLogService, SagaLogStage } from "@/types/saga-log";
 
 // Vietnamese labels for the admin area (Admin Products.dc.html / Product Edit.dc.html mockups
@@ -130,6 +130,20 @@ export function formatOrderStatusVi(status: OrderStatus): string {
   return ORDER_STATUS_LABELS_VI[status];
 }
 
+// Payment status labels — mirrors order-service's PaymentStatus enum (see @/types/order).
+export const PAYMENT_STATUS_LABELS_VI: Record<PaymentStatus, string> = {
+  UNPAID: "Chưa thanh toán",
+  PENDING: "Đang xử lý thanh toán",
+  PAID: "Đã thanh toán",
+  FAILED: "Thanh toán thất bại",
+  CANCELLED: "Đã hủy thanh toán",
+  REFUNDED: "Đã hoàn tiền",
+};
+
+export function formatPaymentStatusVi(status: PaymentStatus): string {
+  return PAYMENT_STATUS_LABELS_VI[status] ?? status;
+}
+
 // Fixed display order for the order-status filter select.
 export const ORDER_STATUSES: OrderStatus[] = [
   "PENDING",
@@ -154,9 +168,13 @@ export const SAGA_LOG_STAGE_LABELS_VI: Record<SagaLogStage, string> = {
   PAYMENT_COMPLETED: "Thanh toán thành công",
   PAYMENT_FAILED: "Thanh toán thất bại",
   STOCK_RELEASE_REQUESTED: "Gửi yêu cầu nhả hàng",
+  PAYMENT_REFUND_REQUESTED: "Gửi yêu cầu hoàn tiền",
+  PAYMENT_REFUNDED: "Hoàn tiền thành công",
+  STOCK_RESTOCK_REQUESTED: "Gửi yêu cầu trả hàng về kho",
   RECONCILIATION_RESENT: "Tự động gửi lại lệnh",
   RECONCILIATION_EXHAUSTED: "Hết lượt tự động thử lại",
   DEAD_LETTERED: "Bản tin bị loại bỏ (dead-letter)",
+  OUTBOX_FAILED: "Gửi sự kiện thất bại (outbox)",
 };
 
 export function formatSagaLogStageVi(stage: SagaLogStage): string {

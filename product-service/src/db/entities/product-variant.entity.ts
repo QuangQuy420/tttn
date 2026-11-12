@@ -4,10 +4,10 @@ import {
   CreateDateColumn,
   DeleteDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
-  Unique,
   UpdateDateColumn,
 } from 'typeorm';
 import { Product } from './product.entity';
@@ -19,14 +19,15 @@ import { numericTransformer } from '../transformers/numeric.transformer';
  *  - Adds `updated_at` and `deleted_at` (soft-delete), matching `ps_products` — Order
  *    Service FKs to a variant `id`, so a hard delete of a referenced variant would break
  *    order history.
- *  - Adds a unique constraint on `(product_id, color, size)` to prevent duplicate variants.
+ *  - Adds a unique index on `(product_id, color, size)` to prevent duplicate variants —
+ *    partial (`deleted_at IS NULL`) so a soft-deleted variant can be re-created.
  */
 @Entity('ps_product_variants')
-@Unique('uq_ps_product_variants_product_color_size', [
-  'productId',
-  'color',
-  'size',
-])
+@Index(
+  'UQ_ps_product_variants_product_color_size_active',
+  ['productId', 'color', 'size'],
+  { unique: true, where: '"deleted_at" IS NULL' },
+)
 @Check('chk_ps_product_variants_quantity_non_negative', '"quantity" >= 0')
 @Check(
   'chk_ps_product_variants_reserved_quantity_non_negative',

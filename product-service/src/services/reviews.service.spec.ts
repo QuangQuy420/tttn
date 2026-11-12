@@ -1,6 +1,7 @@
 import {
   ConflictException,
   ForbiddenException,
+  NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
@@ -47,6 +48,7 @@ describe('ReviewsService.create', () => {
       create: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
+      lockProduct: jest.fn(),
       recomputeProductRating: jest.fn(),
       summary: jest.fn(),
     };
@@ -139,5 +141,57 @@ describe('ReviewsService.create', () => {
     expect(dataSource.transaction).not.toHaveBeenCalled();
     expect(reviewRepository.create).not.toHaveBeenCalled();
     expect(reviewRepository.recomputeProductRating).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 for the review list of a DRAFT product unless includeAllStatuses is set (AC20)', async () => {
+    productRepository.findByIdWithBrandAndCategory.mockResolvedValue({
+      id: 'product-1',
+      status: ProductStatus.DRAFT,
+    } as never);
+    reviewRepository.findPublishedPage.mockResolvedValue({
+      items: [makeReview()],
+      total: 1,
+    });
+
+    await expect(
+      service.listForProduct('product-1', { page: 1, limit: 10 }),
+    ).rejects.toThrow(
+      new NotFoundException('Không tìm thấy sản phẩm product-1'),
+    );
+    expect(reviewRepository.findPublishedPage).not.toHaveBeenCalled();
+
+    const result = await service.listForProduct('product-1', {
+      page: 1,
+      limit: 10,
+      includeAllStatuses: true,
+    });
+    expect(result.items).toHaveLength(1);
+  });
+
+  it('returns 404 for the review list of a product that does not exist (AC20)', async () => {
+    productRepository.findByIdWithBrandAndCategory.mockResolvedValue(null);
+
+    await expect(
+      service.listForProduct('missing', { page: 1, limit: 10 }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(reviewRepository.findPublishedPage).not.toHaveBeenCalled();
+  });
+
+  it('forbids the owner from editing or deleting a HIDDEN review (AC28)', async () => {
+    reviewRepository.findByProductAndUser.mockResolvedValue(
+      makeReview({ status: ReviewStatus.HIDDEN }),
+    );
+    const hiddenError = new ForbiddenException(
+      'Đánh giá của bạn đã bị ẩn bởi quản trị viên nên không thể sửa hoặc xoá',
+    );
+
+    await expect(
+      service.updateMine('user-1', 'product-1', { rating: 1 }),
+    ).rejects.toThrow(hiddenError);
+    await expect(service.deleteMine('user-1', 'product-1')).rejects.toThrow(
+      hiddenError,
+    );
+    expect(reviewRepository.update).not.toHaveBeenCalled();
+    expect(reviewRepository.delete).not.toHaveBeenCalled();
   });
 });

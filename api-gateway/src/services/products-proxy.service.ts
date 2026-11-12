@@ -37,12 +37,21 @@ export class ProductsProxyService {
     return this.forwardGet('/products', query);
   }
 
-  async getProductById(id: string): Promise<unknown> {
-    return this.forwardGet(`/products/${encodeURIComponent(id)}`);
+  async getProductById(
+    id: string,
+    query?: Record<string, unknown>,
+  ): Promise<unknown> {
+    return this.forwardGet(`/products/${encodeURIComponent(id)}`, query);
   }
 
-  async getProductBySlug(slug: string): Promise<unknown> {
-    return this.forwardGet(`/products/slug/${encodeURIComponent(slug)}`);
+  async getProductBySlug(
+    slug: string,
+    query?: Record<string, unknown>,
+  ): Promise<unknown> {
+    return this.forwardGet(
+      `/products/slug/${encodeURIComponent(slug)}`,
+      query,
+    );
   }
 
   async getCategories(query: Record<string, unknown>): Promise<unknown> {

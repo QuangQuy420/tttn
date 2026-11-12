@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -28,7 +29,9 @@ export class CategoriesController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string): Promise<CategoryResponseDto> {
+  findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<CategoryResponseDto> {
     return this.categoriesService.findOne(id);
   }
 
@@ -39,7 +42,7 @@ export class CategoriesController {
 
   @Patch(':id')
   update(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateCategoryDto,
   ): Promise<CategoryResponseDto> {
     return this.categoriesService.update(id, dto);
@@ -47,7 +50,7 @@ export class CategoriesController {
 
   @Delete(':id')
   @HttpCode(204)
-  async remove(@Param('id') id: string): Promise<void> {
+  async remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     await this.categoriesService.remove(id);
   }
 }

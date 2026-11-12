@@ -3,10 +3,8 @@ package com.tttn.userservice.controller;
 import com.tttn.userservice.dto.request.AddressRequest;
 import com.tttn.userservice.dto.response.AddressResponse;
 import com.tttn.userservice.dto.response.ApiResponse;
-import com.tttn.userservice.exception.BusinessException;
-import com.tttn.userservice.exception.ErrorCode;
 import com.tttn.userservice.service.AddressService;
-import com.tttn.userservice.util.JwtUtil;
+import com.tttn.userservice.util.AuthTokenResolver;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -30,7 +28,7 @@ import java.util.UUID;
 public class AddressController {
 
     private final AddressService addressService;
-    private final JwtUtil jwtUtil;
+    private final AuthTokenResolver authTokenResolver;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<AddressResponse>>> listAddresses(
@@ -41,7 +39,7 @@ public class AddressController {
             @RequestParam(value = "page", defaultValue = "1") int page,
             @RequestParam(value = "limit", defaultValue = "20") int limit
     ) {
-        UUID userId = extractUserId(authorizationHeader);
+        UUID userId = authTokenResolver.resolveUserId(authorizationHeader);
 
         return ResponseEntity.ok(
                 ApiResponse.page(
@@ -59,7 +57,7 @@ public class AddressController {
             ) String authorizationHeader,
             @Valid @RequestBody AddressRequest request
     ) {
-        UUID userId = extractUserId(authorizationHeader);
+        UUID userId = authTokenResolver.resolveUserId(authorizationHeader);
 
         return ResponseEntity.ok(
                 ApiResponse.success(
@@ -78,7 +76,7 @@ public class AddressController {
             @PathVariable UUID id,
             @Valid @RequestBody AddressRequest request
     ) {
-        UUID userId = extractUserId(authorizationHeader);
+        UUID userId = authTokenResolver.resolveUserId(authorizationHeader);
 
         return ResponseEntity.ok(
                 ApiResponse.success(
@@ -96,7 +94,7 @@ public class AddressController {
             ) String authorizationHeader,
             @PathVariable UUID id
     ) {
-        UUID userId = extractUserId(authorizationHeader);
+        UUID userId = authTokenResolver.resolveUserId(authorizationHeader);
 
         addressService.deleteAddress(userId, id);
 
@@ -106,20 +104,5 @@ public class AddressController {
                         null
                 )
         );
-    }
-
-    private UUID extractUserId(String authorizationHeader) {
-        if (authorizationHeader == null
-                || !authorizationHeader.startsWith("Bearer ")) {
-            throw new BusinessException(ErrorCode.INVALID_TOKEN);
-        }
-
-        String token = authorizationHeader.substring(7);
-
-        if (!jwtUtil.validateToken(token)) {
-            throw new BusinessException(ErrorCode.INVALID_TOKEN);
-        }
-
-        return jwtUtil.extractUserId(token);
     }
 }

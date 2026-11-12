@@ -14,9 +14,13 @@ export type SagaLogStage =
   | "PAYMENT_COMPLETED"
   | "PAYMENT_FAILED"
   | "STOCK_RELEASE_REQUESTED"
+  | "PAYMENT_REFUND_REQUESTED"
+  | "PAYMENT_REFUNDED"
+  | "STOCK_RESTOCK_REQUESTED"
   | "RECONCILIATION_RESENT"
   | "RECONCILIATION_EXHAUSTED"
-  | "DEAD_LETTERED";
+  | "DEAD_LETTERED"
+  | "OUTBOX_FAILED";
 
 // Mirrors com.tttn.orderservice.entity.OrderSagaLog.SagaLogLevel.
 export type SagaLogLevel = "INFO" | "WARN";

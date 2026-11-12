@@ -159,8 +159,9 @@ describe('ProductsService', () => {
       reserve: jest.fn(),
       release: jest.fn(),
       commit: jest.fn(),
+      restock: jest.fn(),
       findAvailableByVariantIds: jest.fn().mockResolvedValue(new Map()),
-      setQuantity: jest.fn(),
+      setAvailable: jest.fn(),
     };
 
     service = new ProductsService(
@@ -336,6 +337,24 @@ describe('ProductsService', () => {
         NotFoundException,
       );
       expect(variantRepository.findByProductIds).not.toHaveBeenCalled();
+    });
+
+    it('returns 404 for a DRAFT product unless includeAllStatuses is set (AC20)', async () => {
+      productRepository.findByIdWithBrandAndCategory.mockResolvedValue(
+        makeProduct({ status: ProductStatus.DRAFT }),
+      );
+      variantRepository.findByProductIds.mockResolvedValue([]);
+      imageRepository.findByProductIds.mockResolvedValue([]);
+
+      await expect(service.findOne('product-1')).rejects.toThrow(
+        new NotFoundException('Không tìm thấy sản phẩm product-1'),
+      );
+
+      const result = await service.findOne('product-1', {
+        includeAllStatuses: true,
+      });
+      expect(result.id).toBe('product-1');
+      expect(result.status).toBe(ProductStatus.DRAFT);
     });
   });
   describe('create / update (new catalog fields)', () => {

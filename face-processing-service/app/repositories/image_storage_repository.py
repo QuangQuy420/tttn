@@ -16,6 +16,12 @@ from botocore.exceptions import ClientError
 from app.core.config import Settings, get_settings
 
 _PRESIGNED_URL_EXPIRY_SECONDS = 3600  # 1 hour — enough for a client to load the result page
+# Bounds a slow/down MinIO call. botocore's `max_attempts` counts RETRIES, so this is
+# 1 try + 2 retries = 3 attempts: worst case about 30 s (3 x 10 s read timeout) for a
+# stalled read, about 9 s (3 x 3 s) when MinIO can't be reached.
+_CONNECT_TIMEOUT_SECONDS = 3
+_READ_TIMEOUT_SECONDS = 10
+_MAX_ATTEMPTS = 2
 
 
 class IImageStorageRepository(Protocol):
@@ -45,7 +51,12 @@ class S3ImageStorageRepository:
             aws_access_key_id=settings.S3_ACCESS_KEY,
             aws_secret_access_key=settings.S3_SECRET_KEY,
             region_name=settings.S3_REGION,
-            config=BotoConfig(signature_version="s3v4"),
+            config=BotoConfig(
+                signature_version="s3v4",
+                connect_timeout=_CONNECT_TIMEOUT_SECONDS,
+                read_timeout=_READ_TIMEOUT_SECONDS,
+                retries={"max_attempts": _MAX_ATTEMPTS},
+            ),
         )
         # Separate client for presigning only: `S3_ENDPOINT` (e.g. `http://minio:9000`) is a
         # Docker-network-internal hostname a browser can't resolve, so a URL signed against it
@@ -60,7 +71,12 @@ class S3ImageStorageRepository:
             aws_access_key_id=settings.S3_ACCESS_KEY,
             aws_secret_access_key=settings.S3_SECRET_KEY,
             region_name=settings.S3_REGION,
-            config=BotoConfig(signature_version="s3v4"),
+            config=BotoConfig(
+                signature_version="s3v4",
+                connect_timeout=_CONNECT_TIMEOUT_SECONDS,
+                read_timeout=_READ_TIMEOUT_SECONDS,
+                retries={"max_attempts": _MAX_ATTEMPTS},
+            ),
         )
 
     def ensure_bucket(self) -> None:

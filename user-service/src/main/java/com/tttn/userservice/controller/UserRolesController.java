@@ -7,7 +7,7 @@ import com.tttn.userservice.exception.BusinessException;
 import com.tttn.userservice.exception.ErrorCode;
 import com.tttn.userservice.service.PermissionService;
 import com.tttn.userservice.service.UserRolesService;
-import com.tttn.userservice.util.JwtUtil;
+import com.tttn.userservice.util.AuthTokenResolver;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -31,7 +31,7 @@ public class UserRolesController {
 
     private final UserRolesService userRolesService;
     private final PermissionService permissionService;
-    private final JwtUtil jwtUtil;
+    private final AuthTokenResolver authTokenResolver;
 
     @PostMapping
     public ResponseEntity<ApiResponse<UserResponse>> assignRole(
@@ -42,13 +42,13 @@ public class UserRolesController {
             @PathVariable UUID userId,
             @Valid @RequestBody AssignRoleRequest request
     ) {
-        requirePermission(authorizationHeader);
+        UUID callingUserId = requirePermission(authorizationHeader);
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(ApiResponse.success(
                         "Gán vai trò cho người dùng thành công",
-                        userRolesService.assignRole(userId, request.roleId())
+                        userRolesService.assignRole(callingUserId, userId, request.roleId())
                 ));
     }
 
@@ -71,26 +71,13 @@ public class UserRolesController {
         );
     }
 
-    private void requirePermission(String authorizationHeader) {
-        UUID callingUserId = extractUserId(authorizationHeader);
+    private UUID requirePermission(String authorizationHeader) {
+        UUID callingUserId = authTokenResolver.resolveUserId(authorizationHeader);
 
         if (!permissionService.hasPermission(callingUserId, MANAGE_USER_ROLES_PERMISSION)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-    }
 
-    private UUID extractUserId(String authorizationHeader) {
-        if (authorizationHeader == null
-                || !authorizationHeader.startsWith("Bearer ")) {
-            throw new BusinessException(ErrorCode.INVALID_TOKEN);
-        }
-
-        String token = authorizationHeader.substring(7);
-
-        if (!jwtUtil.validateToken(token)) {
-            throw new BusinessException(ErrorCode.INVALID_TOKEN);
-        }
-
-        return jwtUtil.extractUserId(token);
+        return callingUserId;
     }
 }

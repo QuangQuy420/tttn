@@ -22,6 +22,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -30,10 +32,13 @@ import java.util.stream.Collectors;
 
 /**
  * Consumes checkout-saga replies off the durable queue bound to {@code stock.reserved} /
- * {@code stock.reserve.rejected} / {@code payment.completed} / {@code payment.failed}
- * (see {@link RabbitMqConfig}). Every branch re-loads the order and checks its CURRENT status
- * before acting (NFR2/AC8) — RabbitMQ delivers at-least-once, and a user action (cancel) can
- * race a saga reply, so a stale or duplicate message must never blindly advance the order.
+ * {@code stock.reserve.rejected} / {@code payment.completed} / {@code payment.failed} /
+ * {@code payment.refunded} (see {@link RabbitMqConfig}). Every branch re-loads the order and
+ * checks its CURRENT status before acting (NFR2/AC8) — RabbitMQ delivers at-least-once, and a
+ * user action (cancel) can race a saga reply, so a stale or duplicate message must never
+ * blindly advance the order. A concurrent write to the same order fails this transaction with an
+ * optimistic-lock error ({@code Order.@Version}); the exception is not caught here, so the
+ * message is redelivered and re-applied against the fresh order.
  *
  * <p>{@code chaosMode == FORCE_DEAD_LETTER} ({@code SAGA_CHAOS_MODE} env var, dev/test-only,
  * off by default — see {@link SagaChaosMode}) makes {@link #handle} throw immediately for every
@@ -92,6 +97,9 @@ public class OrderSagaEventListener {
             case OrderSagaRoutingKeys.PAYMENT_FAILED ->
                     handlePaymentFailed(order, event);
 
+            case OrderSagaRoutingKeys.PAYMENT_REFUNDED ->
+                    handlePaymentRefunded(order, event);
+
             default -> log.warn(
                     "Bỏ qua routing key saga không xác định: {}",
                     routingKey
@@ -102,6 +110,11 @@ public class OrderSagaEventListener {
     private void handleStockReserved(Order order) {
         if (order.getStatus() == OrderStatus.PENDING) {
             order.setStatus(OrderStatus.AWAITING_PAYMENT);
+
+            // New saga step: the payment step gets its own reconciliation budget instead of
+            // inheriting the attempts spent while waiting for the stock reply.
+            order.setReconciliationAttempts(0);
+            order.setLastReconciliationAttemptAt(null);
 
             order.addStatusHistory(
                     OrderStatusHistory.builder()
@@ -229,6 +242,11 @@ public class OrderSagaEventListener {
             Order order,
             OrderSagaReplyEvent event
     ) {
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+            handleLatePayment(order, event);
+            return;
+        }
+
         if (order.getStatus() != OrderStatus.AWAITING_PAYMENT) {
             log.warn(
                     "Bỏ qua sự kiện 'payment.completed' cho đơn hàng {} đang ở trạng thái {}",
@@ -276,7 +294,146 @@ public class OrderSagaEventListener {
         List<UUID> orderedVariantIds = order.getItems().stream()
                 .map(OrderItem::getVariantId)
                 .collect(Collectors.toList());
-        cartService.removeItems(order.getUserId(), orderedVariantIds);
+        removeCartItemsAfterCommit(order.getUserId(), orderedVariantIds);
+    }
+
+    // Redis is not part of the DB transaction: clean the cart only once CONFIRMED is committed,
+    // and never let a Redis error roll back (and redeliver) the confirmation.
+    private void removeCartItemsAfterCommit(UUID userId, List<UUID> variantIds) {
+        Runnable cleanup = () -> {
+            try {
+                cartService.removeItems(userId, variantIds);
+            } catch (RuntimeException exception) {
+                log.warn(
+                        "Không thể xóa sản phẩm đã đặt khỏi giỏ hàng của người dùng {}: {}",
+                        userId,
+                        exception.getMessage()
+                );
+            }
+        };
+
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            cleanup.run();
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        cleanup.run();
+                    }
+                }
+        );
+    }
+
+    /**
+     * {@code payment.completed} for an order that was cancelled while the payment was in flight:
+     * the money was taken, so record the payment and ask for a refund. Restock too: product-service
+     * also consumes {@code payment.completed} and may have committed the stock before the cancel's
+     * release arrived (a no-op on its side otherwise). Only the call that flips the payment to PAID
+     * enqueues — a redelivery (already PAID or REFUNDED) changes nothing.
+     */
+    private void handleLatePayment(
+            Order order,
+            OrderSagaReplyEvent event
+    ) {
+        if (order.getPaymentStatus() == PaymentStatus.PAID
+                || order.getPaymentStatus() == PaymentStatus.REFUNDED) {
+            log.warn(
+                    "Bỏ qua sự kiện 'payment.completed' lặp lại cho đơn hàng đã hủy {} (thanh toán {})",
+                    order.getId(),
+                    order.getPaymentStatus()
+            );
+            return;
+        }
+
+        order.setPaymentStatus(PaymentStatus.PAID);
+        order.setPaymentId(event.paymentId());
+        order.setTransactionCode(event.transactionCode());
+
+        orderRepository.save(order);
+
+        orderSagaLogService.log(
+                order,
+                SagaLogStage.PAYMENT_COMPLETED,
+                SagaLogLevel.WARN,
+                "Thanh toán thành công sau khi đơn đã bị hủy, sẽ hoàn tiền",
+                SagaLogService.PAYMENT_SERVICE,
+                SagaLogService.ORDER_SERVICE,
+                null,
+                null
+        );
+
+        orderSagaEventPublisher.publishPaymentRefundRequested(
+                order.getId(),
+                "Thanh toán đến sau khi đơn hàng đã bị hủy"
+        );
+
+        orderSagaLogService.log(
+                order,
+                SagaLogStage.PAYMENT_REFUND_REQUESTED,
+                SagaLogLevel.INFO,
+                "Đã gửi yêu cầu hoàn tiền",
+                SagaLogService.ORDER_SERVICE,
+                SagaLogService.PAYMENT_SERVICE,
+                null,
+                null
+        );
+
+        orderSagaEventPublisher.publishStockRestockRequested(order.getId());
+
+        orderSagaLogService.log(
+                order,
+                SagaLogStage.STOCK_RESTOCK_REQUESTED,
+                SagaLogLevel.INFO,
+                "Đã gửi yêu cầu hoàn kho",
+                SagaLogService.ORDER_SERVICE,
+                SagaLogService.PRODUCT_SERVICE,
+                null,
+                null
+        );
+    }
+
+    private void handlePaymentRefunded(
+            Order order,
+            OrderSagaReplyEvent event
+    ) {
+        if (order.getPaymentStatus() == PaymentStatus.REFUNDED) {
+            log.info(
+                    "Bỏ qua sự kiện 'payment.refunded' lặp lại cho đơn hàng {}",
+                    order.getId()
+            );
+            return;
+        }
+
+        if (order.getPaymentStatus() != PaymentStatus.PAID) {
+            log.warn(
+                    "Bỏ qua sự kiện 'payment.refunded' cho đơn hàng {} có trạng thái thanh toán {}",
+                    order.getId(),
+                    order.getPaymentStatus()
+            );
+            return;
+        }
+
+        order.setPaymentStatus(PaymentStatus.REFUNDED);
+
+        if (order.getPaymentId() == null) {
+            order.setPaymentId(event.paymentId());
+        }
+
+        orderRepository.save(order);
+
+        orderSagaLogService.log(
+                order,
+                SagaLogStage.PAYMENT_REFUNDED,
+                SagaLogLevel.INFO,
+                "Đã hoàn tiền thành công",
+                SagaLogService.PAYMENT_SERVICE,
+                SagaLogService.ORDER_SERVICE,
+                null,
+                null
+        );
     }
 
     private void handlePaymentFailed(

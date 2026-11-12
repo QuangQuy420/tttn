@@ -20,6 +20,7 @@ rules below); features use the same `app/ml/face_features.py` code as training.
 """
 from __future__ import annotations
 
+import io
 import os
 import threading
 from dataclasses import dataclass
@@ -28,6 +29,7 @@ from typing import TYPE_CHECKING
 import cv2
 import mediapipe as mp
 import numpy as np
+from PIL import Image
 
 from app.db.models import FaceShape
 from app.ml import face_features
@@ -106,6 +108,30 @@ def _get_landmarker() -> "mp.tasks.vision.FaceLandmarker":
                 )
                 _landmarker = mp.tasks.vision.FaceLandmarker.create_from_options(options)
     return _landmarker
+
+
+def check_image_pixels(image_bytes: bytes, max_pixels: int) -> None:
+    """Reject an image whose width x height is above `max_pixels`, reading only the header.
+
+    Pillow's `Image.open` is lazy (no `load()`), so this runs before any full decode. Raises
+    `InvalidImageError` when the header can't be read or the image is too large.
+    """
+    too_large_message = (
+        f"Ảnh quá lớn — kích thước tối đa cho phép là {max_pixels / 1_000_000:g} triệu điểm ảnh."
+    )
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as image:
+            width, height = image.size
+    except Image.DecompressionBombError as exc:
+        raise InvalidImageError(too_large_message) from exc
+    except (OSError, ValueError, SyntaxError) as exc:
+        # `UnidentifiedImageError` is an `OSError`; truncated/corrupt headers raise plain
+        # `OSError` (e.g. "Truncated File Read").
+        raise InvalidImageError(
+            "Không thể đọc ảnh — tệp có thể bị hỏng hoặc không phải là ảnh thật."
+        ) from exc
+    if width * height > max_pixels:
+        raise InvalidImageError(too_large_message)
 
 
 def _decode_image(image_bytes: bytes) -> np.ndarray:

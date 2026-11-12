@@ -1,6 +1,7 @@
 import { ExecutionContext } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as jwt from 'jsonwebtoken';
+import { PermissionsCacheService } from '../services/permissions-cache.service';
 import { OptionalJwtGuard } from './optional-jwt.guard';
 
 describe('OptionalJwtGuard', () => {
@@ -17,27 +18,32 @@ describe('OptionalJwtGuard', () => {
     const configService = {
       get: jest.fn().mockReturnValue({ jwtSecret: JWT_SECRET }),
     } as unknown as ConfigService;
-    guard = new OptionalJwtGuard(configService);
+    const permissionsCacheService = {
+      getAuthState: jest
+        .fn()
+        .mockResolvedValue({ permissions: [], status: 'ACTIVE', tokensValidAfter: null }),
+    } as unknown as PermissionsCacheService;
+    guard = new OptionalJwtGuard(configService, permissionsCacheService);
   });
 
-  it('lets a request without a token through and leaves request.user unset', () => {
+  it('lets a request without a token through and leaves request.user unset', async () => {
     const request: { headers: Record<string, string>; user?: unknown } = { headers: {} };
 
-    expect(guard.canActivate(contextFor(request))).toBe(true);
+    await expect(guard.canActivate(contextFor(request))).resolves.toBe(true);
     expect(request.user).toBeUndefined();
   });
 
-  it('lets a request with an invalid token through and leaves request.user unset', () => {
+  it('lets a request with an invalid token through and leaves request.user unset', async () => {
     const badToken = jwt.sign({ userId: 'u1' }, 'some-other-secret');
     const request: { headers: Record<string, string>; user?: unknown } = {
       headers: { authorization: `Bearer ${badToken}` },
     };
 
-    expect(guard.canActivate(contextFor(request))).toBe(true);
+    await expect(guard.canActivate(contextFor(request))).resolves.toBe(true);
     expect(request.user).toBeUndefined();
   });
 
-  it('sets request.user from a valid token', () => {
+  it('sets request.user from a valid token', async () => {
     const token = jwt.sign(
       { userId: 'u1', email: 'a@example.com', sub: 'alice' },
       Buffer.from(JWT_SECRET, 'base64'),
@@ -46,7 +52,9 @@ describe('OptionalJwtGuard', () => {
       headers: { authorization: `Bearer ${token}` },
     };
 
-    expect(guard.canActivate(contextFor(request))).toBe(true);
-    expect(request.user).toEqual({ userId: 'u1', email: 'a@example.com', username: 'alice' });
+    await expect(guard.canActivate(contextFor(request))).resolves.toBe(true);
+    expect(request.user).toEqual(
+      expect.objectContaining({ userId: 'u1', email: 'a@example.com', username: 'alice' }),
+    );
   });
 });

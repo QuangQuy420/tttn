@@ -86,6 +86,26 @@ public enum ErrorCode {
             "Không thể xóa vai trò đang được gán cho người dùng"
     ),
 
+    SYSTEM_ROLE_PROTECTED(
+            HttpStatus.CONFLICT,
+            "Không thể đổi tên hoặc xóa vai trò hệ thống"
+    ),
+
+    ADMIN_ROLE_PERMISSIONS_REQUIRED(
+            HttpStatus.CONFLICT,
+            "Vai trò ADMIN phải giữ quyền quản lý vai trò và quản lý vai trò người dùng"
+    ),
+
+    LAST_ADMIN(
+            HttpStatus.CONFLICT,
+            "Không thể gỡ vai trò ADMIN khỏi quản trị viên cuối cùng"
+    ),
+
+    ROLE_EXCEEDS_CALLER_PERMISSIONS(
+            HttpStatus.FORBIDDEN,
+            "Bạn không thể gán vai trò có quyền mà bạn chưa có"
+    ),
+
     PERMISSION_NOT_FOUND(
             HttpStatus.NOT_FOUND,
             "Không tìm thấy quyền"

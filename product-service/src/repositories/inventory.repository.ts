@@ -70,15 +70,22 @@ export interface IInventoryRepository {
    * The caller supplies the transaction that also transitions the reservation rows to COMMITTED.
    */
   commit(items: ReserveItem[], manager: EntityManager): Promise<void>;
+  /**
+   * Undoes a sale (refund of a cancelled, already-paid order): adds each item's quantity back
+   * to `quantity`. Variants are loaded `withDeleted()` so a variant soft-deleted after the sale
+   * is still restocked; a variant row that no longer exists at all is skipped (never throws).
+   * The caller supplies the transaction that also transitions the reservation rows to RESTOCKED.
+   */
+  restock(items: ReserveItem[], manager: EntityManager): Promise<void>;
   /** Plain unlocked read of `quantity - reservedQuantity` per variant (FR7). */
   findAvailableByVariantIds(variantIds: string[]): Promise<Map<string, number>>;
   /**
-   * Admin restock (T-PS-variants) — sets the raw `quantity` for a variant. Leaves
-   * `reservedQuantity` untouched:
-   * this is a total-on-hand correction, not a reservation event, so it must never be routed
-   * through `reserve()`/`release()`.
+   * Admin stock edit (T-PS-variants) — `available` is the new *available* stock, so in one
+   * transaction with the variant row locked: `quantity = available + reservedQuantity`.
+   * Leaves `reservedQuantity` untouched: this is an on-hand correction, not a reservation
+   * event, so it must never be routed through `reserve()`/`release()`.
    */
-  setQuantity(variantId: string, quantity: number): Promise<void>;
+  setAvailable(variantId: string, available: number): Promise<void>;
 }
 
 @Injectable()
@@ -110,7 +117,9 @@ export class TypeOrmInventoryRepository implements IInventoryRepository {
     manager: EntityManager,
     items: ReserveItem[],
   ): Promise<void> {
-    const sortedItems = this.sortByVariantId(items);
+    // Merged first: two entries for the same variant would each load and save their own copy
+    // of the row, so the second save would overwrite the first increment (under-reserve).
+    const sortedItems = this.sortByVariantId(this.mergeByVariantId(items));
     const rows: ProductVariant[] = [];
     for (const item of sortedItems) {
       const row = await manager
@@ -170,18 +179,7 @@ export class TypeOrmInventoryRepository implements IInventoryRepository {
   }
 
   async commit(items: ReserveItem[], manager: EntityManager): Promise<void> {
-    const quantitiesByVariant = new Map<string, number>();
-    for (const item of items) {
-      quantitiesByVariant.set(
-        item.variantId,
-        (quantitiesByVariant.get(item.variantId) ?? 0) + item.quantity,
-      );
-    }
-
-    const committedItems = [...quantitiesByVariant.entries()].map(
-      ([variantId, quantity]) => ({ variantId, quantity }),
-    );
-    const sortedItems = this.sortByVariantId(committedItems);
+    const sortedItems = this.sortByVariantId(this.mergeByVariantId(items));
     for (const item of sortedItems) {
       const row = await manager
         .createQueryBuilder(ProductVariant, 'variant')
@@ -207,12 +205,31 @@ export class TypeOrmInventoryRepository implements IInventoryRepository {
     }
   }
 
+  async restock(items: ReserveItem[], manager: EntityManager): Promise<void> {
+    const sortedItems = this.sortByVariantId(this.mergeByVariantId(items));
+    for (const item of sortedItems) {
+      const row = await manager
+        .createQueryBuilder(ProductVariant, 'variant')
+        .withDeleted()
+        .setLock('pessimistic_write')
+        .where('variant.id = :variantId', { variantId: item.variantId })
+        .getOne();
+      if (!row) {
+        // The FK on ps_stock_reservations makes this unreachable in practice; skipping keeps
+        // the restock from being requeued forever over a row that can never come back.
+        continue;
+      }
+      row.quantity += item.quantity;
+      await manager.save(ProductVariant, row);
+    }
+  }
+
   /** Core release logic, run against whichever `EntityManager` (own or a caller's) is in scope. */
   private async doRelease(
     manager: EntityManager,
     items: ReserveItem[],
   ): Promise<void> {
-    const sortedItems = this.sortByVariantId(items);
+    const sortedItems = this.sortByVariantId(this.mergeByVariantId(items));
     for (const item of sortedItems) {
       const row = await manager
         .createQueryBuilder(ProductVariant, 'variant')
@@ -247,15 +264,36 @@ export class TypeOrmInventoryRepository implements IInventoryRepository {
     return result;
   }
 
-  async setQuantity(variantId: string, quantity: number): Promise<void> {
-    const existing = await this.repo.findOne({
-      where: { id: variantId },
+  async setAvailable(variantId: string, available: number): Promise<void> {
+    await this.dataSource.transaction(async (manager) => {
+      const row = await manager
+        .createQueryBuilder(ProductVariant, 'variant')
+        .setLock('pessimistic_write')
+        .where('variant.id = :variantId', { variantId })
+        .getOne();
+      if (!row) {
+        throw new Error(
+          `ProductVariant ${variantId} not found for stock update`,
+        );
+      }
+      row.quantity = available + row.reservedQuantity;
+      await manager.save(ProductVariant, row);
     });
-    if (!existing) {
-      throw new Error(`ProductVariant ${variantId} not found for stock update`);
+  }
+
+  /** Sums the quantities of repeated `variantId`s into one item each. */
+  private mergeByVariantId(items: ReserveItem[]): ReserveItem[] {
+    const quantitiesByVariant = new Map<string, number>();
+    for (const item of items) {
+      quantitiesByVariant.set(
+        item.variantId,
+        (quantitiesByVariant.get(item.variantId) ?? 0) + item.quantity,
+      );
     }
-    existing.quantity = quantity;
-    await this.repo.save(existing);
+    return [...quantitiesByVariant.entries()].map(([variantId, quantity]) => ({
+      variantId,
+      quantity,
+    }));
   }
 
   /** Stable lock order across concurrent multi-item checkouts, to avoid deadlocks. */

@@ -72,6 +72,45 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * Like `get` for several keys at once, but a Redis failure is thrown
+   * instead of being reported as a miss — for callers that must tell
+   * "key absent" (`null`) from "Redis unreachable".
+   */
+  mgetOrThrow(...keys: string[]): Promise<(string | null)[]> {
+    return this.client.mget(...keys);
+  }
+
+  async incr(key: string): Promise<void> {
+    try {
+      await this.client.incr(key);
+    } catch (error) {
+      this.logFailure('INCR', key, error);
+    }
+  }
+
+  async expire(key: string, ttlSeconds: number): Promise<void> {
+    try {
+      await this.client.expire(key, ttlSeconds);
+    } catch (error) {
+      this.logFailure('EXPIRE', key, error);
+    }
+  }
+
+  /** Runs a Lua script atomically; returns `null` when Redis fails. */
+  async eval(
+    script: string,
+    keys: string[],
+    args: (string | number)[],
+  ): Promise<unknown> {
+    try {
+      return await this.client.eval(script, keys.length, ...keys, ...args);
+    } catch (error) {
+      this.logFailure('EVAL', keys.join(','), error);
+      return null;
+    }
+  }
+
   async setEx(key: string, ttlSeconds: number, value: string): Promise<void> {
     try {
       await this.client.set(key, value, 'EX', ttlSeconds);

@@ -64,7 +64,10 @@ body. The body is plain JSON — it is **not** wrapped in the HTTP response enve
 ## Delivery guarantees
 
 - **Best effort from the publisher.** `product-service` catches and logs publish failures and
-  never throws (the admin request still succeeds). An event can be lost during a broker outage.
+  never throws (the admin request still succeeds). Messages are persistent JSON. While the
+  channel is down, events are kept in memory (de-duplicated per type + product, max 1000, oldest
+  dropped first) and re-sent right after the publisher reconnects. They are still lost if
+  `product-service` restarts during the outage (not a durable outbox).
 - **At-least-once, possibly duplicated or out of order on the consumer side.** Consumers must be
   idempotent. Because the payload is only a "something changed" signal and consumers re-read the
   current product, processing is set-to-latest: a duplicate or late event is harmless.
@@ -85,8 +88,8 @@ body. The body is plain JSON — it is **not** wrapped in the HTTP response enve
   it scans `cart:*` in Redis and, for each cart holding the product, refreshes the item snapshot
   and sets `available` / `unavailableReason` (`PRODUCT_UNAVAILABLE`, `VARIANT_REMOVED`,
   `OUT_OF_STOCK`, `INSUFFICIENT_STOCK`).
-- If `product-service` returns 404 for the product, its cart items are marked
-  `PRODUCT_UNAVAILABLE`. If `product-service` is unreachable, the message is **not** acked as
+- If `product-service` returns 404 for the product (deleted, or no longer `PUBLISHED` — the
+  public detail route hides other statuses), its cart items are marked `PRODUCT_UNAVAILABLE`. If `product-service` is unreachable, the message is **not** acked as
   success — it is retried and finally dead-lettered to `product-events.dlq`. Items are never
   marked unavailable because of an outage.
 - `recommendation-service` (`app/repositories/product_event_consumer.py`): a body that is JSON

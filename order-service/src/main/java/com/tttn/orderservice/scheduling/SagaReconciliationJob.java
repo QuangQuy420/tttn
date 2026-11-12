@@ -9,6 +9,7 @@ import com.tttn.orderservice.enums.SagaLogLevel;
 import com.tttn.orderservice.enums.SagaLogService;
 import com.tttn.orderservice.enums.SagaLogStage;
 import com.tttn.orderservice.messaging.OrderSagaEventPublisher;
+import com.tttn.orderservice.messaging.OrderSagaRoutingKeys;
 import com.tttn.orderservice.repository.OrderRepository;
 import com.tttn.orderservice.repository.OutboxEventRepository;
 import com.tttn.orderservice.service.OrderSagaLogService;
@@ -17,11 +18,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
+import java.util.function.Consumer;
 
 /**
  * Periodically detects checkout-saga orders stuck mid-flight because a best-effort publish
@@ -40,9 +44,11 @@ import java.util.List;
  * never re-decides a business outcome itself (FR8), it only resends the exact message that
  * should already have gone out.
  *
- * <p>Each order is processed in its own try/catch so one order's failure never stops the run
- * (NFR4). An order that has been retried {@code max-attempts} times without escaping its stuck
- * state is marked {@code reconciliationExhausted} and skipped on all future runs (FR6/AC6) — see
+ * <p>Each order is processed in its own transaction and try/catch so one order's failure (e.g.
+ * an optimistic-lock conflict) never stops the run (NFR4). An order that has been retried
+ * {@code max-attempts} times without escaping its stuck state is marked
+ * {@code reconciliationExhausted} and skipped by the stuck-order pass on all future runs
+ * (FR6/AC6; a still-pending stock release of such an order keeps being re-sent) — see
  * {@link #markExhausted} for what happens to it at that point (cancel + release, not just a
  * warning log — this intentionally goes beyond the original plan's FR6, which called for no
  * auto-cancel; kept here to avoid leaking reserved stock forever, see that method's javadoc).
@@ -74,6 +80,7 @@ public class SagaReconciliationJob {
     private final OrderSagaLogService orderSagaLogService;
     private final ReconciliationSettingsService reconciliationSettingsService;
     private final OutboxEventRepository outboxEventRepository;
+    private final PlatformTransactionManager transactionManager;
 
     // Set to "now" at the end of every tick that actually runs the reconciliation logic (never on
     // a tick that gets skipped) — see reconcile()'s elapsed-time check just below. volatile
@@ -81,18 +88,17 @@ public class SagaReconciliationJob {
     // same thread every time.
     private volatile LocalDateTime lastRunAt;
 
-    // @Transactional here (not on the private helpers) because Spring's proxy only intercepts
-    // calls that come in through it — the helpers below are invoked via internal self-invocation,
-    // so this is the only method boundary where the annotation actually takes effect. Keeps the
-    // Hibernate session open for the whole run, which order.getItems() (a lazy collection) needs
-    // when a stuck order is resent.
+    // No @Transactional on the run: each order is re-loaded and processed in its own transaction
+    // (inOrderTransaction), so an optimistic-lock conflict (Order.@Version) — which surfaces at
+    // flush/commit and marks the transaction rollback-only — only skips that one order until the
+    // next run instead of rolling back the whole run. The per-order transaction also keeps the
+    // Hibernate session open for order.getItems() (a lazy collection) when an order is resent.
     //
     // fixedDelay is now a fixed 10-second wake-up, no longer tied to the configurable interval —
     // the actual "did enough time pass" decision happens below, against the live intervalMs read
     // from ReconciliationSettingsService, so a saved change takes effect within ~10s without a
     // restart (NFR1/AC3).
     @Scheduled(fixedDelay = 10000)
-    @Transactional
     public void reconcile() {
         ReconciliationSettingsResponse settings = reconciliationSettingsService.get();
 
@@ -117,14 +123,20 @@ public class SagaReconciliationJob {
         List<Order> candidates = orderRepository
                 .findByStatusInAndReconciliationExhaustedFalse(STUCK_STATUSES);
 
-        for (Order order : candidates) {
+        for (Order candidate : candidates) {
             try {
-                processStuckOrder(order, stuckThresholdMinutes, maxAttempts);
+                inOrderTransaction(candidate.getId(), order -> {
+                    // Re-checked on the fresh row: a saga reply may have moved it meanwhile.
+                    if (STUCK_STATUSES.contains(order.getStatus())
+                            && !order.isReconciliationExhausted()) {
+                        processStuckOrder(order, stuckThresholdMinutes, maxAttempts);
+                    }
+                });
             } catch (Exception exception) {
                 log.error(
                         "SagaReconciliationJob: lỗi khi xử lý đơn hàng {} (trạng thái {}): {}",
-                        order.getId(),
-                        order.getStatus(),
+                        candidate.getId(),
+                        candidate.getStatus(),
                         exception.getMessage(),
                         exception
                 );
@@ -195,16 +207,19 @@ public class SagaReconciliationJob {
     }
 
     private void reconcileUnconfirmedStockReleases(int stuckThresholdMinutes, int maxAttempts) {
-        List<Order> candidates = orderRepository
-                .findByStockReleasePendingTrueAndReconciliationExhaustedFalse();
+        List<Order> candidates = orderRepository.findByStockReleasePendingTrue();
 
-        for (Order order : candidates) {
+        for (Order candidate : candidates) {
             try {
-                processPendingStockRelease(order, stuckThresholdMinutes, maxAttempts);
+                inOrderTransaction(candidate.getId(), order -> {
+                    if (order.isStockReleasePending()) {
+                        processPendingStockRelease(order, stuckThresholdMinutes, maxAttempts);
+                    }
+                });
             } catch (Exception exception) {
                 log.error(
                         "SagaReconciliationJob: lỗi khi xử lý nhả hàng cho đơn hàng {}: {}",
-                        order.getId(),
+                        candidate.getId(),
                         exception.getMessage(),
                         exception
                 );
@@ -221,7 +236,11 @@ public class SagaReconciliationJob {
             return;
         }
 
-        if (order.getReconciliationAttempts() >= maxAttempts) {
+        // An already-exhausted order (its release outbox row was given up after markExhausted)
+        // skips the attempts gate: the release is re-sent until it goes out, without exhausting
+        // the order again.
+        if (!order.isReconciliationExhausted()
+                && order.getReconciliationAttempts() >= maxAttempts) {
             markExhausted(order, maxAttempts);
             return;
         }
@@ -241,10 +260,13 @@ public class SagaReconciliationJob {
     // An order whose saga event is still waiting in the outbox (e.g. RabbitMQ is down) is not
     // stuck: OutboxRelay will deliver it. Skip it without resending or counting an attempt, so a
     // long broker outage does not push it into markExhausted (auto-cancel).
+    // Refund / restock rows are excluded: they are retried forever, and a long-pending one must
+    // not block the order's other reconciliation steps.
     private boolean hasPendingOutboxEvent(Order order) {
-        boolean pending = outboxEventRepository.existsByAggregateIdAndStatus(
+        boolean pending = outboxEventRepository.existsByAggregateIdAndStatusAndRoutingKeyNotIn(
                 order.getId(),
-                OutboxStatus.PENDING
+                OutboxStatus.PENDING,
+                OrderSagaRoutingKeys.RETRIED_UNTIL_SENT
         );
 
         if (pending) {
@@ -255,6 +277,14 @@ public class SagaReconciliationJob {
         }
 
         return pending;
+    }
+
+    // Re-loads the order and runs the work in a fresh transaction. A version conflict throws out
+    // of execute() (rolled back) and is logged by the caller's per-order catch.
+    private void inOrderTransaction(UUID orderId, Consumer<Order> work) {
+        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+                orderRepository.findById(orderId).ifPresent(work)
+        );
     }
 
     private boolean isStuck(Order order, int stuckThresholdMinutes) {

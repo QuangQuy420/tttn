@@ -94,6 +94,31 @@ describe("products api client", () => {
     expect(mockedApiFetchData).toHaveBeenCalledWith("/products/abc");
   });
 
+  it("getProducts sends Authorization and includeAllStatuses only when asked (AC20)", async () => {
+    mockedApiFetchPage.mockResolvedValue(emptyPage);
+
+    await getProducts({ includeAllStatuses: true }, "admin-token");
+    await getProducts();
+
+    expect(mockedApiFetchPage).toHaveBeenNthCalledWith(1, "/products?includeAllStatuses=true", {
+      headers: { Authorization: "Bearer admin-token" },
+    });
+    // Anonymous storefront read: path only, no options object at all.
+    expect(mockedApiFetchPage.mock.calls[1]).toEqual(["/products"]);
+  });
+
+  it("getProductById sends Authorization and includeAllStatuses only when asked (AC20)", async () => {
+    mockedApiFetchData.mockResolvedValue({ id: "abc" });
+
+    await getProductById("abc", { token: "admin-token", includeAllStatuses: true });
+    await getProductById("abc");
+
+    expect(mockedApiFetchData).toHaveBeenNthCalledWith(1, "/products/abc?includeAllStatuses=true", {
+      headers: { Authorization: "Bearer admin-token" },
+    });
+    expect(mockedApiFetchData.mock.calls[1]).toEqual(["/products/abc"]);
+  });
+
   it("getCategories calls /categories with the page/limit query", async () => {
     mockedApiFetchPage.mockResolvedValue(emptyPage);
 

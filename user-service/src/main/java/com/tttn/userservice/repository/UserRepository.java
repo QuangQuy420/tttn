@@ -1,7 +1,10 @@
 package com.tttn.userservice.repository;
 
 import com.tttn.userservice.entity.User;
+import com.tttn.userservice.enums.UserStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -17,4 +20,11 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     boolean existsByUsernameIgnoreCase(String username);
 
     boolean existsByRolesId(UUID roleId);
+
+    @Query("SELECT COUNT(DISTINCT u) FROM User u JOIN u.roles r "
+            + "WHERE r.name = :roleName AND u.status = :status")
+    long countByRoleNameAndStatus(
+            @Param("roleName") String roleName,
+            @Param("status") UserStatus status
+    );
 }

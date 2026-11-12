@@ -27,7 +27,9 @@ import { formatCartUnavailableReasonVi } from "@/lib/labels";
 // selection and the total.
 export function CartPage() {
   const { cart, isLoading, error, refetch } = useCart();
-  const [mutatingVariantId, setMutatingVariantId] = useState<string | null>(null);
+  // One entry per item being changed, so finishing one item's request never re-enables another
+  // item that is still in flight (AC71).
+  const [mutatingVariantIds, setMutatingVariantIds] = useState<Set<string>>(new Set());
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [selectedVariantIds, setSelectedVariantIds] = useState<Set<string>>(new Set());
 
@@ -43,11 +45,20 @@ export function CartPage() {
     });
   }
 
+  function setMutating(variantId: string, isMutating: boolean) {
+    setMutatingVariantIds((current) => {
+      const next = new Set(current);
+      if (isMutating) next.add(variantId);
+      else next.delete(variantId);
+      return next;
+    });
+  }
+
   async function handleUpdateQuantity(variantId: string, quantity: number) {
     const token = getAccessToken();
     if (!token || quantity < 1) return;
 
-    setMutatingVariantId(variantId);
+    setMutating(variantId, true);
     setMutationError(null);
     try {
       await updateCartItem(token, variantId, { quantity });
@@ -58,7 +69,7 @@ export function CartPage() {
         err instanceof ApiError ? err.message : "Không thể cập nhật số lượng sản phẩm.",
       );
     } finally {
-      setMutatingVariantId(null);
+      setMutating(variantId, false);
     }
   }
 
@@ -66,7 +77,7 @@ export function CartPage() {
     const token = getAccessToken();
     if (!token) return;
 
-    setMutatingVariantId(variantId);
+    setMutating(variantId, true);
     setMutationError(null);
     try {
       await removeCartItem(token, variantId);
@@ -77,7 +88,7 @@ export function CartPage() {
         err instanceof ApiError ? err.message : "Không thể xóa sản phẩm khỏi giỏ hàng.",
       );
     } finally {
-      setMutatingVariantId(null);
+      setMutating(variantId, false);
     }
   }
 
@@ -175,7 +186,7 @@ export function CartPage() {
                   <button
                     type="button"
                     onClick={() => handleUpdateQuantity(item.variantId, item.quantity - 1)}
-                    disabled={mutatingVariantId === item.variantId || item.quantity <= 1}
+                    disabled={mutatingVariantIds.has(item.variantId) || item.quantity <= 1}
                     aria-label={`Giảm số lượng ${item.productName}`}
                   >
                     −
@@ -184,7 +195,7 @@ export function CartPage() {
                   <button
                     type="button"
                     onClick={() => handleUpdateQuantity(item.variantId, item.quantity + 1)}
-                    disabled={mutatingVariantId === item.variantId || item.quantity >= 99}
+                    disabled={mutatingVariantIds.has(item.variantId) || item.quantity >= 99}
                     aria-label={`Tăng số lượng ${item.productName}`}
                   >
                     +
@@ -197,7 +208,7 @@ export function CartPage() {
                   type="button"
                   className="btn btn--outline btn--small"
                   onClick={() => handleRemove(item.variantId)}
-                  disabled={mutatingVariantId === item.variantId}
+                  disabled={mutatingVariantIds.has(item.variantId)}
                 >
                   Xóa
                 </button>

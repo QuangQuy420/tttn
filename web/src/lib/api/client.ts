@@ -3,6 +3,7 @@
 // directly, and never hardcode a URL other than NEXT_PUBLIC_API_BASE_URL. See
 // .claude/refs/coder.md §4.
 
+import { expireSession } from "@/lib/auth/session";
 import type { ApiErrorBody, ApiResponse, Paginated } from "@/types/api";
 
 export class ApiError extends Error {
@@ -32,6 +33,38 @@ function getBaseUrl(): string {
   return baseUrl;
 }
 
+// The token of the request's `Authorization: Bearer <token>` header (any HeadersInit shape), or
+// null. Read by hand because `Headers` is not available in every runtime this module runs in
+// (jest/jsdom).
+function bearerTokenOf(headers: HeadersInit | undefined): string | null {
+  if (!headers) return null;
+  let value: string | null | undefined;
+  if (typeof Headers !== "undefined" && headers instanceof Headers) {
+    value = headers.get("Authorization");
+  } else {
+    const entries = Array.isArray(headers) ? headers : Object.entries(headers);
+    value = entries.find(([name]) => name.toLowerCase() === "authorization")?.[1];
+  }
+  const match = value ? /^Bearer\s+(.+)$/i.exec(value.trim()) : null;
+  return match ? match[1] : null;
+}
+
+// Turns `ApiError.details` into a field → message map for showing errors next to form fields
+// (AC65). user-service validation errors send an object `{ field: message }`, which is used as
+// is; gateway class-validator errors send a `string[]` (no field names) and anything else yields
+// an empty map, so the form falls back to the general error message.
+export function getFieldErrors(error: unknown): Record<string, string> {
+  if (!(error instanceof ApiError)) return {};
+  const { details } = error;
+  if (!details || typeof details !== "object" || Array.isArray(details)) return {};
+
+  const result: Record<string, string> = {};
+  for (const [field, message] of Object.entries(details as Record<string, unknown>)) {
+    if (typeof message === "string" && message) result[field] = message;
+  }
+  return result;
+}
+
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const url = `${getBaseUrl()}${path}`;
 
@@ -53,6 +86,10 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   }
 
   if (!response.ok) {
+    // A 401 on a request that sent a token means the token expired or was revoked (AC6).
+    const sentToken = response.status === 401 ? bearerTokenOf(options.headers) : null;
+    if (sentToken) expireSession(sentToken);
+
     let message = response.statusText || `Yêu cầu đến ${path} thất bại`;
     let code: string | null = null;
     let details: unknown = null;

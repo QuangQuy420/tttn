@@ -22,7 +22,6 @@ export default function ChangePasswordPage() {
     const [submitting, setSubmitting] =
         useState(false);
     const [error, setError] = useState("");
-    const [message, setMessage] = useState("");
 
     async function handleSubmit(
         event: FormEvent<HTMLFormElement>,
@@ -30,7 +29,6 @@ export default function ChangePasswordPage() {
         event.preventDefault();
 
         setError("");
-        setMessage("");
 
         if (newPassword.length < 8) {
             setError("Mật khẩu mới phải có ít nhất 8 ký tự.");
@@ -57,17 +55,11 @@ export default function ChangePasswordPage() {
                 newPassword,
             });
 
-            setCurrentPassword("");
-            setNewPassword("");
-            setConfirmPassword("");
-            setMessage("Đổi mật khẩu thành công.");
+            // The password change revokes the current token (AC74): sign out and ask the user
+            // to log in again with the new password.
+            removeAccessToken();
+            router.replace("/login?notice=password-changed");
         } catch (err) {
-            if (err instanceof ApiError && err.status === 401) {
-                removeAccessToken();
-                router.replace("/login");
-                return;
-            }
-
             setError(
                 err instanceof ApiError
                     ? err.message
@@ -144,10 +136,6 @@ export default function ChangePasswordPage() {
         ? "Đang cập nhật..."
         : "Đổi mật khẩu"}
     </button>
-
-    {message && (
-        <p role="status">{message}</p>
-    )}
 
     {error && (
         <p role="alert" className="error-state">

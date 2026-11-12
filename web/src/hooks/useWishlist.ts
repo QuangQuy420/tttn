@@ -20,6 +20,9 @@ let likedIds: ReadonlySet<string> = EMPTY_IDS;
 // Token the current ids were loaded (or are loading) for — null means "load on next subscribe".
 let loadedToken: string | null = null;
 let inFlight: Promise<void> | null = null;
+// Likes / unlikes made while the ids request is in flight (productId → liked). Its response was
+// read before those toggles, so they are re-applied on top of it instead of being undone (AC71).
+let togglesDuringLoad = new Map<string, boolean>();
 const listeners = new Set<() => void>();
 
 function setLikedIds(next: ReadonlySet<string>): void {
@@ -45,9 +48,16 @@ function loadLikedIds(): void {
   if (loadedToken === token) return;
 
   loadedToken = token;
+  togglesDuringLoad = new Map();
   const request: Promise<void> = getWishlistProductIds(token)
     .then((ids) => {
-      if (inFlight === request) setLikedIds(new Set(ids));
+      if (inFlight !== request) return;
+      const next = new Set(ids);
+      togglesDuringLoad.forEach((liked, productId) => {
+        if (liked) next.add(productId);
+        else next.delete(productId);
+      });
+      setLikedIds(next);
     })
     .catch(() => {
       // Hearts just stay empty; allow a retry on the next mount.
@@ -104,12 +114,14 @@ export function useWishlist(): UseWishlistResult {
 
     const wasLiked = likedIds.has(productId);
     setLikedIds(withLiked(likedIds, productId, !wasLiked));
+    if (inFlight) togglesDuringLoad.set(productId, !wasLiked);
     try {
       if (wasLiked) await removeFromWishlist(token, productId);
       else await addToWishlist(token, productId);
       dispatchWishlistChange();
     } catch (err) {
       setLikedIds(withLiked(likedIds, productId, wasLiked));
+      if (inFlight) togglesDuringLoad.set(productId, wasLiked);
       throw err;
     }
   }

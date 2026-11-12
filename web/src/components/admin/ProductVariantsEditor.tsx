@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type SetStateAction } from "react";
 import { ApiError, createVariant, deleteVariant, updateVariant } from "@/lib/api";
 import { getAccessToken } from "@/lib/auth/session";
 import type { ProductImage, ProductVariant } from "@/types/product";
@@ -10,7 +10,9 @@ interface ProductVariantsEditorProps {
   productId: string | null;
   variants: ProductVariant[];
   images: ProductImage[];
-  onChange: (next: ProductVariant[]) => void;
+  // Accepts an updater function (ProductEditForm passes its `setVariants`) so consecutive row
+  // updates / deletes always apply to the latest list, not a stale render's copy (AC71).
+  onChange: (next: SetStateAction<ProductVariant[]>) => void;
 }
 
 const HEX_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
@@ -97,10 +99,12 @@ export function ProductVariantsEditor({
             variant={variant}
             images={images.filter((image) => image.variantId === variant.id)}
             onUpdated={(updated) =>
-              onChange(variants.map((current) => (current.id === updated.id ? updated : current)))
+              onChange((list) =>
+                list.map((current) => (current.id === updated.id ? updated : current)),
+              )
             }
             onDeleted={(variantId) =>
-              onChange(variants.filter((current) => current.id !== variantId))
+              onChange((list) => list.filter((current) => current.id !== variantId))
             }
           />
         ))}
@@ -110,7 +114,7 @@ export function ProductVariantsEditor({
       </div>
       <NewVariantRow
         productId={productId}
-        onCreated={(created) => onChange([...variants, created])}
+        onCreated={(created) => onChange((list) => [...list, created])}
       />
     </div>
   );
@@ -145,9 +149,15 @@ function VariantRow({ productId, variant, images, onUpdated, onDeleted }: Varian
       return;
     }
 
+    // `stock` is the new AVAILABLE stock on the server (AC19): send it only when the admin
+    // changed that field, so saving color / size / price never overwrites the live stock.
+    const { stock, ...rest } = parsed;
+    const stockChanged = stock !== (variant.stock ?? 0);
+    const payload = stockChanged ? { ...rest, stock } : rest;
+
     setIsSaving(true);
     try {
-      const updated = await updateVariant(productId, variant.id, parsed, token);
+      const updated = await updateVariant(productId, variant.id, payload, token);
       onUpdated(updated);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Không thể lưu phiên bản.");

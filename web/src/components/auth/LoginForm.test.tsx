@@ -6,6 +6,7 @@ import { LoginForm } from "./LoginForm";
 
 jest.mock("next/navigation", () => ({
   useRouter: jest.fn(),
+  useSearchParams: () => new URLSearchParams(),
 }));
 jest.mock("@/lib/api", () => ({
   login: jest.fn(),
